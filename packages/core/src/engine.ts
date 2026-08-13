@@ -1,0 +1,602 @@
+// packages/core/src/engine.ts
+// 变动检测、发布计划、发布编排（executePublish 状态机 + journal 续跑）
+
+import fs from 'node:fs'
+import path from 'node:path'
+import { APP_NAME, BUILD_TAG_PREFIX, SEMVER_RE } from '@bxverse/shared'
+import type {
+  DiffStat,
+  PlannedRepo,
+  ProjectDef,
+  PublishEvent,
+  PublishPlan,
+  PublishRequest,
+  ReleaseRecord,
+  RepoDef,
+  RepoStatus,
+} from '@bxverse/shared'
+import * as changelog from './changelog'
+import * as git from './git'
+import { JournalStore } from './journal'
+import type { Journal, JournalPhase } from './journal'
+import { runPreflight } from './preflight'
+import { DataStore, loadAppConfig, versionSafe } from './store'
+import * as version from './version'
+
+// ==================== 变更检测 ====================
+
+/** 单仓实时状态（GET /api/repos/:pid/:rid/status 的数据源） */
+export async function collectChanges(repo: RepoDef): Promise<RepoStatus> {
+  const st: RepoStatus = {
+    id: repo.id,
+    name: repo.name,
+    path: repo.path,
+    branch: '',
+    head: '',
+    dirty: 0,
+    hasRemote: false,
+    remoteUrl: '',
+    versionFile: null,
+    buildTags: [],
+    milestoneTag: null,
+    lastPublishCommit: repo.lastPublishCommit ?? null,
+    changed: false,
+    commits: [],
+  }
+  if (!fs.existsSync(repo.path) || !(await git.isRepo(repo.path))) return st
+  try {
+    st.head = await git.head(repo.path)
+  } catch {
+    st.head = ''
+  }
+  if (st.head) {
+    try {
+      st.branch = await git.currentBranch(repo.path)
+    } catch {
+      st.branch = ''
+    }
+  }
+  st.dirty = await git.dirtyCount(repo.path)
+  st.hasRemote = await git.hasRemote(repo.path)
+  st.remoteUrl = await git.remoteUrl(repo.path)
+
+  const vfPath = path.join(repo.path, repo.outputDir ?? 'public', 'version.json')
+  if (fs.existsSync(vfPath)) {
+    try {
+      const v = JSON.parse(fs.readFileSync(vfPath, 'utf8')) as Record<string, string>
+      st.versionFile = { version: v.version ?? '', build: v.build ?? '', buildTime: v.buildTime ?? '' }
+    } catch {
+      st.versionFile = null
+    }
+  }
+
+  st.buildTags = await git.listTags(repo.path, `${BUILD_TAG_PREFIX}/*`)
+  const milestoneTags = (await git.listTags(repo.path, 'v*')).filter((t) => {
+    const m = SEMVER_RE.exec(t)
+    return m && m[4] === undefined
+  })
+  st.milestoneTag = milestoneTags.sort((a, b) => version.compareSemver(b, a))[0] ?? null
+
+  if (st.head) {
+    st.commits = await git.commitsSince(repo.path, repo.lastPublishCommit ?? null)
+    st.changed = st.commits.length > 0 || st.dirty > 0
+  }
+  return st
+}
+
+/** 纯函数：按已收集状态划分变动/未变动仓库（server 轮询调用） */
+export function detectChanged(
+  repos: RepoDef[],
+  statuses: Record<string, RepoStatus>,
+): { changed: RepoDef[]; unchanged: RepoDef[] } {
+  const changed: RepoDef[] = []
+  const unchanged: RepoDef[] = []
+  for (const r of repos) {
+    (statuses[r.id]?.changed ? changed : unchanged).push(r)
+  }
+  return { changed, unchanged }
+}
+
+// ==================== 发布计划 ====================
+
+function repoVersionFor(project: ProjectDef, projectVersion: string, stamp: string): string {
+  return project.repoVersionScheme === 'timestamp' ? `v${stamp}` : version.hybridVersion(projectVersion, stamp)
+}
+
+/** 计算发布计划（POST /api/publish dryRun 的数据源） */
+export async function planPublish(req: PublishRequest): Promise<PublishPlan> {
+  const cfg = await loadAppConfig()
+  const project = cfg.projects.find(p => p.id === req.projectId)
+  if (!project) throw new Error(`项目不存在: ${req.projectId}`)
+  const candidateIds = req.repoIds ?? project.repos.map(r => r.id)
+  const invalid = candidateIds.filter(id => !project.repos.some(r => r.id === id))
+  if (invalid.length) throw new Error(`工作区中不存在的仓库: ${invalid.join(', ')}`)
+
+  const warnings: string[] = []
+  const statuses: Record<string, RepoStatus> = {}
+  for (const repo of project.repos) {
+    if (!candidateIds.includes(repo.id)) continue
+    statuses[repo.id] = await collectChanges(repo)
+  }
+
+  const changedRepos = project.repos.filter(r => candidateIds.includes(r.id) && statuses[r.id]?.changed)
+  const allCommits = changedRepos.flatMap(r => statuses[r.id].commits)
+  changelog.classifyCommits(allCommits)
+
+  const suggestedBump = project.bump === 'manual' ? 'patch' : version.suggestBump(allCommits)
+  const bump = req.bump === 'auto' ? suggestedBump : req.bump
+  const projectVersion = version.bumpSemver(project.version, bump)
+
+  // buildStamp：已有 build tag 的 stamp 集合 + 发布记录占用 → 撞名自动加序号
+  const store = new DataStore({ dataDir: cfg.dataDir })
+  const usedStamps = new Set<string>()
+  for (const r of changedRepos) {
+    for (const t of statuses[r.id].buildTags) {
+      const m = t.match(/(\d{8,10})$/)
+      if (m) usedStamps.add(m[1])
+    }
+  }
+  const recordTaken = (s: string): boolean =>
+    changedRepos.some(r =>
+      fs.existsSync(path.join(store.dataDir, 'releases', r.id, versionSafe(repoVersionFor(project, projectVersion, s)), 'data.json')),
+    )
+  let stamp = version.buildStamp(new Date(), usedStamps)
+  while (recordTaken(stamp)) {
+    usedStamps.add(stamp)
+    stamp = version.buildStamp(new Date(), usedStamps)
+  }
+
+  // diff 统计（并行；失败降级全 0 + warning）
+  const diffs: Record<string, DiffStat> = {}
+  await Promise.all(
+    changedRepos.map(async (r) => {
+      diffs[r.id] = await git.diffStat(r.path, r.lastPublishCommit ?? null, { warnings })
+    }),
+  )
+
+  const changed: PlannedRepo[] = changedRepos.map((repo) => {
+    const st = statuses[repo.id]
+    const commits = st.commits
+    if (commits.length === 0 && st.dirty > 0) {
+      warnings.push(`${repo.name} 仅有未提交改动，无新提交参与本次发布`)
+    }
+    return {
+      repoId: repo.id,
+      name: repo.name,
+      changed: true,
+      version: repoVersionFor(project, projectVersion, stamp),
+      from: repo.lastPublishCommit ?? null,
+      to: st.head,
+      commits,
+      buildCommand: repo.buildCommand,
+    }
+  })
+
+  const syncedOnly: PlannedRepo[] = project.repos
+    .filter(r => candidateIds.includes(r.id) && !statuses[r.id]?.changed)
+    .map(r => ({
+      repoId: r.id,
+      name: r.name,
+      changed: false,
+      version: projectVersion,
+      from: r.lastPublishCommit ?? null,
+      to: statuses[r.id]?.head ?? '',
+      commits: [],
+      buildCommand: r.buildCommand,
+    }))
+
+  const now = new Date().toISOString()
+  const milestoneTag = projectVersion
+  const externalDraft = changelog.renderExternal(allCommits, {
+    version: projectVersion,
+    date: now,
+    repoName: '全部仓库',
+    projectName: project.name,
+    buildStamp: stamp,
+    exclude: project.externalExclude,
+  })
+  const internalDraft = changelog.renderInternal(allCommits, {
+    version: projectVersion,
+    baseVersion: project.version,
+    date: now,
+    repoName: '全部仓库',
+    projectName: project.name,
+    buildStamp: stamp,
+    from: null,
+    tags: [milestoneTag],
+    stats: changelog.computeStats(allCommits),
+  })
+
+  if (!(await git.hasRemote(store.dataDir))) {
+    warnings.push('数据仓库未配置远程，发布后仅本地提交（可稍后手动同步）')
+  }
+
+  return {
+    projectId: project.id,
+    projectName: project.name,
+    projectVersion,
+    buildStamp: stamp,
+    bump,
+    suggestedBump,
+    changed,
+    syncedOnly,
+    milestoneTag,
+    tags: changed.map(r => ({ repoId: r.repoId, name: r.name, tag: `${BUILD_TAG_PREFIX}/${r.version}` })),
+    externalDraft,
+    internalDraft,
+    warnings,
+  }
+}
+
+// ==================== 版本文件写入 ====================
+
+interface HistoryItem {
+  version: string
+  build: string
+  buildTime: string
+  sync?: boolean
+}
+
+function appendHistory(outDir: string, item: HistoryItem): void {
+  const hp = path.join(outDir, 'version-history.json')
+  let arr: HistoryItem[] = []
+  if (fs.existsSync(hp)) {
+    try {
+      const parsed = JSON.parse(fs.readFileSync(hp, 'utf8'))
+      arr = Array.isArray(parsed) ? parsed : []
+    } catch {
+      arr = []
+    }
+  }
+  arr.push(item)
+  fs.writeFileSync(hp, JSON.stringify(arr, null, 2))
+}
+
+/**
+ * 写入业务仓库 version.json + version-history.json（受 writeVersionFile 开关控制）。
+ * 幂等：与本次计划内容一致 → 跳过；与上次发布记录版本一致 → 正常覆盖；其余 → 抛错防误覆盖。
+ */
+export async function writeVersionFiles(
+  repo: RepoDef,
+  plan: PlannedRepo,
+  _project: ProjectDef,
+  buildStamp: string,
+  prevRecordVersion?: string,
+): Promise<void> {
+  if (repo.writeVersionFile === false) return
+  const outDir = path.join(repo.path, repo.outputDir ?? 'public')
+  fs.mkdirSync(outDir, { recursive: true })
+  const vfPath = path.join(outDir, 'version.json')
+  const data: HistoryItem = { version: plan.version, build: buildStamp, buildTime: new Date().toISOString() }
+  if (fs.existsSync(vfPath)) {
+    let existing: HistoryItem | null = null
+    try {
+      existing = JSON.parse(fs.readFileSync(vfPath, 'utf8')) as HistoryItem
+    } catch {
+      existing = null
+    }
+    if (existing && existing.version === data.version && existing.build === data.build) return
+    if (!existing || (prevRecordVersion && existing.version !== prevRecordVersion)) {
+      throw new Error(`version.json 与计划不一致（可能被外部修改）: ${vfPath}`)
+    }
+  }
+  fs.writeFileSync(vfPath, JSON.stringify(data, null, 2))
+  appendHistory(outDir, data)
+}
+
+/** 未变动仓库仅同步基版：version.json 的 version 更新为项目版本，build/buildTime 保持上次值 */
+export async function syncUnchangedVersionFile(repo: RepoDef, project: ProjectDef): Promise<void> {
+  if (repo.writeVersionFile === false) return
+  const outDir = path.join(repo.path, repo.outputDir ?? 'public')
+  fs.mkdirSync(outDir, { recursive: true })
+  const vfPath = path.join(outDir, 'version.json')
+  let base: Partial<HistoryItem> = {}
+  if (fs.existsSync(vfPath)) {
+    try {
+      base = JSON.parse(fs.readFileSync(vfPath, 'utf8')) as HistoryItem
+    } catch {
+      base = {}
+    }
+  }
+  const data: HistoryItem = {
+    version: project.version,
+    build: base.build ?? '',
+    buildTime: base.buildTime ?? '',
+  }
+  fs.writeFileSync(vfPath, JSON.stringify(data, null, 2))
+  appendHistory(outDir, { ...data, sync: true })
+}
+
+// ==================== 发布编排 ====================
+
+export interface ExecuteResult {
+  releaseId: string | null
+  failedRepos: string[]
+}
+
+/**
+ * 发布执行状态机（串行、失败隔离、journal 续跑）：
+ * preflight → [per-repo: build → tags → version-file → push → record] → sync-unchanged
+ * → project-record → data-commit（里程碑 tag + commit + push）→ done
+ */
+export async function executePublish(
+  req: PublishRequest,
+  opts: { onEvent: (e: PublishEvent) => void; taskId?: string },
+): Promise<ExecuteResult> {
+  const { onEvent } = opts
+  const emit = (type: PublishEvent['type'], message: string, extra: Partial<PublishEvent> = {}) =>
+    onEvent({ type, message, ...extra } as PublishEvent)
+
+  const cfg = await loadAppConfig()
+  const project = cfg.projects.find(p => p.id === req.projectId)
+  if (!project) throw new Error(`项目不存在: ${req.projectId}`)
+  const store = new DataStore({ dataDir: cfg.dataDir })
+  const journalStore = new JournalStore()
+
+  // ---- 续跑检测：同项目存在活跃 journal → 复用其 taskId 与锁存计划 ----
+  const existing = journalStore.findActive(project.id)
+  const resume = !!(existing && existing.plan)
+  const journal: Journal = resume && existing
+    ? { ...existing, status: 'running' }
+    : {
+        taskId: opts.taskId ?? `t_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+        projectId: project.id,
+        startedAt: new Date().toISOString(),
+        status: 'running',
+        request: req,
+        plan: null,
+        steps: [],
+      }
+  const plan = resume ? (journal.plan as PublishPlan) : await planPublish(req)
+  journal.plan = plan
+  journalStore.save(journal)
+  if (resume) emit('log', `检测到中断任务 ${journal.taskId}，从断点续跑（跳过已完成仓库）`)
+
+  const stepOf = (repoId: string | null, phase: JournalPhase) =>
+    journal.steps.find(s => s.repoId === repoId && s.phase === phase)
+  const setStep = (repoId: string | null, phase: JournalPhase, state: 'pending' | 'running' | 'done' | 'failed', detail = '') => {
+    const s = stepOf(repoId, phase)
+    if (s) {
+      s.state = state
+      s.detail = detail
+    } else {
+      journal.steps.push({ seq: journal.steps.length + 1, repoId, phase, state, detail })
+    }
+    journalStore.save(journal)
+    if (detail) emit('step', detail, repoId ? { repoId } : {})
+  }
+  const failCurrent = (repoId: string | null, message: string) => {
+    const s = journal.steps.filter(x => x.repoId === repoId && x.state === 'running').pop()
+    if (s) {
+      s.state = 'failed'
+      s.detail = message
+      journalStore.save(journal)
+    }
+  }
+
+  const repoDefOf = (id: string): RepoDef => {
+    const r = project.repos.find(x => x.id === id)
+    if (!r) throw new Error(`仓库不存在: ${id}`)
+    return r
+  }
+
+  // ---- 1. 预检 ----
+  const failedRepos: string[] = []
+  for (const planned of plan.changed) {
+    if (resume && stepOf(planned.repoId, 'record')?.state === 'done') continue
+    setStep(planned.repoId, 'preflight', 'running')
+    const pf = await runPreflight(repoDefOf(planned.repoId), planned, project)
+    if (!pf.ok) {
+      setStep(planned.repoId, 'preflight', 'failed', pf.blocked.join('；'))
+      emit('repo-error', `${planned.name} 预检未通过：${pf.blocked.join('；')}`, { repoId: planned.repoId })
+      failedRepos.push(planned.repoId)
+    } else {
+      setStep(planned.repoId, 'preflight', 'done')
+    }
+  }
+
+  // ---- 2. 逐 changed 仓库（串行，try/catch 隔离） ----
+  const repoRecords: ReleaseRecord[] = []
+  for (const planned of plan.changed) {
+    if (resume && stepOf(planned.repoId, 'record')?.state === 'done') continue
+    if (failedRepos.includes(planned.repoId)) continue
+    const repo = repoDefOf(planned.repoId)
+    emit('repo-start', `${planned.name} 开始发布 → ${planned.version}`, { repoId: planned.repoId })
+    try {
+      // 2.1 构建（失败 → repo-error，未打标签无污染）
+      if (repo.buildCommand && !req.skipBuild) {
+        setStep(planned.repoId, 'build', 'running')
+        emit('log', `执行构建: ${repo.buildCommand}`, { repoId: planned.repoId })
+        const r = await git.runShell(repo.buildCommand, repo.path, line => emit('log', line, { repoId: planned.repoId }))
+        if (!r.ok) throw new Error(`构建失败: ${r.stderr.split('\n')[0] || `退出码 ${r.code}`}`)
+        setStep(planned.repoId, 'build', 'done')
+      } else if (repo.buildCommand && req.skipBuild) {
+        emit('log', '跳过构建（--skip-build）', { repoId: planned.repoId })
+      }
+
+      // 2.2 标签（幂等）
+      const m = planned.version.match(/^v?(\d+)\.(\d+)\.(\d+)/)
+      const milestone = m ? `v${m[1]}.${m[2]}.${m[3]}` : plan.milestoneTag
+      setStep(planned.repoId, 'tag-milestone', 'running')
+      await git.createTag(repo.path, milestone, { message: `Release ${milestone}` })
+      setStep(planned.repoId, 'tag-milestone', 'done', milestone)
+
+      const buildTag = `${BUILD_TAG_PREFIX}/${planned.version}`
+      setStep(planned.repoId, 'tag-build', 'running')
+      await git.createTag(repo.path, buildTag, { message: `Build ${planned.version}` })
+      setStep(planned.repoId, 'tag-build', 'done', buildTag)
+
+      // 2.3 版本文件（幂等）
+      setStep(planned.repoId, 'version-file', 'running')
+      const prevRecord = (await store.listRecords(repo.id, 1))[0]
+      await writeVersionFiles(repo, planned, project, plan.buildStamp, prevRecord?.version)
+      setStep(planned.repoId, 'version-file', 'done')
+
+      // 2.4 推送（失败降级纯本地）
+      let pushed = false
+      if (!req.offline) {
+        setStep(planned.repoId, 'push', 'running')
+        try {
+          await git.pushTag(repo.path, milestone)
+          await git.pushTag(repo.path, buildTag)
+          pushed = true
+          setStep(planned.repoId, 'push', 'done')
+        } catch (e) {
+          emit('log', `推送失败（降级纯本地）: ${(e as Error).message}`, { repoId: planned.repoId })
+          setStep(planned.repoId, 'push', 'failed', (e as Error).message)
+        }
+      }
+
+      // 2.5 仓库记录（不可变落盘）+ 前移检测基准
+      setStep(planned.repoId, 'record', 'running')
+      const date = new Date().toISOString()
+      const stats = changelog.computeStats(planned.commits)
+      const internal = changelog.renderInternal(planned.commits, {
+        version: planned.version,
+        baseVersion: plan.projectVersion,
+        date,
+        repoName: planned.name,
+        projectName: project.name,
+        buildStamp: plan.buildStamp,
+        from: planned.from ?? null,
+        tags: [buildTag, milestone],
+        stats,
+      })
+      const external = changelog.renderExternal(planned.commits, {
+        version: planned.version,
+        date,
+        repoName: planned.name,
+        projectName: project.name,
+        buildStamp: plan.buildStamp,
+        exclude: project.externalExclude,
+      })
+      const record: ReleaseRecord = {
+        id: store.nextReleaseId('repo', repo.id, planned.version),
+        kind: 'repo',
+        scopeId: repo.id,
+        scopeName: planned.name,
+        version: planned.version,
+        baseVersion: plan.projectVersion,
+        buildStamp: plan.buildStamp,
+        bump: plan.bump,
+        date,
+        from: planned.from ?? null,
+        to: planned.to,
+        commits: planned.commits,
+        stats,
+        logs: {
+          internal: { state: 'auto', content: internal, autoDraft: internal },
+          external: { state: 'auto', content: external, autoDraft: external },
+        },
+        tags: { build: buildTag, milestone },
+        pushed,
+        builtBy: APP_NAME,
+      }
+      await store.writeRecord(record)
+      repoRecords.push(record)
+      setStep(planned.repoId, 'record', 'done', record.id)
+
+      repo.lastPublishCommit = planned.to ?? null
+      await store.saveProject(project)
+
+      emit('repo-done', `${planned.name} → ${planned.version}`, { repoId: planned.repoId })
+    } catch (e) {
+      failCurrent(planned.repoId, (e as Error).message)
+      emit('repo-error', `${planned.name} 发布失败: ${(e as Error).message}`, { repoId: planned.repoId })
+      failedRepos.push(planned.repoId)
+    }
+  }
+
+  // ---- 3. 未变动仓库同步基版 ----
+  for (const s of plan.syncedOnly) {
+    const repo = repoDefOf(s.repoId)
+    try {
+      await syncUnchangedVersionFile(repo, project)
+      emit('log', `${s.name} 同步基版版本号 → ${plan.projectVersion}（未变动，无标签无记录）`)
+    } catch (e) {
+      emit('log', `${s.name} 基版同步失败: ${(e as Error).message}`)
+    }
+  }
+
+  // ---- 4. 项目聚合记录 ----
+  const okCount = plan.changed.length - failedRepos.length
+  if (okCount === 0) {
+    emit('error', '全部仓库失败，未生成发布记录')
+    journal.status = 'failed'
+    journalStore.save(journal)
+    return { releaseId: null, failedRepos }
+  }
+  setStep(null, 'project-record', 'running')
+  const allCommits = repoRecords.flatMap(r => r.commits)
+  const internal = req.internalContent ?? plan.internalDraft
+  const external = req.externalContent ?? plan.externalDraft
+  const projectRecord: ReleaseRecord = {
+    id: store.nextReleaseId('project', project.id, plan.projectVersion),
+    kind: 'project',
+    scopeId: project.id,
+    scopeName: project.name,
+    version: plan.projectVersion,
+    baseVersion: project.version,
+    buildStamp: plan.buildStamp,
+    bump: plan.bump,
+    date: new Date().toISOString(),
+    commits: allCommits,
+    stats: changelog.computeStats(allCommits),
+    logs: {
+      internal: {
+        state: internal === plan.internalDraft ? 'auto' : 'edited',
+        content: internal,
+        autoDraft: plan.internalDraft,
+      },
+      external: {
+        state: external === plan.externalDraft ? 'auto' : 'edited',
+        content: external,
+        autoDraft: plan.externalDraft,
+      },
+    },
+    repos: repoRecords.map(r => ({
+      repoId: r.scopeId,
+      repoName: r.scopeName,
+      version: r.version,
+      commits: r.commits,
+    })),
+    tags: { milestone: plan.milestoneTag },
+    pushed: repoRecords.every(r => r.pushed),
+    builtBy: APP_NAME,
+  }
+  await store.writeRecord(projectRecord)
+  setStep(null, 'project-record', 'done', projectRecord.id)
+  project.version = plan.projectVersion
+  await store.saveProject(project)
+
+  // ---- 5. 数据仓库：里程碑标签 + commit + push ----
+  try {
+    await store.ensureDataRepo()
+    await git.createTag(store.dataDir, plan.milestoneTag, { message: `Unified release ${plan.projectVersion}` })
+  } catch (e) {
+    emit('log', `数据仓库里程碑标签失败: ${(e as Error).message}`)
+  }
+  setStep(null, 'data-commit', 'running')
+  try {
+    const hash = await store.commitRecords(`release(project:${project.id}): ${plan.projectVersion}`)
+    if (hash) emit('log', `数据仓库已提交 ${hash}`)
+    else emit('log', '数据仓库无变更')
+  } catch (e) {
+    emit('log', `数据仓库提交失败: ${(e as Error).message}`)
+  }
+  if (!req.offline) {
+    const pushR = await store.syncDataRepo('push')
+    if (pushR.ok) emit('log', '数据仓库已推送')
+    else emit('log', `数据仓库推送失败（仅本地提交）: ${pushR.message ?? ''}`)
+  }
+  setStep(null, 'data-commit', 'done')
+
+  // ---- 6. 收尾 ----
+  journal.status = 'done'
+  journalStore.save(journal)
+  journalStore.cleanup()
+  emit('done', `统一发布完成: ${plan.projectVersion}`, {
+    data: { releaseId: projectRecord.id, version: plan.projectVersion, failedRepos },
+  })
+  return { releaseId: projectRecord.id, failedRepos }
+}

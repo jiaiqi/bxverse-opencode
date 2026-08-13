@@ -1,0 +1,309 @@
+// packages/core/src/store.ts
+// 数据目录、app.json 配置、凭据、发布记录（DataStore）、数据仓库操作
+
+import fs from 'node:fs'
+import path from 'node:path'
+import { createHash, randomBytes, timingSafeEqual } from 'node:crypto'
+import { APP_DEFAULT_PORT } from '@bxverse/shared'
+import type { AppConfig, ProjectDef, ReleaseRecord } from '@bxverse/shared'
+import { atomicWrite, ensureDirs, resolveHome } from './home'
+import { ensureOk, git } from './git'
+
+const home = ensureDirs()
+
+/** 家目录根（BX_HOME ?? ~/.bxverse） */
+export const APP_DIR: string = home.root
+
+export const DEFAULT_APP_CONFIG: AppConfig = {
+  port: APP_DEFAULT_PORT,
+  host: '127.0.0.1',
+  theme: 'system',
+  pwa: { enabled: true },
+  dataDir: home.dataDir,
+  pollInterval: 30_000,
+  ai: { enabled: false, baseUrl: '', model: '', apiKey: '' },
+  projects: [],
+}
+
+const APP_JSON = path.join(APP_DIR, 'app.json')
+const CRED_JSON = path.join(APP_DIR, 'credentials.json')
+
+function deepMergeDefault(raw: Partial<AppConfig>): AppConfig {
+  return {
+    ...DEFAULT_APP_CONFIG,
+    ...raw,
+    pwa: { ...DEFAULT_APP_CONFIG.pwa, ...(raw.pwa ?? {}) },
+    ai: { ...DEFAULT_APP_CONFIG.ai, ...(raw.ai ?? {}) },
+    dataDir: raw.dataDir ?? DEFAULT_APP_CONFIG.dataDir,
+  }
+}
+
+/** 读取 app.json；缺失时写默认值；深合并新字段兜底 */
+export async function loadAppConfig(): Promise<AppConfig> {
+  if (!fs.existsSync(APP_JSON)) {
+    const cfg: AppConfig = { ...DEFAULT_APP_CONFIG, projects: [] }
+    atomicWrite(APP_JSON, JSON.stringify(cfg, null, 2))
+    return cfg
+  }
+  let raw: unknown
+  try {
+    raw = JSON.parse(fs.readFileSync(APP_JSON, 'utf8'))
+  } catch (e) {
+    throw new Error(`无法解析 app.json: ${(e as Error).message}`)
+  }
+  return deepMergeDefault(raw as Partial<AppConfig>)
+}
+
+export async function saveAppConfig(cfg: AppConfig): Promise<void> {
+  atomicWrite(APP_JSON, JSON.stringify(cfg, null, 2))
+}
+
+// ==================== 凭据 ====================
+
+export interface Credentials {
+  token: string
+  dataRemote?: string | null
+}
+
+export function generateToken(): string {
+  return randomBytes(32).toString('hex')
+}
+
+export async function loadCredentials(): Promise<Credentials> {
+  if (!fs.existsSync(CRED_JSON)) {
+    const cred: Credentials = { token: generateToken(), dataRemote: null }
+    await saveCredentials(cred)
+    return cred
+  }
+  const cred = JSON.parse(fs.readFileSync(CRED_JSON, 'utf8')) as Credentials
+  return { token: cred.token ?? '', dataRemote: cred.dataRemote ?? null }
+}
+
+export async function saveCredentials(cred: Credentials): Promise<void> {
+  atomicWrite(CRED_JSON, JSON.stringify(cred, null, 2), 0o600)
+  try {
+    fs.chmodSync(CRED_JSON, 0o600)
+  } catch {
+    // Windows 下 chmod 无效，尽力而为
+  }
+}
+
+/** 恒时比较（防时序攻击） */
+export function tokenMatches(a: string, b: string): boolean {
+  const ha = createHash('sha256').update(String(a)).digest()
+  const hb = createHash('sha256').update(String(b)).digest()
+  return timingSafeEqual(ha, hb)
+}
+
+// ==================== 版本安全名 ====================
+
+/** releases 目录安全名：version.replace(/[<>:"/\\|?*\s]/g, '_') */
+export function versionSafe(version: string): string {
+  return version.replace(/[<>:"/\\|?*\s]/g, '_')
+}
+
+// ==================== 同步结果 ====================
+
+export type SyncResult = { action: string; ok: boolean; message?: string; warning?: string } & Record<string, unknown>
+
+// ==================== 数据仓库 ====================
+
+export class DataStore {
+  readonly dataDir: string
+  readonly homeDir: string
+
+  constructor(opts: { home?: string; dataDir?: string } = {}) {
+    const h = resolveHome(opts.home)
+    this.homeDir = h.root
+    this.dataDir = opts.dataDir ?? h.dataDir
+  }
+
+  /** 确保数据仓库：git init + .gitignore + 首次 commit + 按需配置 origin + pull --ff-only */
+  async ensureDataRepo(): Promise<void> {
+    fs.mkdirSync(this.dataDir, { recursive: true })
+    const gitDir = path.join(this.dataDir, '.git')
+    if (!fs.existsSync(gitDir)) {
+      fs.writeFileSync(path.join(this.dataDir, '.gitignore'), '*.tmp-*\n')
+      ensureOk(await git(['init', '-b', 'master'], { cwd: this.dataDir }))
+      ensureOk(await git(['add', '-A'], { cwd: this.dataDir }))
+      ensureOk(await git(['commit', '-m', 'chore: init bxverse data repo'], { cwd: this.dataDir }))
+    }
+    const cred = await loadCredentials()
+    const hasOrigin = (await git(['remote', 'get-url', 'origin'], { cwd: this.dataDir })).ok
+    if (!hasOrigin && cred.dataRemote) {
+      ensureOk(await git(['remote', 'add', 'origin', cred.dataRemote], { cwd: this.dataDir }))
+    }
+    if (hasOrigin || cred.dataRemote) {
+      const r = await git(['pull', '--ff-only'], { cwd: this.dataDir, timeoutMs: 60_000 })
+      if (!r.ok) {
+        // 失败仅警告（保留本地），不阻断
+        console.warn(`[bxverse] 数据仓库 pull 失败: ${r.stderr.split('\n')[0]}`)
+      }
+    }
+  }
+
+  // ---------- app.json 内嵌 projects CRUD（原子写） ----------
+
+  async listProjects(): Promise<ProjectDef[]> {
+    return (await loadAppConfig()).projects
+  }
+
+  async getProject(id: string): Promise<ProjectDef | undefined> {
+    return (await this.listProjects()).find(p => p.id === id)
+  }
+
+  async saveProject(p: ProjectDef): Promise<void> {
+    const cfg = await loadAppConfig()
+    const idx = cfg.projects.findIndex(x => x.id === p.id)
+    const stamped = { ...p, updatedAt: new Date().toISOString() }
+    if (idx === -1) cfg.projects.push(stamped)
+    else cfg.projects[idx] = stamped
+    await saveAppConfig(cfg)
+  }
+
+  async deleteProject(id: string): Promise<void> {
+    const cfg = await loadAppConfig()
+    cfg.projects = cfg.projects.filter(p => p.id !== id)
+    await saveAppConfig(cfg)
+  }
+
+  // ---------- 发布记录（数据仓库） ----------
+
+  nextReleaseId(kind: 'project' | 'repo', scopeId: string, version: string): string {
+    return `rel_${kind === 'project' ? 'p' : 'r'}_${scopeId}_${versionSafe(version)}`
+  }
+
+  /**
+   * 落盘发布记录（不可变）：
+   * 写 internal.md → external.md → data.json（最后，作为「落盘完成」判据）→ 重建两级索引。
+   * 目标 data.json 已存在且内容一致 → 幂等跳过；不一致 → 抛错。
+   */
+  async writeRecord(record: ReleaseRecord): Promise<void> {
+    const dir = path.join(this.dataDir, 'releases', record.scopeId, versionSafe(record.version))
+    const dataPath = path.join(dir, 'data.json')
+    const incoming = JSON.stringify(record, null, 2)
+    if (fs.existsSync(dataPath)) {
+      const existing = fs.readFileSync(dataPath, 'utf8')
+      if (existing === incoming) return
+      throw new Error(`发布记录已存在且内容不一致（不可变）: ${dataPath}`)
+    }
+    fs.mkdirSync(dir, { recursive: true })
+    atomicWrite(path.join(dir, 'internal.md'), record.logs.internal.content)
+    atomicWrite(path.join(dir, 'external.md'), record.logs.external.content)
+    atomicWrite(dataPath, incoming)
+    await this.rebuildScopeIndex(record.scopeId)
+    await this.rebuildGlobalIndex()
+  }
+
+  /** 按 id 扫描读取（解析 id 不可靠，直接匹配 data.json 的 id 字段） */
+  async readRecord(id: string): Promise<ReleaseRecord | null> {
+    const found = (await this.listRecordFiles()).find(({ record }) => record.id === id)
+    return found?.record ?? null
+  }
+
+  /** scope 发布历史（倒序），n 默认 20、上限 100 */
+  async listRecords(scopeId: string, n = 20): Promise<ReleaseRecord[]> {
+    const items = await this.listRecordFiles(scopeId)
+    return items
+      .sort((a, b) => b.record.date.localeCompare(a.record.date))
+      .slice(0, Math.min(Math.max(n, 1), 100))
+      .map(x => x.record)
+  }
+
+  /** data/ 内 git add -A + commit；无变更返回 ''（不产生空提交） */
+  async commitRecords(message: string): Promise<string> {
+    const status = await git(['status', '--porcelain'], { cwd: this.dataDir })
+    if (!status.ok || !status.stdout.trim()) return ''
+    ensureOk(await git(['add', '-A'], { cwd: this.dataDir }))
+    ensureOk(await git(['commit', '-m', message], { cwd: this.dataDir }))
+    const rev = await git(['rev-parse', '--short', 'HEAD'], { cwd: this.dataDir })
+    return (rev.ok ? rev.stdout : '').trim()
+  }
+
+  /** 数据仓库同步：pull / push / commit / status */
+  async syncDataRepo(action: 'pull' | 'push' | 'commit' | 'status'): Promise<SyncResult> {
+    const hasOrigin = (await git(['remote', 'get-url', 'origin'], { cwd: this.dataDir })).ok
+    if (action === 'status') {
+      if (!hasOrigin) return { action, ok: true, remote: false, message: '未配置远程' }
+      const branchR = await git(['branch', '--show-current'], { cwd: this.dataDir })
+      const branch = (branchR.ok ? branchR.stdout : '').trim() || 'master'
+      const aheadR = await git(['rev-list', '--count', `origin/${branch}..HEAD`], { cwd: this.dataDir })
+      const behindR = await git(['rev-list', '--count', `HEAD..origin/${branch}`], { cwd: this.dataDir })
+      const ahead = Number(((aheadR.ok ? aheadR.stdout : '') || '0').trim())
+      const behind = Number(((behindR.ok ? behindR.stdout : '') || '0').trim())
+      return { action, ok: true, remote: true, ahead, behind, branch }
+    }
+    if (action === 'commit') {
+      const hash = await this.commitRecords('chore: manual commit')
+      return { action, ok: true, hash }
+    }
+    if (!hasOrigin) return { action, ok: false, message: '未配置远程 origin' }
+    if (action === 'pull') {
+      const r = await git(['pull', '--ff-only'], { cwd: this.dataDir, timeoutMs: 60_000 })
+      if (r.ok) return { action, ok: true }
+      return { action, ok: false, message: r.stderr.split('\n')[0] }
+    }
+    const r = await git(['push', 'origin', 'HEAD'], { cwd: this.dataDir, timeoutMs: 60_000 })
+    if (r.ok) return { action, ok: true }
+    return { action, ok: false, message: r.stderr.split('\n')[0] }
+  }
+
+  // ---------- 内部：记录扫描与索引重建 ----------
+
+  private async listRecordFiles(scopeId?: string): Promise<{ record: ReleaseRecord; dir: string }[]> {
+    const root = path.join(this.dataDir, 'releases')
+    const out: { record: ReleaseRecord; dir: string }[] = []
+    if (!fs.existsSync(root)) return out
+    const scopes = scopeId ? [scopeId] : fs.readdirSync(root)
+    for (const scope of scopes) {
+      const scopeDir = path.join(root, scope)
+      let isDir = false
+      try {
+        isDir = fs.statSync(scopeDir).isDirectory()
+      } catch {
+        continue
+      }
+      if (!isDir) continue
+      for (const vd of fs.readdirSync(scopeDir)) {
+        const dataPath = path.join(scopeDir, vd, 'data.json')
+        if (!fs.existsSync(dataPath)) continue
+        try {
+          const record = JSON.parse(fs.readFileSync(dataPath, 'utf8')) as ReleaseRecord
+          out.push({ record, dir: path.join(scopeDir, vd) })
+        } catch {
+          // 跳过损坏记录（启动自愈由重建索引承担）
+        }
+      }
+    }
+    return out
+  }
+
+  private async rebuildScopeIndex(scopeId: string): Promise<void> {
+    const items = (await this.listRecordFiles(scopeId))
+      .sort((a, b) => b.record.date.localeCompare(a.record.date))
+      .map(({ record }) => ({
+        id: record.id,
+        kind: record.kind,
+        version: record.version,
+        buildStamp: record.buildStamp,
+        date: record.date,
+      }))
+    atomicWrite(
+      path.join(this.dataDir, 'releases', scopeId, 'index.json'),
+      JSON.stringify({ schemaVersion: 1, scopeId, releases: items }, null, 2),
+    )
+  }
+
+  private async rebuildGlobalIndex(): Promise<void> {
+    const items = (await this.listRecordFiles())
+      .sort((a, b) => b.record.date.localeCompare(a.record.date))
+      .map(({ record }) => ({
+        id: record.id,
+        kind: record.kind,
+        scopeId: record.scopeId,
+        version: record.version,
+        date: record.date,
+      }))
+    atomicWrite(path.join(this.dataDir, 'index.json'), JSON.stringify({ schemaVersion: 1, releases: items }, null, 2))
+  }
+}
