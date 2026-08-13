@@ -10,7 +10,7 @@
 | R18 版本清单导出（下载/写仓库/本地目录） | ✅ 完成 | 2026-08-13 |
 | M4 发布向导六步 + 双轨日志编辑器 + SSE 控制台 + 前端轮询刷新 | ✅ 完成（向导 e2e + 中断续跑演练通过） | 2026-08-13 |
 | WIG 整改 + 四项目借鉴（realpath 加固 / RuntimeStatus / 提交级排除 / seed+icons 脚本） | ✅ 完成 | 2026-08-13 |
-| M5 自动化 / PWA 运行时启用 / AI / 收尾 | ⬜ 待做 | — |
+| M5 自动化 / PWA 运行时启用 / AI / 收尾 | 🟡 部分完成（M5-01 PWA 运行时注册 ✅；AI/引导/兼容回归待做） | 2026-08-13 |
 | M6 版本一致性对比与发布备份（R19） | ✅ 完成（core 单测 + API E2E 全通过） | 2026-08-13 |
 | M7 备份恢复（R19 低优先级，远期） | ⏸ 暂缓 | — |
 
@@ -267,7 +267,7 @@ architecture §3.2 全部路由可用且经 curl 验证；SSE 通道、单队列
 
 | 编号 | 标题 | 涉及文件 | 输入 → 输出 | 依赖 | 人日 |
 |---|---|---|---|---|---|
-| M5-01 | PWA 运行时注册 | `apps/web/src/pwa/register.ts`、`apps/web/public/`、manifest 配置 | `AppConfig.pwa.enabled` → enabled 时动态 import 注册 SW；disabled 时 unregister 并提示刷新；补图标/manifest | M3-05、M4-12 | 1 |
+| M5-01 | PWA 运行时注册 ✅（已完成） | `apps/web/src/pwa/register.ts`、`apps/web/public/`、manifest 配置 | `AppConfig.pwa.enabled` → enabled 时动态 import 注册 SW（dev 短路）；disabled 时 unregister + 清缓存 + 移除 manifest link；boot 与设置页保存两个调用点 | M3-05、M4-12 | 1 |
 | M5-02 | AI 润色接线 | `apps/server/src/api/`（新增 polish 路由）、`LogEditor.vue` 润色按钮 | 日志文本 + `AppConfig.ai` → POST `/api/ai/polish` → 润色结果（未启用时按钮隐藏/短路；api.md 同步补路由） | M1-26、M4-05 | 1 |
 | M5-03 | 初始数据导入 | 导入脚本或 UI 引导（写入 app.json） | 6 工程路径清单 → 「主产品线」项目 + 6 仓库（R11）；路径不存在给出明确修复提示 | M3-10、M2-17 | 1 |
 | M5-04 | 自动检测体验 | `Dashboard.vue` 轮询刷新 | `pollInterval` → 变更徽标实时性（无闪烁）、发布期间暂停该项目轮询 | M3-09、M1-21 | 0.5 |
@@ -391,4 +391,5 @@ architecture §3.2 全部路由可用且经 curl 验证；SSE 通道、单队列
 | 2026-08-13 | 新增 R19/M6：备份与一致性对比（备份范围= bundle + archive 快照，遵循 .gitignore；产物目录按仓库由用户选择 artifactDir；恢复功能 M7 低优先级暂缓）；风险清单补 #10/#11 |
 | 2026-08-13 | M6 完成：core backup/compare 零依赖引擎 + 发布流程挂接 + 备份 API + 前端备份管理页；验收全过（core 单测 / API E2E：备份、下载、校验、产物与源码对比、删除） |
 | 2026-08-13 | WIG 整改 + 四项目借鉴落地：realpath 加固、RuntimeStatus 服务状态 chip、发布向导提交级排除、seed/icons 脚本；文档同步补全（frontend.md / development.md / AGENTS.md / README.md） |
+| 2026-08-13 | M5-01 完成：PWA 运行时注册（pwa/register.ts 动态 import 注册/注销，boot + 设置页双调用点）；缺陷修复：versions/export 增加盘符/UNC 绝对路径拦截（POSIX 下 path.isAbsolute 不识别 C:/），server 测试非 git 目录用例改为 mkdtemp 跨平台夹具（不再依赖 Windows TEMP） |
 
