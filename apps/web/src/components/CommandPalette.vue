@@ -122,7 +122,7 @@ const flatActive = (groupIdx: number, itemIdx: number): number => {
   <NModal
     :show="uiStore.paletteOpen"
     :closable="true"
-    @update:show="v => uiStore.togglePalette(v)"
+    @update:show="(v: boolean) => uiStore.togglePalette(v)"
     transform-origin="center"
   >
     <div class="w-160 max-w-90vw rounded-lg bg-surface border border-border shadow-lg overflow-hidden">

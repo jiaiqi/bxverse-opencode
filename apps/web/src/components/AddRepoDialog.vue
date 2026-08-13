@@ -88,7 +88,7 @@ async function submitUrl() {
     preset="card"
     title="接入代码仓库"
     class="w-140 max-w-95vw"
-    @update:show="v => emit('update:show', v)"
+    @update:show="(v: boolean) => emit('update:show', v)"
   >
     <NTabs v-model:value="tab" type="segment" animated>
       <NTabPane name="path" tab="本地路径">
