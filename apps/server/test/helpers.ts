@@ -17,6 +17,11 @@ export function makeRepo(): string {
   return dir
 }
 
+/** 创建保证非 git 的临时目录（跨平台，不依赖 Windows TEMP 环境变量） */
+export function makeDir(): string {
+  return mkdtempSync(path.join(tmpdir(), 'bxverse-srv-dir-'))
+}
+
 export function commit(dir: string, message: string, files: Record<string, string>): string {
   for (const [f, content] of Object.entries(files)) {
     const p = path.join(dir, f)
