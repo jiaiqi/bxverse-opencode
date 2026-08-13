@@ -149,10 +149,10 @@ watch(tab, (t) => {
         </span>
       </PageHeader>
 
-      <div class="card">
-        <NTabs v-model:value="tab" type="line" animated>
+      <div class="card overflow-hidden">
+        <NTabs v-model:value="tab" type="line" animated :pane-style="{ padding: '0' }">
           <NTabPane name="files" tab="文件">
-            <div class="flex h-140 -m-5 mt-4">
+            <div class="flex h-140">
               <div class="w-72 shrink-0 border-r border-border overflow-y-auto">
                 <FileTree :pid="pid" :rid="rid" @select="p => selectedFile = p" />
               </div>
@@ -163,7 +163,7 @@ watch(tab, (t) => {
           </NTabPane>
 
           <NTabPane name="logs" tab="版本日志">
-            <div class="flex h-140 -m-5 mt-4">
+            <div class="flex h-140">
               <div class="w-80 shrink-0 border-r border-border overflow-y-auto">
                 <div v-if="releasesLoading" class="p-6 text-center text-text-3"><NSpin size="small" /></div>
                 <div v-else-if="releases.length === 0" class="p-4">
@@ -200,7 +200,7 @@ watch(tab, (t) => {
           </NTabPane>
 
           <NTabPane name="settings" tab="设置">
-            <div class="max-w-xl py-2 space-y-5">
+            <div class="p-5 max-w-xl space-y-5">
               <div>
                 <div class="text-sm font-medium text-text-1 mb-1">本地路径</div>
                 <div class="code-text text-13px text-text-2 bg-surface-alt border border-border rounded-md px-3 py-2">{{ repo.path }}</div>
