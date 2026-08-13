@@ -170,9 +170,9 @@ async function submitExportWrite() {
 }
 
 const exportOptions = [
-  { label: '另存为文件（原生对话框）', key: 'download', icon: () => 'i-carbon-download' },
-  { label: '写入项目仓库（选择目录）', key: 'write', icon: () => 'i-carbon-folder-add' },
-  { label: '导出到本地目录（原生选择器）', key: 'local', icon: () => 'i-carbon-save' },
+  { label: '另存为文件（原生对话框）', key: 'download', icon: () => h('i', { class: 'i-carbon-download text-16px' }) },
+  { label: '写入项目仓库（选择目录）', key: 'write', icon: () => h('i', { class: 'i-carbon-folder-add text-16px' }) },
+  { label: '导出到本地目录（原生选择器）', key: 'local', icon: () => h('i', { class: 'i-carbon-save text-16px' }) },
 ]
 
 function onExportSelect(key: string) {
