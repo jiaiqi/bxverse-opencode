@@ -8,11 +8,14 @@ import ProjectCard from '../components/ProjectCard.vue'
 import EmptyState from '../components/EmptyState.vue'
 import AddProjectDialog from '../components/AddProjectDialog.vue'
 import { useNow } from '../composables/useNow'
+import { usePolling } from '../composables/usePolling'
 import { useMessage } from 'naive-ui'
+import { useAppStore } from '../stores/app'
 import type { OverviewData } from '@bxverse/shared'
 
 const router = useRouter()
 const projectsStore = useProjectsStore()
+const appStore = useAppStore()
 const message = useMessage()
 const now = useNow()
 const showAddProject = ref(false)
@@ -58,6 +61,9 @@ async function syncData() {
 onMounted(() => {
   void refresh()
 })
+
+// 页面可见时按配置周期自动刷新（总览/项目/仓库状态）
+usePolling(refresh, computed(() => appStore.pollInterval).value || 30_000)
 </script>
 
 <template>

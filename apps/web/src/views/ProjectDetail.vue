@@ -14,10 +14,13 @@ import AddProjectDialog from '../components/AddProjectDialog.vue'
 import DirPicker from '../components/DirPicker.vue'
 import { useDialog, useMessage } from 'naive-ui'
 import { useFsAccess } from '../composables/useFsAccess'
+import { usePolling } from '../composables/usePolling'
+import { useAppStore } from '../stores/app'
 
 const route = useRoute()
 const router = useRouter()
 const projectsStore = useProjectsStore()
+const appStore = useAppStore()
 const dialog = useDialog()
 const message = useMessage()
 
@@ -224,6 +227,11 @@ watch(projectId, async (id) => {
   if (!projectsStore.byId(id)) await projectsStore.load()
   await Promise.all([loadStatuses(), loadReleases()])
 }, { immediate: true })
+
+// 状态轮询（30s 或配置周期）
+usePolling(async () => {
+  if (project.value) await Promise.all([loadStatuses(), loadReleases()])
+}, appStore.pollInterval || 30_000)
 </script>
 
 <template>
