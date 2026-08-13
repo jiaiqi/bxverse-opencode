@@ -201,6 +201,24 @@ export class DataStore {
     return found?.record ?? null
   }
 
+  /**
+   * 更新已落盘记录（日志人工编辑的唯一通道，api.md §7.3）：
+   * 重写 data.json + 同步 md 副本；id/version 不可变（写入前校验）。
+   */
+  async updateRecord(record: ReleaseRecord): Promise<void> {
+    const existing = await this.readRecord(record.id)
+    if (!existing) throw new Error(`发布记录不存在: ${record.id}`)
+    if (existing.version !== record.version || existing.scopeId !== record.scopeId) {
+      throw new Error(`发布记录不可变字段被改动（id/version/scopeId）: ${record.id}`)
+    }
+    const dir = path.join(this.dataDir, 'releases', record.scopeId, versionSafe(record.version))
+    const dataPath = path.join(dir, 'data.json')
+    if (!fs.existsSync(dataPath)) throw new Error(`发布记录数据文件缺失: ${dataPath}`)
+    atomicWrite(path.join(dir, 'internal.md'), record.logs.internal.content)
+    atomicWrite(path.join(dir, 'external.md'), record.logs.external.content)
+    atomicWrite(dataPath, JSON.stringify(record, null, 2))
+  }
+
   /** scope 发布历史（倒序），n 默认 20、上限 100 */
   async listRecords(scopeId: string, n = 20): Promise<ReleaseRecord[]> {
     const items = await this.listRecordFiles(scopeId)
