@@ -1,0 +1,28 @@
+{
+  "name": "bxverse",
+  "version": "0.1.0",
+  "private": true,
+  "description": "BX 版本管理台：项目/仓库两级版本与更新日志统一管理（本地 Web + 可选 PWA）",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "packageManager": "pnpm@10.32.1",
+  "scripts": {
+    "dev": "concurrently -n server,web -c blue,green \"pnpm --filter @bxverse/server dev\" \"pnpm --filter @bxverse/web dev\"",
+    "build": "pnpm --filter @bxverse/shared build && pnpm --filter @bxverse/core build && pnpm --filter @bxverse/server build && pnpm --filter @bxverse/cli build && pnpm --filter @bxverse/web build",
+    "typecheck": "pnpm -r typecheck",
+    "test": "pnpm --filter @bxverse/core test",
+    "start": "pnpm --filter @bxverse/server start"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2",
+    "typescript": "^5.8.3"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild",
+      "vue-demi"
+    ]
+  }
+}
