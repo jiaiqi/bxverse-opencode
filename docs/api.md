@@ -260,7 +260,7 @@
 | 字段 | 说明 |
 |---|---|
 | `repoId` | 必填；必须属于该项目 |
-| `path` | 必填；相对仓库根的路径，必须以 `.json` 结尾；禁止绝对路径与 `..` 越界 |
+| `path` | 必填；相对仓库根的路径，必须以 `.json` 结尾；禁止绝对路径（含 Windows 盘符 `C:/`、UNC）、`..` 越界（校验在 POSIX 与 Windows 上行为一致） |
 | `items` | 可选；`RepoVersionItem[]`（`{app,name,version}`）——传入则**直接写入该内容**（发布历史快照导出用，通常取自 `GET /api/releases/:id/versions`）；缺省时实时采集当前版本（fresh 读取业务仓库 version.json）。非数组或元素缺 `app/name/version` 字符串 → 400 `VALIDATION` |
 
 响应 `200`：
