@@ -116,6 +116,10 @@ export function register(router: import('../http/router').Router, services: Repo
       if (!name) throw apiError(400, 'VALIDATION', 'name 不能为空')
       repo.name = name
     }
+    if (body.displayName !== undefined) {
+      const displayName = String(body.displayName).trim()
+      repo.displayName = displayName || undefined
+    }
     if (body.buildCommand !== undefined) repo.buildCommand = String(body.buildCommand) || undefined
     if (body.outputDir !== undefined) repo.outputDir = String(body.outputDir) || 'public'
     if (body.writeVersionFile !== undefined) {

@@ -21,6 +21,7 @@ import { register as registerPublish } from './api/publish'
 import { register as registerEvents } from './api/events'
 import { register as registerSync } from './api/sync'
 import { register as registerOverview } from './api/overview'
+import { register as registerVersions } from './api/versions'
 
 export interface App {
   server: http.Server
@@ -108,6 +109,7 @@ export function createApp(opts: { token?: string } = {}): App {
   registerEvents(router, { queue, sse })
   registerSync(router, registerSyncServices)
   registerOverview(router, registerOverviewServices)
+  registerVersions(router, { loadCfg, poll })
 
   const server = http.createServer(async (req, res) => {
     const url = new URL(req.url ?? '/', 'http://127.0.0.1')

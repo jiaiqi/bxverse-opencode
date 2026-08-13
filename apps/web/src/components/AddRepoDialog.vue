@@ -18,6 +18,7 @@ const tab = ref<'path' | 'url'>('path')
 const path = ref('')
 const url = ref('')
 const name = ref('')
+const displayName = ref('')
 const shallow = ref(false)
 const cloning = ref(false)
 
@@ -28,6 +29,7 @@ watch(
       path.value = ''
       url.value = ''
       name.value = ''
+      displayName.value = ''
       shallow.value = false
       tab.value = 'path'
     }
@@ -38,7 +40,14 @@ async function submitPath() {
   if (!path.value.trim()) return
   cloning.value = true
   try {
-    const repo = await projectsStore.addRepo(props.projectId, { path: path.value.trim() })
+    const repo = await projectsStore.addRepo(props.projectId, {
+      path: path.value.trim(),
+      name: name.value.trim() || undefined,
+    })
+    if (displayName.value.trim()) {
+      await projectsStore.updateRepo(props.projectId, repo.id, { displayName: displayName.value.trim() })
+      repo.displayName = displayName.value.trim()
+    }
     message.success('仓库已接入')
     emit('added', repo)
     emit('update:show', false)
@@ -58,6 +67,10 @@ async function submitUrl() {
       name: name.value.trim() || undefined,
       shallow: shallow.value,
     })
+    if (displayName.value.trim()) {
+      await projectsStore.updateRepo(props.projectId, repo.id, { displayName: displayName.value.trim() })
+      repo.displayName = displayName.value.trim()
+    }
     message.success('仓库已克隆并接入')
     emit('added', repo)
     emit('update:show', false)
@@ -88,6 +101,9 @@ async function submitUrl() {
                 @keydown.enter="submitPath"
               />
             </NFormItem>
+            <NFormItem label="中文名（可选，版本清单导出用）">
+              <NInput v-model:value="displayName" placeholder="如：PC 前端" />
+            </NFormItem>
           </NForm>
           <div class="flex items-center gap-2 text-xs text-text-3">
             <i class="i-carbon-information" />
@@ -107,6 +123,9 @@ async function submitUrl() {
             </NFormItem>
             <NFormItem label="名称（可选，默认取地址）">
               <NInput v-model:value="name" placeholder="如：l-pc-front" />
+            </NFormItem>
+            <NFormItem label="中文名（可选，版本清单导出用）">
+              <NInput v-model:value="displayName" placeholder="如：PC 前端" />
             </NFormItem>
             <NFormItem label="浅克隆（--depth 1，大仓库建议开启）">
               <NSwitch v-model:value="shallow" />

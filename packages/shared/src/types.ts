@@ -51,6 +51,8 @@ export interface ReleaseLog {
 export interface RepoDef {
   id: string
   name: string
+  /** 中文名（可选，展示与导出用；缺省时展示 name） */
+  displayName?: string
   /** 本地绝对路径 */
   path: string
   /** origin 远程地址 */
@@ -59,7 +61,7 @@ export interface RepoDef {
   buildCommand?: string
   /** version.json 输出目录（相对仓库根，默认 public） */
   outputDir?: string
-  /** 是否在业务仓库内写 version.json / version-history（默认 true，零侵入可关） */
+  /** 是否在业务仓库内写 version.json / version-history.json（默认 true，零侵入可关） */
   writeVersionFile?: boolean
   /** 上次统一发布时的 commit（变更检测基准） */
   lastPublishCommit?: string | null
@@ -254,4 +256,14 @@ export interface CloneRequest {
   url: string
   name?: string
   shallow?: boolean
+}
+
+/** 项目版本清单项（GET /api/projects/:id/versions，R18） */
+export interface RepoVersionItem {
+  /** 仓库英文名（RepoDef.name） */
+  app: string
+  /** 仓库中文名（RepoDef.displayName ?? app） */
+  name: string
+  /** 当前版本号（业务仓库 version.json；缺省回退项目统一版本） */
+  version: string
 }

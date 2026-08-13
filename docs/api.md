@@ -162,9 +162,7 @@
 
 ## 4. 总览
 
-### 4.1 GET /api/overview
-
-用途：首页聚合（项目卡片 + 变动仓库列表，对应 R2/R13）。数据来自轮询检测缓存（TTL=`pollInterval`），不做实时 git 查询。
+### 4.1 GET /api/overview用途：首页聚合（项目卡片 + 变动仓库列表，对应 R2/R13）。数据来自轮询检测缓存（TTL=`pollInterval`），不做实时 git 查询。
 
 查询参数：无。
 
@@ -202,6 +200,28 @@
 - `lastRelease` 来自数据仓库 `data/releases/{scopeId}/index.json` 最新一条；无发布则为 `null`。
 
 实现：`apps/server/src/api/overview.ts`；底层 `@bxverse/core` engine.detectChanged + DataStore。
+
+---
+
+### 4.2 GET /api/projects/:id/versions（R18，MVP）
+
+用途：导出项目下**所有仓库的版本清单**，JSON 数组，字段 `app`（仓库英文名）/ `name`（仓库中文名）/ `version`（版本号）。中文名缺省时回退英文名；版本号取业务仓库 `version.json` 的当前版本，未生成时回退项目统一版本。
+
+响应 `200`（`RepoVersionItem[]`）：
+
+```json
+[
+  { "app": "l-pc-front", "name": "PC 前端", "version": "v1.2.0.26081315" },
+  { "app": "l-data-v", "name": "数据可视化", "version": "v1.2.0.26081315" }
+]
+```
+
+- `RepoDef.displayName` 承载中文名（仓库 PATCH 可写，接入弹窗/设置页可填）。
+- 该端点实时读取（fresh），不依赖轮询缓存。
+
+错误：404 `NOT_FOUND`（项目不存在）。
+
+实现：`apps/server/src/api/versions.ts`；前端「导出版本清单」按钮下载 `{项目名}-versions.json`。
 
 ---
 

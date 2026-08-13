@@ -243,6 +243,37 @@ describe('发布全链路（api.md §8）', () => {
     expect(cur.taskId).toBeTruthy()
     expect(['done', 'failed', 'running']).toContain(cur.status)
   })
+
+  it('GET /api/projects/:id/versions 版本清单导出（R18）', async () => {
+    // 设置中文名
+    const { body: projectsBody } = await client.get('/api/projects')
+    const project = (projectsBody as { id: string; repos: { id: string; name: string }[] }[]).find(p => p.id === projectId)!
+    const repo = project.repos[0]
+    const patched = await client.patch(`/api/projects/${projectId}/repos/${repo.id}`, { displayName: '测试前端' })
+    expect(patched.status).toBe(200)
+
+    const { status, body } = await client.get(`/api/projects/${projectId}/versions`)
+    expect(status).toBe(200)
+    const items = body as { app: string; name: string; version: string }[]
+    expect(items).toHaveLength(1)
+    expect(items[0].app).toBe(repo.name)
+    expect(items[0].name).toBe('测试前端')
+    expect(items[0].version.startsWith('v0.2.0.')).toBe(true) // 业务仓库 version.json 的混合版本
+
+    // 未发布过版本文件的仓库 → 回退项目统一版本
+    const { body: p2 } = await client.post('/api/projects', { name: '空项目' })
+    const emptyProjectId = (p2 as { id: string }).id
+    const emptyRepoPath = makeRepo()
+    commit(emptyRepoPath, 'feat: init', { 'a.txt': '1' })
+    await client.post(`/api/projects/${emptyProjectId}/repos`, { path: emptyRepoPath })
+    const { body: v2 } = await client.get(`/api/projects/${emptyProjectId}/versions`)
+    const items2 = v2 as { app: string; name: string; version: string }[]
+    expect(items2).toHaveLength(1)
+    expect(items2[0].version).toBe('v0.1.0') // 回退项目统一版本
+
+    const notFound = await client.get('/api/projects/p_nonexistent/versions')
+    expect(notFound.status).toBe(404)
+  })
 })
 
 describe('日志编辑（api.md §7.3）', () => {

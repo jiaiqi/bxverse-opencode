@@ -13,6 +13,7 @@ import type {
   ReleaseRecord,
   RepoDef,
   RepoStatus,
+  RepoVersionItem,
   TreeNode,
 } from '@bxverse/shared'
 import { http, streamSse } from './http'
@@ -39,6 +40,9 @@ export const api = {
   // 总览
   overview: () => http.get<OverviewData>('/overview'),
 
+  // 版本清单导出（R18）
+  projectVersions: (projectId: string) => http.get<RepoVersionItem[]>(`/projects/${projectId}/versions`),
+
   // 项目
   projects: () => http.get<ProjectDef[]>('/projects'),
   createProject: (body: { name: string; description?: string }) => http.post<ProjectDef>('/projects', body),
@@ -51,7 +55,7 @@ export const api = {
     http.post<RepoDef>(`/projects/${projectId}/repos`, name ? { path, name } : { path }),
   addRepoByUrl: (projectId: string, body: CloneRequest) =>
     http.post<RepoDef>(`/projects/${projectId}/repos`, body),
-  updateRepo: (pid: string, rid: string, body: Partial<Pick<RepoDef, 'name' | 'buildCommand' | 'outputDir' | 'writeVersionFile' | 'path'>>) =>
+  updateRepo: (pid: string, rid: string, body: Partial<Pick<RepoDef, 'name' | 'displayName' | 'buildCommand' | 'outputDir' | 'writeVersionFile' | 'path'>>) =>
     http.patch<RepoDef>(`/projects/${pid}/repos/${rid}`, body),
   deleteRepo: (pid: string, rid: string, purge = false) =>
     http.del<{ ok: boolean; purged: boolean }>(`/projects/${pid}/repos/${rid}?purge=${purge}`),

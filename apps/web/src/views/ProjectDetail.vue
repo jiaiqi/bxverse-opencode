@@ -3,6 +3,7 @@
 
 import type { ReleaseRecord, RepoStatus } from '@bxverse/shared'
 import { useProjectsStore } from '../stores/projects'
+import { api } from '../api'
 import PageHeader from '../components/PageHeader.vue'
 import RepoCard from '../components/RepoCard.vue'
 import StatusBadge from '../components/StatusBadge.vue'
@@ -64,6 +65,28 @@ async function refreshRepo(rid: string) {
     statuses.value = new Map(statuses.value)
   } catch (e) {
     message.error((e as Error).message)
+  }
+}
+
+/** 导出版本清单 JSON 文件（R18：app/name/version 数组） */
+const exporting = ref(false)
+async function exportVersions() {
+  if (!project.value) return
+  exporting.value = true
+  try {
+    const items = await api.projectVersions(projectId.value)
+    const blob = new Blob([JSON.stringify(items, null, 2)], { type: 'application/json; charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `${project.value.name}-versions.json`
+    a.click()
+    URL.revokeObjectURL(url)
+    message.success(`已导出 ${items.length} 个仓库的版本清单`)
+  } catch (e) {
+    message.error((e as Error).message)
+  } finally {
+    exporting.value = false
   }
 }
 
@@ -130,6 +153,10 @@ watch(projectId, async (id) => {
         <NButton @click="showAddRepo = true">
           <template #icon><i class="i-carbon-add" /></template>
           接入仓库
+        </NButton>
+        <NButton :loading="exporting" @click="exportVersions">
+          <template #icon><i class="i-carbon-download" /></template>
+          导出版本清单
         </NButton>
         <NButton quaternary @click="showEdit = true">
           <template #icon><i class="i-carbon-edit" /></template>

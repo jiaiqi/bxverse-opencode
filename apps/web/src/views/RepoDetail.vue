@@ -54,6 +54,7 @@ async function loadAll() {
 // 设置表单
 const settingsForm = reactive({
   name: '',
+  displayName: '',
   buildCommand: '',
   outputDir: 'public',
   writeVersionFile: true,
@@ -63,6 +64,7 @@ const saving = ref(false)
 function openSettings() {
   if (!repo) return
   settingsForm.name = repo.name
+  settingsForm.displayName = repo.displayName ?? ''
   settingsForm.buildCommand = repo.buildCommand ?? ''
   settingsForm.outputDir = repo.outputDir ?? 'public'
   settingsForm.writeVersionFile = repo.writeVersionFile ?? true
@@ -74,6 +76,7 @@ async function saveSettings() {
   try {
     await projectsStore.updateRepo(pid.value, rid.value, {
       name: settingsForm.name.trim() || undefined,
+      displayName: settingsForm.displayName.trim() || undefined,
       buildCommand: settingsForm.buildCommand || undefined,
       outputDir: settingsForm.outputDir,
       writeVersionFile: settingsForm.writeVersionFile,
@@ -203,8 +206,11 @@ watch(tab, (t) => {
                 <div class="code-text text-13px text-text-2 bg-surface-alt border border-border rounded-md px-3 py-2">{{ repo.path }}</div>
               </div>
               <NForm label-placement="left" label-width="110">
-                <NFormItem label="名称">
-                  <NInput v-model:value="settingsForm.name" placeholder="仓库名称" />
+                <NFormItem label="英文名">
+                  <NInput v-model:value="settingsForm.name" placeholder="如：l-pc-front（app 标识）" />
+                </NFormItem>
+                <NFormItem label="中文名">
+                  <NInput v-model:value="settingsForm.displayName" placeholder="如：PC 前端（可选，版本清单导出用）" />
                 </NFormItem>
                 <NFormItem label="构建命令">
                   <NInput v-model:value="settingsForm.buildCommand" placeholder="如：pnpm build（发版前执行，可留空）" />
