@@ -1,0 +1,311 @@
+/* ==================== bxverse 设计 token（唯一颜色来源） ==================== */
+:root {
+  /* 品牌（靛蓝） */
+  --bx-brand-50: #F0F3FF;
+  --bx-brand-100: #E0E6FF;
+  --bx-brand-200: #C3CEFF;
+  --bx-brand-300: #9CAFFF;
+  --bx-brand-400: #748FFC;
+  --bx-brand-500: #4C6EF5;
+  --bx-brand-600: #3B5BDB;
+  --bx-brand-700: #2F49B8;
+  --bx-brand-800: #273C94;
+  --bx-brand-900: #223171;
+  --bx-brand-soft: #EDF0FE;
+  --bx-brand-soft-hover: #DEE4FD;
+
+  /* 中性 */
+  --bx-bg: #F5F6F8;
+  --bx-surface: #FFFFFF;
+  --bx-surface-hover: #F9FAFB;
+  --bx-surface-alt: #FAFBFC;
+  --bx-border: #E5E7EB;
+  --bx-border-strong: #D1D5DB;
+  --bx-text-1: #1F2328;
+  --bx-text-2: #57606A;
+  --bx-text-3: #8B949E;
+
+  /* 语义 */
+  --bx-success: #2F9E44;
+  --bx-success-soft: #E6F4EA;
+  --bx-warning: #F08C00;
+  --bx-warning-soft: #FFF3E0;
+  --bx-error: #E03131;
+  --bx-error-soft: #FDEBEB;
+  --bx-info: #1971C2;
+  --bx-info-soft: #E7F5FF;
+
+  /* 字体 */
+  --bx-font-sans: system-ui, -apple-system, "Segoe UI", Roboto, "PingFang SC",
+    "Hiragino Sans GB", "Microsoft YaHei", "Helvetica Neue", Arial, sans-serif;
+  --bx-font-mono: ui-monospace, "Cascadia Code", "SF Mono", "JetBrains Mono",
+    Consolas, "Liberation Mono", "Courier New", monospace;
+
+  /* 阴影 */
+  --bx-shadow-sm: 0 1px 2px rgba(16, 24, 40, 0.05);
+  --bx-shadow-md: 0 2px 8px rgba(16, 24, 40, 0.08);
+  --bx-shadow-lg: 0 8px 24px rgba(16, 24, 40, 0.12);
+
+  /* 动效 */
+  --bx-dur-fast: 150ms;
+  --bx-dur-base: 200ms;
+  --bx-dur-slow: 250ms;
+  --bx-ease: cubic-bezier(0.2, 0, 0, 1);
+}
+
+html.dark {
+  --bx-brand-500: #5C7CFA;
+  --bx-brand-600: #748FFC;
+  --bx-brand-700: #4C6EF5;
+  --bx-brand-soft: #232B4D;
+  --bx-brand-soft-hover: #2C3760;
+
+  --bx-bg: #121316;
+  --bx-surface: #1A1C21;
+  --bx-surface-hover: #23262D;
+  --bx-surface-alt: #15171B;
+  --bx-border: #2A2E37;
+  --bx-border-strong: #3A3F4B;
+  --bx-text-1: #E9EBEE;
+  --bx-text-2: #A6ADB8;
+  --bx-text-3: #717985;
+
+  --bx-success: #51CF66;
+  --bx-success-soft: #1F3A28;
+  --bx-warning: #FFA94D;
+  --bx-warning-soft: #3D2E1B;
+  --bx-error: #FF6B6B;
+  --bx-error-soft: #3D2121;
+  --bx-info: #4DABF7;
+  --bx-info-soft: #1C3447;
+
+  --bx-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --bx-shadow-md: 0 2px 8px rgba(0, 0, 0, 0.5);
+  --bx-shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.6);
+}
+
+/* ==================== 基础 ==================== */
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: var(--bx-font-sans);
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--bx-text-1);
+  background: var(--bx-bg);
+  -webkit-font-smoothing: antialiased;
+}
+
+code,
+pre,
+.font-mono {
+  font-family: var(--bx-font-mono);
+}
+
+/* 数字表格化 */
+.stat-value,
+.code-text {
+  font-variant-numeric: tabular-nums;
+}
+
+/* 滚动条 */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--bx-border-strong);
+  border-radius: 5px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--bx-text-3);
+  background-clip: content-box;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* 减少动效偏好 */
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition-duration: 0ms !important;
+    animation-duration: 0ms !important;
+  }
+}
+
+/* ==================== Markdown 渲染 ==================== */
+.md-body {
+  color: var(--bx-text-1);
+  word-break: break-word;
+}
+.md-body h1 {
+  font-size: 22px;
+  font-weight: 600;
+  margin: 0 0 12px;
+}
+.md-body h2 {
+  font-size: 17px;
+  font-weight: 600;
+  margin: 24px 0 10px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--bx-border);
+}
+.md-body h3 {
+  font-size: 15px;
+  font-weight: 600;
+  margin: 18px 0 8px;
+}
+.md-body h4 {
+  font-size: 14px;
+  font-weight: 600;
+  margin: 14px 0 6px;
+}
+.md-body p {
+  margin: 8px 0;
+}
+.md-body ul,
+.md-body ol {
+  margin: 8px 0;
+  padding-left: 22px;
+}
+.md-body li {
+  margin: 3px 0;
+}
+.md-body blockquote {
+  margin: 10px 0;
+  padding: 4px 14px;
+  border-left: 3px solid var(--bx-brand-400);
+  background: var(--bx-surface-alt);
+  color: var(--bx-text-2);
+  border-radius: 0 6px 6px 0;
+}
+.md-body code {
+  font-family: var(--bx-font-mono);
+  font-size: 13px;
+  background: var(--bx-surface-alt);
+  border: 1px solid var(--bx-border);
+  border-radius: 4px;
+  padding: 1px 6px;
+}
+.md-body pre {
+  background: var(--bx-surface-alt);
+  border: 1px solid var(--bx-border);
+  border-radius: 8px;
+  padding: 14px;
+  overflow: auto;
+  margin: 10px 0;
+}
+.md-body pre code {
+  background: transparent;
+  border: none;
+  padding: 0;
+}
+.md-body table {
+  border-collapse: collapse;
+  margin: 10px 0;
+  width: 100%;
+}
+.md-body th,
+.md-body td {
+  border: 1px solid var(--bx-border);
+  padding: 6px 12px;
+  text-align: left;
+}
+.md-body th {
+  background: var(--bx-surface-hover);
+  font-weight: 600;
+}
+.md-body hr {
+  border: none;
+  border-top: 1px solid var(--bx-border);
+  margin: 20px 0;
+}
+
+/* ==================== highlight.js 主题（随亮/暗翻转） ==================== */
+.hljs {
+  background: transparent;
+  color: var(--bx-text-1);
+}
+.hljs-comment,
+.hljs-quote {
+  color: #8B949E;
+  font-style: italic;
+}
+.hljs-keyword,
+.hljs-selector-tag,
+.hljs-tag {
+  color: #a626a4;
+}
+.hljs-string,
+.hljs-attr,
+.hljs-template-variable {
+  color: #50a14f;
+}
+.hljs-number,
+.hljs-literal {
+  color: #986801;
+}
+.hljs-title,
+.hljs-function .hljs-title,
+.hljs-title.function_ {
+  color: #4078f2;
+}
+.hljs-built_in,
+.hljs-symbol,
+.hljs-regexp {
+  color: #e45649;
+}
+html.dark .hljs-comment,
+html.dark .hljs-quote {
+  color: #717985;
+}
+html.dark .hljs-keyword,
+html.dark .hljs-selector-tag,
+html.dark .hljs-tag {
+  color: #c678dd;
+}
+html.dark .hljs-string,
+html.dark .hljs-attr,
+html.dark .hljs-template-variable {
+  color: #98c379;
+}
+html.dark .hljs-number,
+html.dark .hljs-literal {
+  color: #d19a66;
+}
+html.dark .hljs-title,
+html.dark .hljs-function .hljs-title,
+html.dark .hljs-title.function_ {
+  color: #61afef;
+}
+html.dark .hljs-built_in,
+html.dark .hljs-symbol,
+html.dark .hljs-regexp {
+  color: #e06c75;
+}
+
+/* ==================== 路由过渡 ==================== */
+.fade-slide-enter-active,
+.fade-slide-leave-active {
+  transition: opacity var(--bx-dur-base) var(--bx-ease),
+    transform var(--bx-dur-base) var(--bx-ease);
+}
+.fade-slide-enter-from {
+  opacity: 0;
+  transform: translateY(6px);
+}
+.fade-slide-leave-to {
+  opacity: 0;
+}
