@@ -81,3 +81,4 @@
 | 2026-08-13 | 补充 R18：项目版本清单导出（app/name/version JSON 数组）——`RepoDef.displayName`（中文名）承载 name 字段，`GET /api/projects/:id/versions` 返回 |
 | 2026-08-13 | R18 补充：生成的文件可自定义写入项目下某个仓库的指定路径——`POST /api/projects/:id/versions/export {repoId, path}` |
 | 2026-08-13 | R18 澄清：写入目标**手动点选**（弹窗内树形目录选择器，不手填路径）；全面引入 File System Access API——导出另存为（showSaveFilePicker）、导出到任意本地目录（showDirectoryPicker + 句柄写入）、文件查看器原生下载；仓库内写入因浏览器不暴露绝对路径由树选择器承担 |
+| 2026-08-13 | R18 补充：版本清单与发布绑定——每次发布完成页可导出当次清单；发布历史每条记录可导出**当时快照**（`GET /api/releases/:id/versions`，发布落盘时快照各仓库版本与中文名） |

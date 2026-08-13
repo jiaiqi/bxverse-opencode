@@ -1,7 +1,7 @@
 // apps/server/src/api/history.ts
 // 发布历史查询 + 双轨日志编辑（PATCH /api/releases/:id/log，state 流转）
 
-import type { AppConfig } from '@bxverse/shared'
+import type { AppConfig, RepoVersionItem } from '@bxverse/shared'
 import { store } from '@bxverse/core'
 import type { Ctx } from '../http/router'
 import { apiError, readJsonBody, sendJson } from '../http/json'
@@ -35,6 +35,21 @@ export function register(router: import('../http/router').Router, services: Hist
       return
     }
     sendJson(ctx.res, 200, records)
+  })
+
+  // GET /api/releases/:id/versions —— 该次发布的项目版本清单（R18 与发布历史绑定）
+  router.get('/api/releases/:id/versions', async (ctx: Ctx) => {
+    const record = await services.dataStore.readRecord(ctx.params.id)
+    if (!record) throw apiError(404, 'NOT_FOUND', `发布记录不存在: ${ctx.params.id}`)
+    if (record.kind !== 'project' || !record.repos) {
+      throw apiError(400, 'VALIDATION', '仅项目级发布记录包含版本清单')
+    }
+    const items: RepoVersionItem[] = record.repos.map(r => ({
+      app: r.repoName,
+      name: r.displayName || r.repoName,
+      version: r.version,
+    }))
+    sendJson(ctx.res, 200, items)
   })
 
   // PATCH /api/releases/:id/log —— 双轨日志人工编辑（api.md §7.3）

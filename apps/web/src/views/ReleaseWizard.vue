@@ -11,6 +11,8 @@ import LogEditor from '../components/LogEditor.vue'
 import PublishConsole from '../components/PublishConsole.vue'
 import { useDialog, useMessage } from 'naive-ui'
 import type { PublishEventLike } from '../api'
+import { api } from '../api'
+import { useFsAccess } from '../composables/useFsAccess'
 
 const route = useRoute()
 const router = useRouter()
@@ -169,6 +171,27 @@ function onFailed(msg: string) {
 // ==================== 步骤 6：完成 ====================
 const bumpLabel = (b: string): string =>
   b === 'major' ? '重大' : b === 'minor' ? '次版本' : b === 'patch' ? '补丁' : '自动'
+
+// ==================== 完成页：导出版本清单 ====================
+const fs = useFsAccess()
+const exportingVersions = ref(false)
+
+async function exportThisReleaseVersions() {
+  if (!store.result?.releaseId) return
+  exportingVersions.value = true
+  try {
+    const items = await api.releaseVersions(store.result.releaseId)
+    const content = `${JSON.stringify(items, null, 2)}\n`
+    const result = await fs.saveTextFile(`${store.result.version}-versions.json`, content)
+    if (result !== 'cancelled') {
+      message.success(`已导出 ${items.length} 个仓库的版本清单（${store.result.version}）`)
+    }
+  } catch (e) {
+    message.error((e as Error).message)
+  } finally {
+    exportingVersions.value = false
+  }
+}
 </script>
 
 <template>
@@ -397,6 +420,14 @@ const bumpLabel = (b: string): string =>
           </template>
           <div class="flex justify-center gap-3 mt-6">
             <NButton @click="router.push(`/project/${projectId}`)">返回项目</NButton>
+            <NButton
+              v-if="store.result?.releaseId"
+              :loading="exportingVersions"
+              @click="exportThisReleaseVersions"
+            >
+              <template #icon><i class="i-carbon-download" /></template>
+              导出版本清单
+            </NButton>
             <NButton type="primary" secondary @click="store.reset(projectId); detect(); store.setSelected(changedRepoIds)">再次发布</NButton>
           </div>
         </div>

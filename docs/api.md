@@ -567,7 +567,28 @@
 
 错误：400 `VALIDATION`（`scopeId` 缺失）；404 `NOT_FOUND`（记录不存在）。
 
-### 7.3 PATCH /api/releases/:id/log
+### 7.3 GET /api/releases/:id/versions（R18：发布历史版本清单）
+
+用途：导出**某次发布当时的项目版本清单快照**（`[{app,name,version}]`，与 §4.2 结构一致）。数据来自发布记录落盘时的 `repos` 快照（含中文名 `displayName`），不依赖仓库当前状态。
+
+响应 `200`（`RepoVersionItem[]`）：
+
+```json
+[
+  { "app": "l-pc-front", "name": "PC 前端", "version": "v1.2.0.26081315" },
+  { "app": "l-data-v", "name": "数据可视化", "version": "v1.2.0.26081315" }
+]
+```
+
+- 仅项目级记录（`kind='project'`）支持；仓库级记录返回 400 `VALIDATION`。
+- 前端入口：项目页发布历史每行「版本清单」按钮 + 发布向导完成页「导出版本清单」按钮（原生另存为）。
+- 旧记录无 `displayName` 快照时回退英文名 `repoName`。
+
+错误：404 `NOT_FOUND`；400 `VALIDATION`。
+
+实现：`apps/server/src/api/history.ts`；`RepoReleaseRef.displayName` 由发布引擎在落盘时快照。
+
+### 7.4 PATCH /api/releases/:id/log
 
 用途：人工编辑/确认/重置双轨日志（R14），state 流转。**这是已落盘记录唯一的修改通道**：每次保存生成一条新的数据仓库 commit（git 审计可见；「发布记录不可变」仅约束发布引擎的写入路径）。
 

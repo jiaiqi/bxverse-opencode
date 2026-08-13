@@ -557,6 +557,7 @@ export async function executePublish(
     repos: repoRecords.map(r => ({
       repoId: r.scopeId,
       repoName: r.scopeName,
+      displayName: repoDefOf(r.scopeId).displayName,
       version: r.version,
       commits: r.commits,
     })),

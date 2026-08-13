@@ -222,6 +222,20 @@ function openDetail(r: ReleaseRecord) {
   showDetail.value = true
 }
 
+/** 导出某次发布的版本清单（发布历史快照，R18） */
+async function exportReleaseVersions(r: ReleaseRecord) {
+  try {
+    const items = await api.releaseVersions(r.id)
+    const content = `${JSON.stringify(items, null, 2)}\n`
+    const result = await fs.saveTextFile(`${r.version}-versions.json`, content)
+    if (result !== 'cancelled') {
+      message.success(`已导出 ${items.length} 个仓库的版本清单（${r.version}）`)
+    }
+  } catch (e) {
+    message.error((e as Error).message)
+  }
+}
+
 watch(projectId, async (id) => {
   statuses.value = new Map()
   if (!projectsStore.byId(id)) await projectsStore.load()
@@ -323,6 +337,10 @@ usePolling(async () => {
                 <StatusBadge type="bump" :bump="r.bump" />
                 <StatusBadge type="pushed" :pushed="r.pushed" />
                 <span class="flex-1" />
+                <NButton size="tiny" quaternary title="导出版本清单" @click.stop="exportReleaseVersions(r)">
+                  <template #icon><i class="i-carbon-download" /></template>
+                  版本清单
+                </NButton>
                 <span class="text-xs text-text-3">{{ r.date.slice(0, 10) }}</span>
                 <i class="i-carbon-chevron-right text-text-3" />
               </div>

@@ -236,6 +236,25 @@ describe('发布全链路（api.md §8）', () => {
     expect(vf.version.startsWith('v0.2.0.')).toBe(true)
   })
 
+  it('GET /api/releases/:id/versions 发布历史版本清单（R18）', async () => {
+    const { body } = await client.get(`/api/projects/${projectId}/releases`)
+    const projectRecord = (body as { id: string; kind: string }[])[0]
+    const { status, body: items } = await client.get(`/api/releases/${projectRecord.id}/versions`)
+    expect(status).toBe(200)
+    const list = items as { app: string; name: string; version: string }[]
+    expect(list).toHaveLength(1)
+    expect(list[0].app).toBeTruthy()
+    expect(list[0].version.startsWith('v0.2.0.')).toBe(true)
+
+    // 仓库级记录不支持
+    const { body: projBody2 } = await client.get('/api/projects')
+    const p2 = (projBody2 as { id: string; repos: { id: string }[] }[]).find(p => p.id === projectId)!
+    const scopeBody = await client.get(`/api/releases?scopeId=${p2.repos[0].id}`)
+    const repoRecord = (scopeBody.body as { id: string; kind: string }[])[0]
+    const bad = await client.get(`/api/releases/${repoRecord.id}/versions`)
+    expect(bad.status).toBe(400)
+  })
+
   it('GET /api/publish/current 恢复控制台', async () => {
     const { status, body } = await client.get('/api/publish/current')
     expect(status).toBe(200)

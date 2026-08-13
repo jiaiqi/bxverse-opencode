@@ -76,6 +76,7 @@ export const api = {
     http.get<ReleaseRecord[] | ReleaseRecord>(`/releases?scopeId=${scopeId}${version ? `&version=${encodeURIComponent(version)}` : ''}`),
   editLog: (recordId: string, body: { track: 'internal' | 'external'; action: 'edit' | 'confirm' | 'reset'; content?: string }) =>
     http.patch<ReleaseRecord>(`/releases/${recordId}/log`, body),
+  releaseVersions: (recordId: string) => http.get<RepoVersionItem[]>(`/releases/${recordId}/versions`),
 
   // 发布
   publish: (body: PublishRequest) => http.post<PublishPlan | { taskId: string; queued: boolean }>('/publish', body),

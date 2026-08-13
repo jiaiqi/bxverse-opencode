@@ -105,6 +105,8 @@ export interface AppConfig {
 export interface RepoReleaseRef {
   repoId: string
   repoName: string
+  /** 发布时刻的仓库中文名快照（缺省回退 repoName） */
+  displayName?: string
   version: string
   commits: CommitInfo[]
 }
