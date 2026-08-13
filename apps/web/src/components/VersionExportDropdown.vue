@@ -151,12 +151,15 @@ function onSelect(key: string) {
 
 <template>
   <NDropdown trigger="click" :options="exportOptions" @select="onSelect">
-    <slot>
-      <NButton :size="size" :quaternary="quaternary" :loading="exporting">
-        <template #icon><i class="i-carbon-download" /></template>
-        {{ label }}
-      </NButton>
-    </slot>
+    <!-- 阻止点击冒泡：组件常嵌在可点击行内（如发布历史行），不应触发行的点击行为 -->
+    <div class="inline-flex" @click.stop>
+      <slot>
+        <NButton :size="size" :quaternary="quaternary" :loading="exporting">
+          <template #icon><i class="i-carbon-download" /></template>
+          {{ label }}
+        </NButton>
+      </slot>
+    </div>
   </NDropdown>
 
   <!-- 写入项目仓库 -->
