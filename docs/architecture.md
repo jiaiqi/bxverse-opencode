@@ -1,8 +1,8 @@
 # bxverse 总体架构设计
 
-> 文档版本：v0.2（2026-08-13）
+> 文档版本：v0.3（2026-08-13）
 > 依据：`docs/requirements.md`（唯一需求依据）、`packages/shared/src/types.ts`（定稿共享类型）、`packages/shared/src/constants.ts`（定稿常量）、根 `package.json` 与 `pnpm-workspace.yaml`。
-> 读者：后续开发 agent 与维护者。本文中出现的所有领域类型字段名与 `types.ts` 一字不差；未实现的内容在文件清单中以 `[待建]` 标注。
+> 读者：后续开发 agent 与维护者。本文中出现的所有领域类型字段名与 `types.ts` 一字不差；§7 文件清单以 `[已有]`/`[待建]` 标注实现状态。
 
 ### 变更记录
 
@@ -10,6 +10,7 @@
 |---|---|---|
 | v0.1 | 2026-08-13 | 初稿 |
 | v0.2 | 2026-08-13 | 明确 `AppConfig.dataDir` 语义与默认值；修正 §7 home.ts 目录描述（`home/`→`data/`）；docs/data-model.md 标记 `[已有]`；修正指向 data-model.md 的章节引用（多机同步 §7→§9、buildStamp 撞名 §4→§6.3、日志状态机 §5→§7、版本联动 §4→§6.4）；§5.5 克隆目录细化到 `{projectId}/{repoId}/` |
+| v0.3 | 2026-08-13 | §7 文件清单对齐实际实现：packages/core 公开模块平铺 src/ 根（补 backup/、compare/、files.ts 及 test/）；apps/server 补 app/poll/queue/sse 与 api/events、backups、versions；apps/web 全量组件/视图/composables/utils（含 BackupManage、RuntimeStatus、VersionExportDropdown、DirPicker）；新增 scripts/（seed.mjs、gen-pwa-icons.cjs）与 e2e/ 目录；全部已实现文件 `[待建]`→`[已有]`；§5.5 安全模型补 realpath 符号链接加固 |
 
 ---
 
@@ -268,6 +269,7 @@ Vite 代理原生支持流式转发，SSE 可直通，无需 ws。开发时浏�
 ### 5.5 其余
 
 - 路径穿越：文件树/文件内容接口对 `path` 参数做规范化校验，禁止 `..` 逃逸仓库根。
+- 符号链接加固：文件树/读取在词法校验（`resolve` + `startsWith`）之后，再经 `fs.realpathSync` 解析符号链接/junction 做第二次校验，**指向仓库外的链接一律拒绝**（`files.safeAbs`，报「路径越界（符号链接指向仓库外）」）；目标不存在时回退原路径（写入场景）。
 - 克隆校验：`CloneRequest.url` 仅允许 https/ssh 协议前缀；克隆目标固定 `~/.bxverse/repos/{projectId}/{repoId}/`。
 - 错误信息不泄露本地绝对路径给非本机客户端（非回环绑定时脱敏）。
 
@@ -333,7 +335,7 @@ Vite 代理原生支持流式转发，SSE 可直通，无需 ws。开发时浏�
 
 ```
 G:\vibecoding\
-├── package.json                       [已有] 根脚本 dev/build/typecheck/test/start
+├── package.json                       [已有] 根脚本 dev/build/typecheck/test/start/seed/icons
 ├── pnpm-workspace.yaml                [已有] packages/* 与 apps/*
 ├── tsconfig.base.json                 [已有] strict 基线
 ├── README.md                          [已有]
@@ -350,117 +352,133 @@ G:\vibecoding\
 │   │       ├── index.ts               [已有] 汇总导出
 │   │       ├── types.ts               [已有] 全部共享类型
 │   │       └── constants.ts           [已有] SEMVER_RE/HYBRID_VERSION_RE/COMMIT_TYPES 等
-│   └── core/                          [待建] 零运行时依赖引擎
-│       ├── package.json               [待建] name=@bxverse/core；dep: @bxverse/shared；无第三方依赖
-│       ├── tsconfig.json              [待建]
-│       ├── tsup.config.ts             [待建]
-│       └── src/
-│           ├── index.ts               [待建] 汇总导出
-│           ├── home.ts                [待建] BX_HOME 解析、目录确保（data/repos/journal/logs/tmp）
-│           ├── git/
-│           │   ├── client.ts          [待建] spawn git 封装（超时/错误归一）
-│           │   ├── status.ts          [待建] branch/head/dirty/remote → RepoStatus
-│           │   ├── commits.ts         [待建] range 提交解析 → CommitInfo[]/Stats/DiffStat
-│           │   ├── tags.ts            [待建] tag 列表/创建（幂等）/校验
-│           │   ├── clone.ts           [待建] 本地路径校验 .git、URL 克隆（https/ssh）
-│           │   └── files.ts           [待建] 懒加载文件树（TreeNode/FileEntry/FileContent，DEFAULT_IGNORE_DIRS）
-│           ├── version/
-│           │   ├── index.ts           [待建] 三方案版本计算（semver/hybrid/timestamp）
-│           │   ├── bump.ts            [待建] BumpType 推断（breaking→major/feat→minor/fix→patch）
-│           │   ├── stamp.ts           [待建] buildStamp 生成与撞名规避（YYMMDDHH + 序号）
-│           │   └── parse.ts           [待建] SEMVER_RE/HYBRID_VERSION_RE 校验
-│           ├── logs/
-│           │   ├── index.ts           [待建] 日志流水线入口（生成/编辑/确认）
-│           │   ├── internal.ts        [待建] 对内日志模板（全量：提交/文件/统计）
-│           │   ├── external.ts        [待建] 对外日志模板（EXTERNAL_SECTIONS + externalExclude）
-│           │   └── diff.ts            [待建] autoDraft vs content 行级 LCS diff
-│           ├── publish/
-│           │   ├── plan.ts            [待建] 变更检测→版本→日志草稿→PublishPlan（含 warnings）
-│           │   ├── engine.ts          [待建] 发布执行编排（串行、事件回调、幂等 step）
-│           │   ├── preflight.ts       [待建] §6.2 预检阻塞项
-│           │   └── journal.ts         [待建] journal 落盘/扫描/恢复
-│           ├── backup/（R19/M6 扩展）
-│           │   ├── index.ts           [待建] 备份编排 backupRepo()（幂等、失败策略 warn/fail、元数据落 data/backups/）
-│           │   ├── source.ts          [待建] git bundle + git archive 源码备份（遵循 .gitignore）
-│           │   ├── artifact.ts        [待建] 产物目录归档 + manifest（RepoDef.artifactDir）
-│           │   ├── manifest.ts        [待建] 目录→哈希清单（流式 sha256 + totals）
-│           │   └── tar.ts             [待建] 零依赖 ustar tar.gz（pax 长路径/中文头）
-│           ├── compare/（R19/M6 扩展）
-│           │   └── index.ts           [待建] 三层对比：git diff / 清单对比 / manifest 校验 → CompareResult
-│           ├── store/
-│           │   ├── config.ts          [待建] app.json 读写（原子写、默认值、BX_HOME）
-│           │   ├── records.ts         [待建] releases/{scopeId}/{versionSafeName}/ 读写
-│           │   ├── dataRepo.ts        [待建] 数据仓库 git init/commit/pull/push/remote
-│           │   └── credentials.ts     [待建] credentials.json 读写（0600）
-│           ├── detect/
-│           │   └── poll.ts            [待建] 轮询检测 + RepoStatus 缓存（TTL=pollInterval）
-│           └── ai/
-│               └── client.ts          [待建] 可选 AI 日志润色（读 AppConfig.ai，未启用时短路）
+│   └── core/                          [已有] 零运行时依赖引擎（公开模块平铺 src/ 根，仅 backup/、compare/ 为子目录）
+│       ├── package.json               [已有] name=@bxverse/core；dep: @bxverse/shared；无第三方运行时依赖
+│       ├── tsconfig.json              [已有]
+│       ├── tsup.config.ts             [已有]
+│       ├── vitest.config.ts           [已有]
+│       ├── src/
+│       │   ├── index.ts               [已有] 汇总导出：git/version/changelog/store/engine/files/backup/compare 八模块 + diffLines/JournalStore（core-engine.md §1）
+│       │   ├── git.ts                 [已有] spawn git 封装、commitsSince/diffStat、tag 幂等、克隆（core-engine.md §2）
+│       │   ├── version.ts             [已有] 三方案版本计算 + buildStamp 撞名规避（§3）
+│       │   ├── changelog.ts           [已有] 提交分类/统计/双轨日志渲染（§4）
+│       │   ├── store.ts               [已有] app.json/credentials/发布记录/备份元数据/数据仓库（§5）
+│       │   ├── engine.ts              [已有] 变动检测、planPublish、executePublish 编排（§6）
+│       │   ├── files.ts               [已有] 懒加载文件树/文件读取（listTree/readFileContent，safeAbs 符号链接加固）
+│       │   ├── journal.ts             [已有] journal 落盘/扫描/续跑（JournalStore）
+│       │   ├── preflight.ts           [已有] §6.2 预检阻塞项（runPreflight）
+│       │   ├── ai.ts                  [已有] 可选 AI 日志润色（polishLog，v1 短路返回原文）
+│       │   ├── diff.ts                [已有] autoDraft vs content 行级 LCS diff（diffLines/DiffLine）
+│       │   ├── home.ts                [已有] BX_HOME 解析、目录确保（data/repos/journal/logs/tmp）
+│       │   ├── backup/                [已有] R19 发布备份（5 文件）
+│       │   │   ├── index.ts           [已有] 备份编排 backupRepo()（幂等、失败清理本次半成品、返回 RepoBackupRef）
+│       │   │   ├── source.ts          [已有] git bundle + git archive 源码备份（快照遵循 .gitignore）
+│       │   │   ├── artifact.ts        [已有] 产物目录归档 + manifest（RepoDef.artifactDir）
+│       │   │   ├── manifest.ts        [已有] 目录→哈希清单（流式 sha256 + totals）
+│       │   │   └── tar.ts             [已有] 零依赖 ustar tar.gz（GNU 'L' longname 长路径/中文头）
+│       │   └── compare/
+│       │       └── index.ts           [已有] 三层对比：git diff / 清单对比 / manifest 校验 → CompareResult
+│       └── test/                      [已有] vitest：git/version/changelog/engine/files/diff/journal/backup + helpers/setup
 ├── apps/
-│   ├── server/                        [待建]
-│   │   ├── package.json               [待建] name=@bxverse/server；dep: @bxverse/core、@bxverse/shared；engines node>=20
-│   │   ├── tsconfig.json              [待建]
+│   ├── server/                        [已有]
+│   │   ├── package.json               [已有] name=@bxverse/server；dep: @bxverse/core、@bxverse/shared；engines node>=20
+│   │   ├── tsconfig.json              [已有]
+│   │   ├── tsup.config.ts             [已有]
+│   │   ├── vitest.config.ts           [已有]
+│   │   ├── test/                      [已有] vitest（server.test.ts + helpers/setup）
 │   │   └── src/
-│   │       ├── index.ts               [待建] 启动序列/信号处理（§3.1）
+│   │       ├── index.ts               [已有] 启动序列/信号处理（§3.1）
+│   │       ├── app.ts                 [已有] 应用组装（路由/中间件/SSE/静态托管挂载）
+│   │       ├── poll.ts                [已有] 轮询检测定时器 + RepoStatus 缓存（TTL=pollInterval）
+│   │       ├── queue.ts               [已有] PublishQueue 单队列
+│   │       ├── sse.ts                 [已有] SSE 连接管理/心跳/广播（fetch-流兼容）
 │   │       ├── http/
-│   │       │   ├── router.ts          [待建] 路由表 + 中间件链
-│   │       │   ├── auth.ts            [待建] X-BX-Token + Origin/Content-Type 校验
-│   │       │   ├── json.ts            [待建] 请求体解析/错误响应封装
-│   │       │   └── static.ts          [待建] web/dist 静态托管 + SPA fallback
-│   │       ├── api/
-│   │       │   ├── config.ts          [待建] GET/PUT /api/config
-│   │       │   ├── auth.ts            [待建] /api/auth/init、/api/auth/rotate
-│   │       │   ├── projects.ts        [待建] 项目 CRUD
-│   │       │   ├── repos.ts           [待建] 仓库接入/状态/移除
-│   │       │   ├── files.ts           [待建] 文件树/文件内容
-│   │       │   ├── publish.ts         [待建] plan/publish
-│   │       │   ├── history.ts         [待建] 发布历史
-│   │       │   ├── overview.ts        [待建] 首页聚合
-│   │       │   ├── sync.ts            [待建] /api/system/sync
-│   │       │   └── backups.ts         [待建] R19/M6 备份列表/下载/删除/对比/校验（api.md §10.5）
-│   │       │   └── sync.ts            [待建] /api/system/sync
-│   │       ├── queue.ts               [待建] PublishQueue 单队列
-│   │       └── sse.ts                 [待建] SSE 连接管理/心跳/广播（fetch-流兼容）
-│   ├── web/                           [待建]（verse/web 仅作风格参考，不复用）
-│   │   ├── package.json               [待建] dep: vue/naive-ui/pinia/vue-router/vite-plugin-pwa；
+│   │       │   ├── router.ts          [已有] 路由表 + 中间件链
+│   │       │   ├── auth.ts            [已有] X-BX-Token + Origin/Content-Type 校验
+│   │       │   ├── json.ts            [已有] 请求体解析/错误响应封装
+│   │       │   └── static.ts          [已有] web/dist 静态托管 + SPA fallback
+│   │       └── api/
+│   │           ├── auth.ts            [已有] /api/auth/init、/api/auth/rotate
+│   │           ├── config.ts          [已有] GET/PUT /api/config
+│   │           ├── projects.ts        [已有] 项目 CRUD
+│   │           ├── repos.ts           [已有] 仓库接入/状态/移除
+│   │           ├── files.ts           [已有] 文件树/文件内容
+│   │           ├── versions.ts        [已有] R18 项目版本清单（GET /versions 汇总 + POST /versions/export 导出到仓库/目录）
+│   │           ├── publish.ts         [已有] plan/publish
+│   │           ├── events.ts          [已有] GET /api/events SSE 事件通道（实时控制台）
+│   │           ├── history.ts         [已有] 发布历史
+│   │           ├── overview.ts        [已有] 首页聚合
+│   │           ├── backups.ts         [已有] R19/M6 备份列表/下载/删除/对比/校验/源码 diff（api.md §10.5）
+│   │           └── sync.ts            [已有] /api/system/sync
+│   ├── web/                           [已有]（verse/web 仅作风格参考，不复用）
+│   │   ├── package.json               [已有] dep: vue/naive-ui/pinia/vue-router/vite-plugin-pwa；
 │   │   │                              devDep: vite/@vitejs/plugin-vue/typescript/unocss 等
-│   │   ├── vite.config.ts             [待建] §3.4 代理 + PWA 插件（registerType: 'autoUpdate'）
-│   │   ├── uno.config.ts              [待建] presetUno + presetIcons（@iconify-json/carbon）
-│   │   ├── tsconfig.json              [待建]
-│   │   ├── index.html                 [待建]
-│   │   ├── public/                    [待建] PWA 图标/robots（本地工具可无）
+│   │   ├── vite.config.ts             [已有] §3.4 代理 + PWA 插件（registerType: 'autoUpdate'）
+│   │   ├── uno.config.ts              [已有] presetUno + presetIcons（@iconify-json/carbon）
+│   │   ├── tsconfig.json              [已有]
+│   │   ├── index.html                 [已有]
+│   │   ├── public/                    [已有] PWA 图标（pwa-192/pwa-512/maskable-512/icon.svg）
 │   │   └── src/
-│   │       ├── main.ts                [待建] createApp + pinia + router + naive + uno.css
-│   │       ├── App.vue                [待建] 布局壳：主题切换/命令面板挂载/全局消息
-│   │       ├── env.d.ts               [待建]
+│   │       ├── main.ts                [已有] createApp + pinia + router + naive + uno.css
+│   │       ├── App.vue                [已有] 布局壳：主题切换/命令面板挂载/全局消息
+│   │       ├── theme.ts               [已有] Naive UI 主题定制（亮/暗，色板引用 styles/tokens.css）
+│   │       ├── env.d.ts               [已有]
 │   │       ├── api/
-│   │       │   ├── http.ts            [待建] fetch 封装：X-BX-Token 注入、错误归一、
+│   │       │   ├── http.ts            [已有] fetch 封装：X-BX-Token 注入、错误归一、
 │   │       │   │                      fetch-流式 SSE 订阅（§5.2）
-│   │       │   └── index.ts           [待建] §3.2 各资源 API
+│   │       │   └── index.ts           [已有] §3.2 各资源 API
 │   │       ├── stores/
-│   │       │   ├── config.ts          [待建] AppConfig + pwa.enabled 运行时开关
-│   │       │   ├── projects.ts        [待建] 项目/仓库列表与状态
-│   │       │   ├── publish.ts         [待建] 六步向导状态机（step/repoIds/日志状态）
-│   │       │   └── ui.ts              [待建] 主题/命令面板显隐
-│   │       ├── router/index.ts        [待建] 路由：/ /projects /publish /history /settings
+│   │       │   ├── app.ts             [已有] AppConfig + pwa.enabled 运行时开关（bootstrap）
+│   │       │   ├── projects.ts        [已有] 项目/仓库列表与状态
+│   │       │   ├── publish.ts         [已有] 六步向导状态机（step/repoIds/日志状态）
+│   │       │   └── ui.ts              [已有] 主题/命令面板显隐
+│   │       ├── router/index.ts        [已有] 路由：/ /project/:id /project/:id/release /project/:id/backups /repo/:pid/:rid /settings + 404
 │   │       ├── views/
-│   │       │   ├── Dashboard.vue      [待建] 总览（R2/R13 变动仓库聚合）
-│   │       │   ├── Projects.vue       [待建] 项目/仓库管理（接入两种方式，R2/R3）
-│   │       │   ├── Publish.vue        [待建] 六步发布向导（R9/R14）
-│   │       │   ├── History.vue        [待建] 发布历史（R5/R6/R7 双轨日志查看）
-│   │       │   └── Settings.vue       [待建] 配置（PWA/R10 双模式/AI/数据仓库同步）
+│   │       │   ├── Dashboard.vue      [已有] 总览（R2/R13 变动仓库聚合）
+│   │       │   ├── ProjectDetail.vue  [已有] 项目详情（仓库列表 + 发布历史 + 项目设置）
+│   │       │   ├── RepoDetail.vue     [已有] 仓库详情（文件 / 版本日志 / 设置）
+│   │       │   ├── ReleaseWizard.vue  [已有] 六步发布向导（R9/R14）
+│   │       │   ├── BackupManage.vue   [已有] R19 备份管理：备份列表/下载/删除/产物校验/两次备份对比/源码对比/版本导出
+│   │       │   ├── Settings.vue       [已有] 配置（PWA/R10 双模式/AI/数据仓库同步）
+│   │       │   └── NotFound.vue       [已有] 404 页
 │   │       ├── components/
-│   │       │   ├── RepoTree.vue       [待建] 懒加载文件树（R4）
-│   │       │   ├── LogEditor.vue      [待建] 双轨日志编辑器（状态徽标 + 草稿 diff，R14）
-│   │       │   ├── DiffView.vue       [待建] autoDraft vs content 对比
-│   │       │   ├── PublishConsole.vue [待建] SSE 实时控制台
-│   │       │   ├── CommandPalette.vue [待建] ⌘K 命令面板
-│   │       │   └── EmptyState.vue     [待建] 空状态引导
-│   │       └── pwa/register.ts        [待建] 按 AppConfig.pwa.enabled 动态注册（main.ts 加载配置后 import）
-│   └── cli/                           [待建]
-│       ├── package.json               [待建] name=@bxverse/cli，bin: { "bx-manager": "./dist/index.js" }
-│       ├── tsconfig.json              [待建]
-│       └── src/index.ts               [待建] §3.5 四个子命令
+│   │       │   ├── FileTree.vue / FileTreeNode.vue   [已有] 懒加载文件树（R4）
+│   │       │   ├── FileViewer.vue     [已有] 文件内容查看（truncated/binary 徽标）
+│   │       │   ├── LogEditor.vue      [已有] 双轨日志编辑器（状态徽标 + 草稿 diff，R14）
+│   │       │   ├── DiffView.vue       [已有] autoDraft vs content 对比
+│   │       │   ├── MarkdownView.vue   [已有] 日志 Markdown 渲染
+│   │       │   ├── PublishConsole.vue [已有] SSE 实时控制台
+│   │       │   ├── CommandPalette.vue [已有] ⌘K 命令面板
+│   │       │   ├── EmptyState.vue     [已有] 空状态引导
+│   │       │   ├── CommitList.vue     [已有] 提交列表（含提交级排除勾选）
+│   │       │   ├── DirPicker.vue / DirPickerNode.vue [已有] 本地目录选择器（R18 导出目标/artifactDir 选择）
+│   │       │   ├── VersionExportDropdown.vue [已有] 版本清单导出下拉（下载/写仓库/本地目录/预览，R18）
+│   │       │   ├── RuntimeStatus.vue  [已有] 运行时状态（端口/数据仓库/同步状态）
+│   │       │   ├── AddProjectDialog.vue / AddRepoDialog.vue [已有] 新建项目/接入仓库（本地路径 + URL 克隆）对话框
+│   │       │   └── ProjectCard.vue / RepoCard.vue / StatCard.vue / StatusBadge.vue / PageHeader.vue [已有] 卡片/徽标/页头 UI 组件
+│   │       ├── composables/
+│   │       │   ├── useFsAccess.ts     [已有] 文件系统访问（目录选择/权限探测，R18）
+│   │       │   ├── usePolling.ts      [已有] 轮询封装
+│   │       │   ├── useRuntimeStatus.ts [已有] 运行时状态查询
+│   │       │   └── useNow.ts          [已有] 实时时钟
+│   │       ├── utils/
+│   │       │   ├── format.ts          [已有] 时间/大小/数量格式化
+│   │       │   └── diff.ts            [已有] 前端行级 diff
+│   │       ├── constants/icons.ts     [已有] 图标常量
+│   │       ├── layouts/AppLayout.vue  [已有] 应用布局
+│   │       └── styles/tokens.css      [已有] 主题 token（色板唯一来源）
+│   └── cli/                           [已有]
+│       ├── package.json               [已有] name=@bxverse/cli，bin: { "bx-manager": "./dist/index.js" }
+│       ├── tsconfig.json              [已有]
+│       ├── tsup.config.ts             [已有]
+│       └── src/index.ts               [已有] §3.5 四个子命令（start/dev/data-dir/status）
+├── scripts/                           [已有] 工具脚本
+│   ├── seed.mjs                       [已有] 演示数据种子（默认项目 + fixture 仓库，需在 dev 服务运行前执行）
+│   └── gen-pwa-icons.cjs              [已有] PWA 图标生成（pnpm icons）
+├── e2e/                               [已有] 端到端验证脚本（隔离 BX_HOME 与端口，运行方式见 e2e/README.md）
+│   ├── prepare-fixture.mjs            [已有] 构造测试夹具
+│   ├── wizard-flow.py                 [已有] 六步向导全流程（Playwright）
+│   └── resume.mjs                     [已有] 中断续跑演练
 └── verse/                             [已有] 参考原型，不在 workspace，不参与构建
 ```
 
@@ -480,7 +498,7 @@ G:\vibecoding\
 | §4 仓库接入（本地路径+URL 克隆） | R3、R4 | 两种接入方式、文件树查看 |
 | §5 安全模型 | 非功能·安全 | 127.0.0.1、防 CSRF、凭据独立、token 走 Header |
 | §6 可靠性设计 | 非功能·可靠性/自动化 | journal 续跑、预检、失败隔离、tag 幂等 |
-| §7 文件清单 | R15、R16 | 完整落地蓝图 |
+| §7 文件清单 | R15、R16 | 与实现同步的文件级清单（全部 [已有]） |
 | 双轨日志（internal/external） | R7、R14 | 对外分节、对内全量，状态机见 data-model.md §7 |
 | 版本联动（R12） | 见 data-model.md §6.4 | 仓库随项目基版、未变动仓库同步基版 |
 

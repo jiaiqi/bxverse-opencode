@@ -47,6 +47,18 @@ pnpm dev
 | `pnpm start` | 生产启动 server（需先 build） | 验证生产形态：静态托管 + SPA fallback |
 | `pnpm --filter @bxverse/web dev` | 仅前端热更 | 后端不涉及改动时使用 |
 | `pnpm --filter @bxverse/core test` | 仅 core 测试 | 引擎改动快速反馈 |
+| `pnpm seed` | 创建演示项目 + 3 个本地 fixture 仓库（web-front / api-service / mp-weixin） | **需服务已启动**（`pnpm dev` 或 `pnpm start`）；可选 `--port 8899` / `--project 演示项目` |
+| `pnpm icons` | 生成 PWA 图标到 `apps/web/public/`（pwa-192/512、maskable-512.png） | 零依赖手写 PNG 编码器（crc32+zlib）；图标资源变更后重跑 |
+
+**端到端测试（e2e/）**：先装依赖 `pip install playwright` + `playwright install chromium`（详见 `e2e/README.md`）；三个脚本：
+
+| 脚本 | 用途 | 运行方式 |
+|---|---|---|
+| `e2e/prepare-fixture.mjs` | 造 fixture 项目/仓库 | `BX_PORT=18899` 启动 server 后执行 |
+| `e2e/wizard-flow.py` | 发布向导六步全流程（检测→版本→双轨日志确认→预览→SSE 执行→完成） | prepare 之后依次执行 |
+| `e2e/resume.mjs` | 中断续跑演练：执行中 kill server → 重启 → 重新发起 → 幂等续跑不重复打标签 | 自管理 server 生命周期，直接 `node e2e/resume.mjs`（`BX_PORT=18898`） |
+
+e2e 用独立 `BX_HOME` 与端口（18899/18898）隔离，不触碰真实数据；运行前确保端口未被占用，截图输出至 `%TEMP%\opencode\bxverse-shots\`。
 
 ## 4. 目录约定（新增文件放置规则）
 
@@ -109,6 +121,9 @@ apps/web/
 6. **样式**：UnoCSS 原子类优先；颜色只允许 `brand/bg/surface/border/text/success/warning/error/info` 体系（frontend.md §1.8），禁止裸 hex；scoped CSS 仅限 markdown 渲染与 highlight 主题。
 7. **异步**：统一 `async/await`；请求失败必须处理（toast/错误态），禁止静默 catch；组件卸载前取消 SSE 订阅（`onUnmounted`）。
 8. **依赖**：web 包禁止新增运行时依赖清单外的库；新增依赖需在 PR 描述说明理由（锁定栈见 requirements 澄清结论）。
+9. **WIG 合规约定**（frontend.md §12）：装饰图标 `aria-hidden`；icon-only 按钮 `aria-label`；树/行 `role`+`tabindex`+键盘；站内导航必须 RouterLink；transition 显式属性（禁 `transition-all`）；日期必须 Intl；placeholder 以 `…` 结尾；路径类输入 `autocomplete="off" + spellcheck="false"`。
+10. **URL 状态同步**：需要「刷新/分享可恢复」的界面状态（RepoDetail `?tab=`、发布向导 `?step=`）必须双向同步 URL query：初始化读 query 校验，变化 `router.replace` 写回；禁止只存内存 store。
+11. **构建顺序与生成物**：web 构建 = `vite build && vue-tsc --noEmit`（vite 先产出 dist，vue-tsc 后做类型门禁）；`auto-imports.d.ts` / `components.d.ts` 由 unplugin 自动生成，应入库（不要 gitignore），保证 clone 后 vue-tsc 可直接通过。
 
 ## 7. 质量门禁（每个任务完成必须全绿）
 
@@ -144,6 +159,8 @@ apps/web/
 8. **Vite 代理**：`/api` 与 `/api/publish/stream` 都走同一 proxy（SSE 走 HTTP 长连接，不要配 `ws: true`）。
 9. **自动按需导入**：Naive UI 组件与 API（`useMessage` 等）依赖 `unplugin-auto-import` + `unplugin-vue-components`（NaiveUiResolver）；UnoCSS 类名必须静态拼写（动态拼接的 `i-carbon-${name}` 不会生成图标）。
 10. **sessionStorage token**：token 只走 `X-BX-Token` 头（architecture §5.2）；页面刷新后 `bootstrap()` 自动续；401 的兜底是 `/api/auth/init` 重新引导，禁止把 token 写 localStorage 或 Cookie。
+11. **并发会话 / 多实例端口冲突**：server 默认监听 `127.0.0.1:8899`；并行任务、e2e、多实例同时启动会撞端口（`EADDRINUSE` → server 打印错误并退出）。启动前先检测端口占用；被占用时用 `BX_PORT` 换端口（server 启动错误信息会提示）；e2e 固定用 18899/18898 隔离。
+12. **server 代码改动必须重启**：路由/API/引擎均在 server 进程启动时加载，改 server 代码后 watch 不覆盖生效；验证前务必重启 server 进程（kill 旧进程或重开 `pnpm dev`），否则跑的是旧路由。`pnpm seed` 也依赖运行中的服务。
 
 ## 9. git 提交规范
 

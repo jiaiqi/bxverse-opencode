@@ -1,6 +1,6 @@
 # bxverse 服务端 API 设计
 
-> 文档版本：v0.1（2026-08-13）
+> 文档版本：v0.2（2026-08-13）
 > 依据：`docs/requirements.md`（唯一需求依据）、`docs/architecture.md`（总体架构）、`packages/shared/src/types.ts`（定稿共享类型）、`packages/shared/src/constants.ts`（定稿常量）。
 > 读者：后续开发 agent。本文中所有 JSON 字段名与 `types.ts` 一字不差；实现文件路径均为建议路径（`apps/server/src/...`）。
 > 本文对 `architecture.md` §3.2 的路由表做了 4 处修订，见文末「§11 与 architecture.md 的差异」。
@@ -56,8 +56,8 @@
 ### 1.3 认证与 CSRF 规则（X-BX-Token）
 
 1. **token 生成与存储**：server 启动时读取 `~/.bxverse/credentials.json`；不存在则 `crypto.randomBytes(32).toString('hex')` 生成并以 0600 权限原子写入。重启不换 token。实现：`apps/server/src/http/auth.ts`。
-2. **token 下发**：唯一免 token 端点 `GET /api/config` 在响应中直接返回 token；该端点与其他 GET 一样**绝不设置 CORS 头**，跨源页面无法读取响应体，故安全。
-3. **携带方式**：除 `GET /api/config` 外的全部 `/api/*` 请求（含 GET）必须携带请求头 `X-BX-Token`，服务端用 `crypto.timingSafeEqual` 比对；失败返回 401。**token 只走 Header，绝不使用 Cookie**。
+2. **token 下发**：免 token 端点 `GET /api/config` 在响应中直接返回 token；该端点与其他 GET 一样**绝不设置 CORS 头**，跨源页面无法读取响应体，故安全。
+3. **携带方式**：除 `GET /api/config` 与 `GET /api/health`（§10.3）外的全部 `/api/*` 请求（含 GET）必须携带请求头 `X-BX-Token`，服务端用 `crypto.timingSafeEqual` 比对；失败返回 401。**token 只走 Header，绝不使用 Cookie**。
 4. **前端引导流程**：页面加载 → `GET /api/config`（无 token）→ 将 token 存入 `sessionStorage` → 后续请求统一注入头（`apps/web/src/api/http.ts`）；收到 401 时重新执行引导一次，仍失败则提示「会话失效」。
 5. **非 GET 请求双重校验**（所有状态变更端点）：
    - `Origin` 头存在时，必须命中白名单 `http://127.0.0.1:*` 或 `http://localhost:*`（任意端口，覆盖 Vite dev 的 5173）；不命中 → 403。`Origin` 缺失（curl、同源导航）放行——跨站浏览器请求必然携带 Origin。
@@ -79,6 +79,7 @@
 |---|---|---|---|---|
 | GET | `/api/config` | 引导 + 读配置（含 token） | `AppConfig` | `apps/server/src/api/config.ts` |
 | POST | `/api/config` | 部分更新配置 | — | `apps/server/src/api/config.ts` |
+| GET | `/api/health` | 健康检查（免 token，CLI status / 前端 RuntimeStatus chip） | — | `apps/server/src/app.ts` |
 | GET | `/api/overview` | 首页聚合 | `OverviewData` | `apps/server/src/api/overview.ts` |
 | GET | `/api/projects` | 项目列表 | `ProjectDef[]` | `apps/server/src/api/projects.ts` |
 | POST | `/api/projects` | 新建项目 | `ProjectDef` | `apps/server/src/api/projects.ts` |
@@ -90,14 +91,24 @@
 | GET | `/api/repos/:pid/:rid/status` | 仓库状态（含相对上次发布的提交） | `RepoStatus` | `apps/server/src/api/repos.ts` |
 | GET | `/api/repos/:pid/:rid/tree` | 目录懒加载 | `TreeNode` | `apps/server/src/api/files.ts` |
 | GET | `/api/repos/:pid/:rid/file` | 文件内容 | `FileContent` | `apps/server/src/api/files.ts` |
+| GET | `/api/projects/:id/versions` | 项目版本清单（实时采集，R18） | `RepoVersionItem[]` | `apps/server/src/api/versions.ts` |
+| POST | `/api/projects/:id/versions/export` | 版本清单写入指定仓库（R18） | `RepoVersionItem[]` | `apps/server/src/api/versions.ts` |
 | GET | `/api/projects/:id/releases` | 项目发布历史 | `ReleaseRecord[]` | `apps/server/src/api/history.ts` |
 | GET | `/api/releases` | 按 scope+版本查发布记录（含日志内容） | `ReleaseRecord` | `apps/server/src/api/history.ts` |
+| GET | `/api/releases/:id/versions` | 发布历史版本清单快照（R18） | `RepoVersionItem[]` | `apps/server/src/api/history.ts` |
 | PATCH | `/api/releases/:id/log` | 编辑双轨日志（state 流转） | `ReleaseRecord` | `apps/server/src/api/history.ts` |
 | POST | `/api/publish` | dry-run 预览 / 提交发布任务 | `PublishPlan` / `{taskId}` | `apps/server/src/api/publish.ts` |
 | GET | `/api/events` | SSE 事件流 | `PublishEvent` | `apps/server/src/api/events.ts` |
 | POST | `/api/sync` | 数据仓库 pull/push/commit/status | — | `apps/server/src/api/sync.ts` |
 | POST | `/api/auth/rotate` | 轮换 token（可选） | — | `apps/server/src/http/auth.ts` |
 | GET | `/api/publish/current` | 当前任务查询（可选，续跑 UI） | — | `apps/server/src/api/publish.ts` |
+| GET | `/api/repos/:pid/:rid/backups` | 仓库历次发布备份列表（R19） | `RepoBackupRef[]` | `apps/server/src/api/backups.ts` |
+| GET | `/api/backups/:releaseId/:repoId` | 备份元数据（R19） | `RepoBackupRef` | `apps/server/src/api/backups.ts` |
+| GET | `/api/backups/download/:releaseId/:repoId/:kind` | 备份文件流式下载（R19） | — | `apps/server/src/api/backups.ts` |
+| DELETE | `/api/backups/:releaseId/:repoId` | 删除备份文件与元数据（R19） | — | `apps/server/src/api/backups.ts` |
+| POST | `/api/backups/compare` | 产物级对比（R19） | `CompareResult` | `apps/server/src/api/backups.ts` |
+| POST | `/api/backups/verify` | 备份完整性校验（R19） | `CompareResult` | `apps/server/src/api/backups.ts` |
+| GET | `/api/repos/:pid/:rid/diff` | 源码级对比（R19） | `CompareResult` | `apps/server/src/api/backups.ts` |
 
 ---
 
@@ -105,7 +116,7 @@
 
 ### 3.1 GET /api/config（免 token）
 
-用途：应用引导（拿 token）+ 读取配置 + 项目概要。**唯一免 token 端点**；响应不含 CORS 头。
+用途：应用引导（拿 token）+ 读取配置 + 项目概要。**免 token 端点**（另一免 token 端点为 `GET /api/health`，见 §10.3）；响应不含 CORS 头。
 
 查询参数：无。
 
@@ -233,10 +244,24 @@
 { "repoId": "r_8k2m", "path": "versions.json" }
 ```
 
+携带 `items`（发布历史快照导出用，见 §7.3）时：
+
+```json
+{
+  "repoId": "r_8k2m",
+  "path": "versions.json",
+  "items": [
+    { "app": "l-pc-front", "name": "PC 前端", "version": "v1.2.0.26081315" },
+    { "app": "l-data-v", "name": "数据可视化", "version": "v1.2.0.26081315" }
+  ]
+}
+```
+
 | 字段 | 说明 |
 |---|---|
 | `repoId` | 必填；必须属于该项目 |
 | `path` | 必填；相对仓库根的路径，必须以 `.json` 结尾；禁止绝对路径与 `..` 越界 |
+| `items` | 可选；`RepoVersionItem[]`（`{app,name,version}`）——传入则**直接写入该内容**（发布历史快照导出用，通常取自 `GET /api/releases/:id/versions`）；缺省时实时采集当前版本（fresh 读取业务仓库 version.json）。非数组或元素缺 `app/name/version` 字符串 → 400 `VALIDATION` |
 
 响应 `200`：
 
@@ -252,7 +277,7 @@
 ```
 
 - 写入前自动创建父目录；内容为格式化 JSON 数组 + 末尾换行。
-- 错误：404（项目/仓库不存在或不属于该项目）；400 `VALIDATION`（字段缺失、非 `.json`、路径越界）；400 `REPO_INVALID`（仓库路径失效）。
+- 错误：404（项目/仓库不存在或不属于该项目）；400 `VALIDATION`（字段缺失、非 `.json`、路径越界、`items` 非 `{app,name,version}` 数组）；400 `REPO_INVALID`（仓库路径失效）。
 - 前端交互（File System Access API）：「另存为文件」走原生 `showSaveFilePicker`（不支持时回退浏览器下载）；「写入项目仓库」弹窗内**树形目录选择器点选目标目录**（不手填路径，记住上次选择）；「导出到本地目录」走原生 `showDirectoryPicker` 选择任意本地目录后经句柄直接写入。注：浏览器安全限制下系统选择器不返回绝对路径，因此仓库内写入由后端路径 + 树选择器承担。
 
 实现：`apps/server/src/api/versions.ts`；前端导出按钮下拉「写入指定仓库」弹窗（目标仓库 + 路径，记住上次选择）。
@@ -555,7 +580,7 @@
     "external": { "state": "confirmed", "content": "# 主产品线 v1.2.0 更新日志\n...", "autoDraft": "# 主产品线 v1.2.0 更新日志\n...（自动草稿）" }
   },
   "repos": [
-    { "repoId": "r_8k2m", "repoName": "l-pc-front", "version": "v1.2.0.26081315", "commits": [ { "hash": "9d4f2a1", "fullHash": "9d4f2a1c...", "author": "张三", "date": "2026-08-12", "subject": "feat: 支持暗色主题", "type": "feat", "scope": null, "breaking": false, "files": ["src/theme/index.ts"] } ] }
+    { "repoId": "r_8k2m", "repoName": "l-pc-front", "displayName": "PC 前端", "version": "v1.2.0.26081315", "commits": [ { "hash": "9d4f2a1", "fullHash": "9d4f2a1c...", "author": "张三", "date": "2026-08-12", "subject": "feat: 支持暗色主题", "type": "feat", "scope": null, "breaking": false, "files": ["src/theme/index.ts"] } ] }
   ],
   "tags": { "milestone": "v1.2.0" },
   "pushed": true,
@@ -633,6 +658,7 @@ state 状态机（`auto → edited → confirmed`）：
   "projectId": "p_3f1",
   "bump": "auto",
   "repoIds": ["r_8k2m", "r_x9"],
+  "excludeCommits": { "r_8k2m": ["9d4f2a1c3b5e7f8a9d0b1c2d3e4f5a6b7c8d9e0f"] },
   "skipBuild": false,
   "offline": false,
   "dryRun": false,
@@ -650,6 +676,7 @@ state 状态机（`auto → edited → confirmed`）：
 | `offline` | 纯本地模式：跳过 tag 推送与数据仓库 push |
 | `dryRun` | `true` → 同步返回 `PublishPlan`；不落任务、不写 journal |
 | `externalContent` / `internalContent` | 向导中人工编辑后的定稿；缺省 = 自动草稿 |
+| `excludeCommits` | 可选；`Record<repoId, fullHash[]>`——提交级人工排除（向导人工甄别），被排除的提交不参与本次发布：引擎过滤后**重算 changed**；某仓库全部提交被排除且无 dirty 时自动降级为 `syncedOnly`；排除数记入 `PublishPlan.warnings`（如「r_8k2m 排除 2 个提交，参与本次发布 1 个」）。非对象或值非字符串数组 → 400 `VALIDATION`（`excludeCommits 必须为 { repoId: string[] }`） |
 
 **模式一：dry-run（`dryRun: true`）** —— 同步执行 `planPublish`，响应 `200`（`PublishPlan`）：
 
@@ -699,7 +726,7 @@ state 状态机（`auto → edited → confirmed`）：
 - **执行时以服务端实时重算的 plan 为准**：执行引擎会重新执行 `planPublish` 并对版本做锁存（写入 journal），避免 preview 与执行之间仓库发生新提交导致版本漂移。
 
 错误：
-- 400 `VALIDATION`（`bump` 非法、`repoIds` 含非本项目仓库）；
+- 400 `VALIDATION`（`bump` 非法、`repoIds` 非字符串数组或含非本项目仓库、`excludeCommits` 非 `{ repoId: string[] }`）；
 - 404 `NOT_FOUND`（项目不存在）；
 - 409 `TASK_BUSY`（队列忙）：
   ```json
@@ -836,6 +863,22 @@ data: {"type":"done","message":"发布完成","data":{"releaseId":"rel_p_3f1_v1.
 
 > 前端处理：收到新 token 后更新 `sessionStorage` 并重新引导；SSE 客户端按 `retry` 自动重连（重建连接时需重新执行引导拿新 token）。
 
+### 10.3 GET /api/health（免 token）
+
+用途：健康检查——**免 token**（与 `GET /api/config` 同为免 token 白名单端点），供 CLI `status` 命令与前端顶栏 RuntimeStatus chip 使用。实现于 `apps/server/src/app.ts`（路由组装处内联注册，非独立 API 模块）；版本号读取 `process.cwd()` 下 `package.json` 的 `version` 字段，读取失败回退 `0.0.0`。
+
+查询参数：无。请求体：无。
+
+响应 `200`：
+
+```json
+{ "ok": true, "version": "0.2.0" }
+```
+
+- `version` 为 server 包版本（`package.json`），非项目/仓库版本。
+- 认证豁免：`(pathname === '/api/health') && method === 'GET'` 跳过 token 校验（见 app.ts）；响应同样无 CORS 头。
+- 不做任何 git/配置读取，用于探测服务存活与版本。
+
 ---
 
 ## 10.5 备份与一致性对比（R19/M6）
@@ -925,5 +968,17 @@ data: {"type":"done","message":"发布完成","data":{"releaseId":"rel_p_3f1_v1.
 | §8 发布（dry-run/执行/SSE） | R9、R10、R12、R14 | 自动化生成、六步向导、本地/远程双模式、执行前预览 |
 | §9 数据仓库同步 | R10、R15 | tag/release 远程联动与多机同步、自动降级 |
 | §10 辅助端点 | 非功能·可靠性 | 中断续跑恢复 UI、token 轮换 |
+
+---
+
+## 13. 变更记录
+
+| 日期 | 变更 |
+|---|---|
+| 2026-08-13 | 初版（v0.1）：与 requirements.md / architecture.md / types.ts 对齐的全量 API 设计 |
+| 2026-08-13 | §8.1 补 `excludeCommits`（`Record<repoId, fullHash[]>`，提交级人工排除；引擎过滤后重算 `changed`，全部排除且无 dirty 的仓库自动降级 `syncedOnly`；warnings 记录排除数；非对象或值非字符串数组 → 400 `VALIDATION`） |
+| 2026-08-13 | §4.3 补 `items?: RepoVersionItem[]`（传入则直接写入该内容——发布历史快照导出用；缺省实时采集当前版本）；§7.2 示例 `repos` 补 `displayName` |
+| 2026-08-13 | 新增 §10.3 `GET /api/health`（免 token，响应 `{ok:true, version}`，实现于 `apps/server/src/app.ts`；§1.3/§3.1「唯一免 token 端点」表述同步修正） |
+| 2026-08-13 | §2 端点总览补齐：`/api/health`、`/api/projects/:id/versions`、`/api/projects/:id/versions/export`、`/api/releases/:id/versions`、`/api/repos/:pid/:rid/backups`、`/api/backups/*`（元数据/下载/删除/compare/verify）、`/api/repos/:pid/:rid/diff`；实现文件栏按实际源码路径填写 |
 
 

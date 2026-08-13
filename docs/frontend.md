@@ -394,11 +394,27 @@ NConfigProvider(theme + themeOverrides)
 
 **状态处理**：保存中按钮 loading；409（发布进行中）→ toast 后端 `error`；网络失败 → toast + 表单保留。
 
-### 3.6 404 `/：pathMatch(.*)*`
+### 3.6 备份管理 `/project/:id/backups`（BackupManage.vue，R19）
+
+**数据来源**：项目定义 `projectsStore.byId(pid)`（无则 `GET /api/projects`）；每仓库备份列表 `GET /api/repos/:pid/:rid/backups`（`{ items: RepoBackupRef[] }`，进入页面并行拉取，单仓失败置空数组）。路由 `name: 'backups'`，`meta.title: '备份与对比'`；入口：项目详情「备份与对比」按钮、发布向导完成页「查看本次备份」。
+
+**区块**：
+
+| 区块 | 内容 |
+|---|---|
+| PageHeader | 标题「备份与对比 · {项目名}」+ 说明「每次发布自动备份源码与产物（元数据入数据仓库审计，大文件存本地 backups 目录）」；back 回 `/project/:id`；勾选两项后 actions 出现「产物对比」「源码对比」按钮 + 已选版本提示 |
+| NAlert 说明 | 源码快照遵循仓库 .gitignore（仅含已跟踪文件）；产物目录在各仓库「设置」中配置（未配置则发布时跳过产物备份） |
+| 按仓库分区 | 每仓库一张卡：仓库名 + 备份数 chip + 产物目录（或「未配置产物目录（仅源码备份）」）；备份行 = NCheckbox 选择 + `version`（mono）/`date`/`tag` + 各项 kind chip（源码 bundle / 源码快照 / 产物归档 · 大小）；行尾 NDropdown「下载」（按 kind 分项，`api.backupDownload` → blob 落盘）、「校验」（`api.verifyBackup`）、删除（NDialog 确认后 `api.deleteBackup`，不可恢复） |
+
+**对比流程**：勾选同一仓库的两次发布（最多 2 项，跨仓库 toast 警告）→「产物对比」= `POST /api/backups/compare { kind:'artifact', left, right }`；「源码对比」= `GET /api/repos/:pid/:rid/diff?from=&to=`（取 tag 或 commit）。结果面板（NModal）：totals 四类 chip（新增/缺失/变更/一致）+ 文件明细表（状态/路径/插入/删除/两侧大小）+「导出校验报告」（生成 Markdown 表格 blob 下载）。校验入口同样复用该面板展示 `CompareResult`。
+
+**状态处理**：loading → NSpin；`project.repos.length===0` → EmptyState「暂无仓库」；项目不存在 → NResult 404 + 返回总览。
+
+### 3.7 404 `/：pathMatch(.*)*`
 
 `NResult status="404"` + 「返回总览」按钮，2s 后自动重定向 `/`（可取消）。
 
-### 3.7 徽标规则汇总（StatusBadge 统一实现，禁止散落自绘）
+### 3.8 徽标规则汇总（StatusBadge 统一实现，禁止散落自绘）
 
 | 场景 | 判定条件 | 文案/图标 | 色 |
 |---|---|---|---|
@@ -466,7 +482,7 @@ props: {
   count?: number          // changed/dirty 的数值
 }
 ```
-视觉：`chip` 基础上按 §3.7 配色；可选前导 6px 圆点；纯图标模式 `aria-label` 必填。
+视觉：`chip` 基础上按 §3.8 配色；可选前导 6px 圆点；纯图标模式 `aria-label` 必填。
 
 ### 4.6 PageHeader
 
@@ -544,7 +560,44 @@ emits: { finished: [result: { releaseId: string; version: string; failedRepos: s
 订阅 `api.subscribePublish`（§6）；行渲染规则：`log`→text-2 前缀 `$`、`step`→brand 加粗前缀 `▸`、`repo-start`→info 前缀 `▶`、`repo-done`→success `✓`、`repo-error`→error `✗`、`done`→success 横幅、`error`→error 横幅；`repoId` 非空时行首 chip 显示仓库名（从 plan 映射）。
 交互：自动滚动（新行到达且「跟随」开 → `scrollTop=scrollHeight`，用户上滚 200px 即暂停跟随，按钮恢复）；断线时顶部 NAlert「连接断开，正在重连（第 N 次）…」；`done` → `emits('finished')` 并关闭连接。
 
-### 4.16 其他小组件
+### 4.16 RuntimeStatus
+
+服务连接状态 chip（挂载于侧栏底部，借鉴 repoverse）：
+```ts
+无 props/emits；自持 useRuntimeStatus()
+```
+- 三态：`checking`（「检测本地服务…」，`i-carbon-renew` 旋转）/ `connected`（「本地服务已连接」，`i-carbon-checkmark-filled`，title 显示 `bxverse v{version}`）/ `unavailable`（「本地服务未连接」，`i-carbon-warning-alt`，title 显示错误信息）。
+- 检测：挂载即查 `GET /api/health`，每 30s 轮询一次（onScopeDispose 清理定时器）；chip 本身是 `<button>`，点击立即重试（`check()`）；三态分别映射 success/warning/neutral 软底 + `focus-ring`。
+
+### 4.17 VersionExportDropdown
+
+版本清单导出通用组件（R18）：发布历史行与发布向导完成页复用。
+```ts
+props: {
+  projectId: string
+  filename: string            // 默认文件名（如 versions.json / {version}-versions.json）
+  loadItems: () => Promise<RepoVersionItem[]>   // 清单数据源（当前版本或某次发布快照）
+  label?: string; size?: 'tiny'|'small'|'medium'; quaternary?: boolean
+}
+```
+- 四个入口：**直接打开（预览）**（highlight.js 渲染 JSON，可复制/另存）、**另存为文件**（`useFsAccess().saveTextFile`：`showSaveFilePicker` 原生对话框，不支持或失败回退 anchor 下载，取消静默）、**写入项目仓库**（弹窗内 NSelect 选仓库 + DirPicker 点选目录 + 文件名（.json 校验）；`api.exportProjectVersions` 写入，**不 commit**，由用户自行提交）、**导出到本地目录**（`showDirectoryPicker` 原生目录选择器 + 句柄直写，无路径依赖）。
+- localStorage 记住「写入项目仓库」上次选择：key `bxverse-export-{projectId}-{filename}`（repoId/dir/filename，仓库已不存在则回退第一个仓库）。
+- 触发按钮外层 `<div @click.stop>` 拦截点击冒泡——组件常嵌在可点击行（发布历史行）内，防止误触发行点击。
+
+### 4.18 DirPicker / DirPickerNode
+
+目录选择器（R18 写入版本清单 / R19 仓库设置选产物目录共用）：
+```ts
+// DirPicker.vue
+props: { pid: string; rid: string; modelValue: string }   // modelValue '' = 仓库根
+emits: { 'update:modelValue': [path: string] }
+```
+- **仅目录**：根节点与子节点都只渲染 `type==='dir'` 条目（`api.tree(pid, rid, path)`）；展开时懒加载子目录（childrenMap 缓存，重复展开不再请求）。
+- **仓库根选项**：列表顶部固定「（仓库根目录）」行（`i-carbon-home`）；头部显示当前选中路径 + 清空按钮（aria-label「清空为仓库根目录」）。
+- **键盘**：行 `role="button" tabindex="0"`；`Enter`/`Space` 选中、`→` 展开、`←` 折叠（DirPickerNode 内 `onKeydown`）；focus-visible 焦点环；`rid` 变化时整体重置（root/缓存/展开态清空，选中回仓库根）。
+- 选中态：`picker-row-active`（brand 软底 + 左侧 2px brand 竖条）；节点按 depth 缩进；加载中行 NSpin。
+
+### 4.19 其他小组件
 
 - **ThemeToggle**：icon 按钮，循环 light→dark→system，tooltip 显示目标模式。
 - **StatCard**：props `{ label, value, icon?, accent? }`；`stat-value` + `stat-label`。
@@ -668,6 +721,16 @@ actions: {
 }
 ```
 
+### 5.5 可复用 composables 与工具函数
+
+| 模块 | 职责 |
+|---|---|
+| `composables/usePolling.ts` | 可见性感知轮询：挂载即 tick + setInterval；`document.hidden` 时跳过，`visibilitychange` 回前台立即刷新一次；失败静默下轮重试；返回 `{ refresh }` |
+| `composables/useRuntimeStatus.ts` | 本地服务状态：`checking/connected/unavailable` 三态 + `version` + `errorMessage`；`check()` 调 `GET /api/health`；30s 轮询；供 RuntimeStatus chip 使用 |
+| `composables/useFsAccess.ts` | File System Access API 封装（三种导出方式的底层）：`saveTextFile`（原生另存为，返回 `'native'/'fallback'/'cancelled'`，不支持或失败回退 anchor 下载）、`pickDirectory`（原生目录选择器，取消返回 null）、`writeToDirectory`（目录句柄直写） |
+| `composables/useNow.ts` | 当前时间 `Ref<Date>`，分钟级刷新（页头日期展示） |
+| `utils/format.ts` | `formatDate` / `formatDateTime`（Intl.DateTimeFormat('zh-CN')，ISO → 2026-08-13 / 2026-08-13 15:30，无效输入原样返回）、`formatSize`（Intl.NumberFormat，B/KB/MB/GB）——日期/大小统一走 Intl，禁硬编码格式 |
+
 ---
 
 ## 6. API Client 封装（api/http.ts）
@@ -709,6 +772,7 @@ const routes = [
   { path: '/',                  name: 'dashboard',     component: Dashboard.vue },
   { path: '/project/:id',       name: 'project-detail',component: ProjectDetail.vue },
   { path: '/project/:id/release', name: 'release-wizard', component: ReleaseWizard.vue },
+  { path: '/project/:id/backups', name: 'backups', component: BackupManage.vue },
   { path: '/repo/:pid/:rid',    name: 'repo-detail',   component: RepoDetail.vue },
   { path: '/settings',          name: 'settings',      component: Settings.vue },
   { path: '/:pathMatch(.*)*',   name: 'not-found',     component: NotFound.vue },
@@ -730,7 +794,7 @@ const routes = [
 
 | 步 | 名称 | 关键数据 | 数据来源 |
 |---|---|---|---|
-| 1 | 检测变更 | `statuses` / `selectedRepoIds` | `GET .../repos/:rid/status?fresh=true`（并行） |
+| 1 | 检测变更 | `statuses` / `selectedRepoIds` / `excludedCommits`（提交级排除） | `GET .../repos/:rid/status?fresh=true`（并行） |
 | 2 | 版本号 | `plan`（PublishPlan） | `POST /api/projects/:id/plan` |
 | 3 | 日志编辑 | `logs.external` / `logs.internal` | plan 草稿 → 本地编辑态 |
 | 4 | Dry-run 预览 | 由 `plan` 推导的「将执行命令清单」 | 纯前端渲染（不另发请求） |
@@ -749,6 +813,7 @@ const routes = [
 - 列表：每个仓库行 = RepoCard 变体（勾选框 + changed 徽标 + commits 数 + dirty 徽标 + `lastPublishCommit` 前 7 位）；默认勾选全部 `changed===true`；无变动仓库置灰显示「已同步」但**不可勾选**（它们将进入 `syncedOnly` 处理）。
 - 空态：全部无变动 → EmptyState「所有仓库均为最新」+ 返回按钮。
 - `dirty>0` 的仓库行尾 error 提示「有未提交改动，发布将失败（预检阻断）」——仍可勾选但步骤 2 前 toast 警告。
+- **提交级排除（变化收件箱）**：每个变动仓库行下方「提交明细」折叠面板（按钮 `@click.stop`），逐提交勾选 `NCheckbox` 参与与否；状态存 `publishStore.excludedCommits`（`repoId → fullHash[]`），切换走 `toggleCommit(repoId, fullHash, included)` 并置 `planDirty`；有排除时按钮旁显示「已排除 N 条」warning chip，被排除提交行划线置灰；排除后该仓库无剩余提交且无 dirty 时降级为 `syncedOnly`（core plan 计算）。
 
 ### 8.4 步骤 2 细节（版本号）
 
@@ -813,6 +878,11 @@ const routes = [
 - `failedRepos` 非空 → warning 区列出失败仓库名 + 说明「失败仓库未更新基准，可下次重新发布」（失败隔离，architecture §6.3）。
 - 动作：返回项目详情 / 查看发布记录（`GET /api/releases/:id` 弹层渲染双轨日志）/ 再次发布（`reset()` 回步骤 1）。
 - `error` 事件（0 仓库成功）→ 整页 NResult error + 重试（回到步骤 2 重取 plan）。
+
+### 8.8 步骤状态 URL 同步与离开守卫
+
+- **URL step 同步**：进入向导读 `route.query.step`（1–6 合法值恢复 `store.step`，非法忽略）；`watch(store.step)` 变化即 `router.replace({ query: { ...route.query, step } })`——刷新/分享保持步骤。
+- **beforeunload 守卫**：监听 `window.beforeunload`，当「任一侧日志 `state !== 'auto'`（已人工编辑）」或「`phase === 'running'`（发布执行中）」且步骤在 2–5 时 `e.preventDefault()` 弹浏览器原生离开确认；组件卸载时移除监听。
 
 ---
 
@@ -902,7 +972,23 @@ const routes = [
 
 ---
 
-## 12. 与需求文档的对应关系
+## 12. Web Interface Guidelines（WIG）合规约定
+
+前端全部页面遵守 Web Interface Guidelines（WIG）核心条目的落地约定：
+
+1. **装饰图标一律 `aria-hidden="true"`**：纯装饰的 `i-carbon-*` 图标不进入读屏树。
+2. **icon-only 按钮必配 `aria-label`**（如「新建项目」「清空为仓库根目录」）；有可见文字则不必。
+3. **树/行可聚焦元素**：`role="button"` + `tabindex="0"` + `aria-expanded`/`aria-label` + 键盘处理（`Enter`/`Space` 选中、`→`/`←` 展开折叠，见 DirPickerNode）。
+4. **站内导航必须用 `RouterLink`**：禁止 `<a href>` 硬跳转（侧栏/Logo/项目项等）。
+5. **transition 显式列出属性**：只过渡 `colors`/`background-color`/`transform`/`border-color`/`width` 等具体属性（如 `transition-colors`、`transition-transform`、`transition-[border-color,background-color]`），**禁止 `transition-all`**。
+6. **日期/数字必须 `Intl`**：日期展示一律走 `utils/format.ts` 的 `formatDate/formatDateTime`；文件大小用 `Intl.NumberFormat`；禁止手拼 `YYYY-MM-DD`。
+7. **placeholder 以 `…` 结尾**：输入框占位文案统一省略号结尾（如「选择目录…」「如：l-pc-front…」）。
+8. **路径/标识类输入 `autocomplete="off"` + `spellcheck="false"`**（NInput 用 `:input-props` 传入），禁止浏览器自动填充与拼写检查干扰。
+9. **Tab/步骤状态同步 URL query**：RepoDetail 的 `?tab=`、发布向导的 `?step=` 双向同步（`router.replace` 写入、初始化读取校验），保证刷新/分享可恢复。
+
+---
+
+## 13. 与需求文档的对应关系
 
 | 编号 | 需求 | 本文对应章节 |
 |---|---|---|
@@ -915,11 +1001,22 @@ const routes = [
 | R7 | 对内/对外日志双轨 | §3.3 双轨切换、§9 双轨编辑器 |
 | R8 | 版本号方案可配 | §4.8 AddProjectDialog（repoVersionScheme）、§8.4 步骤 2（bump 覆盖） |
 | R9 | 自动化 | §8.1 六步流程（自动检测/plan/草稿）、§4.15 ReleaseConsole |
-| R10 | 纯本地与远程联动 | §8.6 offline 开关、§3.5 设置、§3.7 纯本地徽标 |
+| R10 | 纯本地与远程联动 | §8.6 offline 开关、§3.5 设置、§3.8 纯本地徽标 |
 | R11 | 现有工程入默认项目 | §3.1 总览初始数据展示（默认项目）+ §4.7 空状态引导 |
 | R12 | 版本联动 | §8.4 syncedOnly 展示「仅同步基版」、§8.6 dry-run 清单 |
 | R13 | 改动点可见 | §3.1 changedRepos 面板、§4.3 CommitList（commits/files） |
 | R14 | 日志自动生成 + 人工编辑确认 | §9.4 状态机（auto→edited→confirmed）、§9.3 工具栏 |
 | R15 | 完整性（无历史包袱） | 全部按 types.ts 定稿类型设计，未迁移旧实现 |
 | R16 | 足够好用 | §2.3 命令面板、§11 键盘清单、§4.7 空状态引导 |
-| R17 | UI/UX 美观优雅精致大方 | §1 设计系统（色板/字体/间距/圆角/阴影/动效）、§3.7 徽标统一 |
+| R17 | UI/UX 美观优雅精致大方 | §1 设计系统（色板/字体/间距/圆角/阴影/动效）、§3.8 徽标统一 |
+| R18 | 版本清单导出（下载/写仓库/本地目录/预览） | §4.17 VersionExportDropdown、§4.18 DirPicker、§5.5 useFsAccess |
+| R19 | 版本一致性对比与发布备份 | §3.6 备份管理、§8.6 备份开关（dry-run 清单）、§4.18 DirPicker（artifactDir 选择） |
+
+---
+
+## 14. 变更记录
+
+| 日期 | 变更 |
+|---|---|
+| 2026-08-13 | 首版：设计系统、页面规格、组件清单、状态管理、路由、向导状态机、日志编辑器、PWA、无障碍 |
+| 2026-08-13 | 补 R18/R19 落地：BackupManage 备份管理页（§3.6）、RuntimeStatus / VersionExportDropdown / DirPicker 组件（§4.16–4.18）、composables 与 format.ts（§5.5）、提交级排除与 URL 同步 / beforeunload 守卫（§8）、WIG 合规约定（§12） |

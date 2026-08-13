@@ -1,6 +1,6 @@
 # bxverse 数据模型与存储设计
 
-> 文档版本：v0.1（2026-08-13）
+> 文档版本：v0.2（2026-08-13）
 > 依据：`docs/requirements.md`（唯一需求依据）、`docs/architecture.md`、`packages/shared/src/types.ts`（定稿共享类型）、`packages/shared/src/constants.ts`（定稿常量）。
 > 读者：后续开发 agent 与维护者。**本文中出现的所有领域字段名与 `types.ts` 一字不差；本文不新增任何共享类型字段**，需要扩展的能力一律列入 §11「待扩展」，且注明扩展方式与「不影响现有类型」。
 > 与 `architecture.md` 的关系：architecture 定义进程/接口/可靠性，本文定义「数据落在哪里、长什么样、何时写、怎么读」。
@@ -108,11 +108,13 @@ AppConfig ─── 1:N ─── ProjectDef ─── 1:N ─── RepoDef
 |---|---|---|---|
 | `id` | `string` | 仓库唯一 ID，规则 `r_` + 6 位小写字母数字；也是克隆目录名 | — |
 | `name` | `string` | 仓库名（默认取目录名/URL 仓库名） | — |
+| `displayName` | `string`（可选） | 中文名，展示与导出用（版本清单 `RepoVersionItem.name`、发布快照 `RepoReleaseRef.displayName` 均取自本字段）；缺省时回退 `name` | 缺省不输出 |
 | `path` | `string` | 本地绝对路径：接入时校验存在且含 `.git`；URL 克隆成功后指向克隆目录 | — |
 | `remote` | `string`（可选） | origin 远程地址（接入时从 git config 读取；克隆时为 `CloneRequest.url`） | 缺省不输出 |
 | `buildCommand` | `string`（可选） | 发版前执行的构建命令（`shell` 语义，如 `npm run build`）；空/缺省 = 跳过构建 | 缺省不输出 |
 | `outputDir` | `string`（可选） | `version.json`/`version-history.json` 输出目录（相对仓库根） | `public` |
 | `writeVersionFile` | `boolean`（可选） | 是否在业务仓库内写版本文件；`false` 实现零侵入（只打 tag） | `true` |
+| `artifactDir` | `string`（可选） | 扩展：R19 产物备份目录（相对仓库根）；未配置则发布时跳过产物备份并提示 | 缺省不输出 |
 | `lastPublishCommit` | `string \| null`（可选） | 上次统一发布时该仓库的 HEAD **fullHash**（40 hex）；变更检测基准，见 §8 | `null`（= 从未发布） |
 | `createdAt` | `string`（可选） | ISO 8601 接入时间 | 接入时写入 |
 
@@ -134,7 +136,7 @@ AppConfig ─── 1:N ─── ProjectDef ─── 1:N ─── RepoDef
 | `commits` | `CommitInfo[]` | 本次发布包含的提交（`repo` 记录为该仓库范围；`project` 记录为全部参与仓库的聚合） |
 | `stats` | `Stats` | 聚合统计（`commits`/`filesChanged`/`insertions`/`deletions`/`byType`），`byType` 恒含 12 个 `CommitType` 键（未出现为 0） |
 | `logs` | `{ internal: ReleaseLog, external: ReleaseLog }` | 双轨日志，状态机见 §7 |
-| `repos` | `RepoReleaseRef[]`（可选） | 仅 `kind='project'` 存在：各成功仓库快照（`repoId`/`repoName`/`version`/`commits`），**只含成功仓库**（失败仓库见 `PublishPlan.warnings` 与 `done` 事件 `failedRepos`） |
+| `repos` | `RepoReleaseRef[]`（可选） | 仅 `kind='project'` 存在：各成功仓库快照（`repoId`/`repoName`/`displayName`/`version`/`commits`），**只含成功仓库**（失败仓库见 `PublishPlan.warnings` 与 `done` 事件 `failedRepos`） |
 | `tags` | `{ build?: string; milestone?: string }` | 打下的标签名快照：`repo` 记录含 `build`（如 `build/v1.2.0.26081315`）与 `milestone`（如 `v1.2.0`）；`project` 记录仅 `milestone` |
 | `pushed` | `boolean` | 本次发布完成后数据仓库远端推送是否成功（落盘时定值，不回溯改写）；`offline`/无 remote/推送失败 = `false` |
 | `builtBy` | `string` | 发布人：`git config user.name <user.email>`；缺失时退化为 `bxverse <local>` |
@@ -150,10 +152,10 @@ AppConfig ─── 1:N ─── ProjectDef ─── 1:N ─── RepoDef
 | `Stats` | `commits`/`filesChanged`/`insertions`/`deletions` + `byType: Record<CommitType, number>` |
 | `DiffStat` | `filesChanged`/`insertions`/`deletions`（单文件粒度之上的短平快统计，用于总览卡片） |
 | `ReleaseLog` | `state` + `content` + `autoDraft`，见 §7 |
-| `RepoReleaseRef` | `repoId`/`repoName`/`version`/`commits`：项目记录对仓库发布结果的快照 |
+| `RepoReleaseRef` | `repoId`/`repoName`/`displayName`/`version`/`commits`：项目记录对仓库发布结果的快照；`displayName` 为**发布落盘时定格**的仓库中文名快照，旧记录缺省回退 `repoName`（`GET /api/releases/:id/versions` 以 `displayName || repoName` 输出 `name`） |
 | `PlannedRepo` | 计划内单仓库：`repoId`/`name`/`changed`/`version`/`from`/`to`/`commits`/`buildCommand`；`changed=true` 进 `PublishPlan.changed`，`false` 进 `PublishPlan.syncedOnly` |
 | `PublishPlan` | `projectId`/`projectName`/`projectVersion`（目标 `vX.Y.Z`）/`buildStamp`/`bump`（最终采用）/`suggestedBump`（推断建议）/`changed`/`syncedOnly`/`milestoneTag`/`tags`（`{repoId,name,tag}[]` 干跑预览标签清单）/`externalDraft`/`internalDraft`（项目级双轨草稿）/`warnings`（非阻断警告，如「首次发布仅展示最近 500 条」） |
-| `PublishRequest` | `projectId`/`bump`（`BumpType \| 'auto'`，`auto` 表示采用 `suggestedBump`）/`repoIds`（不传 = 全部有变动仓库）/`skipBuild`/`offline`/`dryRun`/`externalContent`/`internalContent`（向导人工定稿，覆盖草稿） |
+| `PublishRequest` | `projectId`/`bump`（`BumpType \| 'auto'`，`auto` 表示采用 `suggestedBump`）/`repoIds`（不传 = 全部有变动仓库）/`skipBuild`/`offline`/`dryRun`/`externalContent`/`internalContent`（向导人工定稿，覆盖草稿）/`excludeCommits`（提交级排除，语义见 §8.4） |
 | `PublishEvent` | `type` 7 值（architecture §3.3）+ `message` + `repoId`（可选）+ `data`（可选，`done` 时携带 `releaseId/version/failedRepos`） |
 | `RepoStatus` | 实时状态：`id/name/path/branch/head/dirty/hasRemote/remoteUrl`（无 remote 为 `''`）/`versionFile`（`{version,build,buildTime} \| null`，读业务仓库内 version.json）/`buildTags`（build 前缀 tag 列表）/`milestoneTag`（最新 milestone tag 或 `null`）/`changed`（`commits.length>0 \|\| dirty>0`）/`lastPublishCommit`/`commits` |
 | `FileEntry` | `name/type('dir'\|'file')/size`（字节，目录为 0） |
@@ -163,6 +165,32 @@ AppConfig ─── 1:N ─── ProjectDef ─── 1:N ─── RepoDef
 | `CloneRequest` | `url`（仅 https/ssh）/`name`（可选，仓库显示名）/`shallow`（浅克隆开关） |
 
 **ID 生成约定（core 私有实现）**：`projectId = 'p_' + nanoid6`、`repoId = 'r_' + nanoid6`（`[a-z0-9]`）、`taskId = 't_' + YYYYMMDD + '_' + HHmmss + '_' + rand4`、`releaseId = 'rel_' + scopeId + '_' + versionSafeName`。
+
+### 3.6 `RepoVersionItem`（R18：项目版本清单项）
+
+| 字段 | 类型 | 语义与规则 |
+|---|---|---|
+| `app` | `string` | 仓库英文名（`RepoDef.name`） |
+| `name` | `string` | 仓库中文名（`RepoDef.displayName ?? app`，缺省回退英文名） |
+| `version` | `string` | 当前版本号：业务仓库 `version.json` 的 `version`；未生成时回退项目统一版本（`ProjectDef.version`） |
+
+JSON 示例（`RepoVersionItem[]`）：
+
+```json
+[
+  { "app": "l-pc-front", "name": "PC 前端", "version": "v1.2.0.26081315" },
+  { "app": "l-data-v", "name": "数据可视化", "version": "v1.2.0.26081315" }
+]
+```
+
+两种数据源：
+
+| 数据源 | 端点 | 采集方式 |
+|---|---|---|
+| 实时采集 | `GET /api/projects/:id/versions` | fresh 实时读取各业务仓库 `version.json`，不依赖轮询缓存（api.md §4.2） |
+| 发布快照 | `GET /api/releases/:id/versions` | 读取发布记录落盘时的 `repos` 快照（`RepoReleaseRef`），与仓库当前状态无关（api.md §7.3） |
+
+写入：`POST /api/projects/:id/versions/export` 可携带 `items` 直接写入快照内容，缺省时实时采集（api.md §4.3）。
 
 ---
 
@@ -259,7 +287,7 @@ data/releases/{scopeId}/{versionSafeName}/
     "external": { "state": "confirmed", "content": "# 更新日志 …", "autoDraft": "# 更新日志（草稿）…" }
   },
   "repos": [
-    { "repoId": "r_8k2m1n", "repoName": "l-pc-front", "version": "v1.2.0.26081315", "commits": [] }
+    { "repoId": "r_8k2m1n", "repoName": "l-pc-front", "displayName": "PC 前端", "version": "v1.2.0.26081315", "commits": [] }
   ],
   "tags": { "milestone": "v1.2.0" },
   "pushed": true,
@@ -414,6 +442,21 @@ auto ──(用户编辑 content)──► edited ──(用户点击「确认�
 
 - 只有「该仓库本次发布成功」才前移基准；`syncedOnly` 仓库、失败仓库、`dryRun` 任务均**不动** `lastPublishCommit`。
 - 幂等续跑（journal 恢复）时：以「tag 已存在」判定步骤已 done，不会重复前移（architecture §6.4）。
+
+### 8.4 提交级排除（`PublishRequest.excludeCommits`，扩展：R19）
+
+- 类型：`Record<string, string[]>`——`repoId → 不参与本次发布的提交 fullHash 列表`（向导人工甄别「哪些 commit 值得进版本」）。
+- 引擎处理（core `planPublish`）：按 fullHash 过滤该仓库 `RepoStatus.commits` → **重算 `changed`**；过滤后的 `commits` 参与 bump 推断（§6.2）、双轨草稿（§7.2）与发布记录。
+- 降级规则：某仓库**全部提交被排除且 `dirty === 0`** → `changed` 置 `false`，该仓库移出 `PublishPlan.changed`、归入 `syncedOnly`（仅同步基版 version.json，不打 tag、不产生 `kind='repo'` 记录）。
+- `dirty > 0` 且无剩余提交时：仓库仍在 `changed`（仅 dirty 参与），`warnings` 追加「仅有未提交改动，无新提交参与本次发布」；预检仍按 §8.2 阻断未提交改动。
+- `PublishPlan.warnings` 记录排除数：`{name} 排除 N 个提交，参与本次发布 M 个`。
+- 服务端校验（`apps/server/src/api/publish.ts`）：非对象或任一值非字符串数组 → 400 `VALIDATION`（`excludeCommits 必须为 { repoId: string[] }`）。
+
+JSON 示例：
+
+```json
+{ "excludeCommits": { "r_8k2m": ["9d4f2a1c3b5e7f8a9d0b1c2d3e4f5a6b7c8d9e0f"] } }
+```
 
 ---
 
@@ -571,11 +614,13 @@ export interface RepoBackupRef {
         {
           "id": "r_8k2m1n",
           "name": "l-pc-front",
+          "displayName": "PC 前端",
           "path": "E:\\bx-gitee\\l-pc-front",
           "remote": "https://gitee.com/bx/l-pc-front.git",
           "buildCommand": "npm run build",
           "outputDir": "public",
           "writeVersionFile": true,
+          "artifactDir": "dist",
           "lastPublishCommit": "9f2c8a1b3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a",
           "createdAt": "2026-08-13T10:00:00+08:00"
         },
@@ -702,3 +747,15 @@ export interface RepoBackupRef {
 | 非功能·安全 | 凭据独立、token 走 Header | §1.3 规则 3、§4 `credentials.json` |
 | 非功能·可靠性 | 可中断续跑、失败隔离 | §4 journal、§5.4 落盘判据、架构 §6 |
 | 非功能·兼容 | 离线/无 origin 自动降级 | §9.3 降级表 |
+
+---
+
+## 15. 变更记录
+
+| 日期 | 变更 |
+|---|---|
+| 2026-08-13 | 初版（v0.1）：与 types.ts / constants.ts / architecture.md 对齐的数据与存储设计 |
+| 2026-08-13 | §3.3 `RepoDef` 补 `displayName`（中文名，展示与导出用，缺省回退 `name`）与 `artifactDir`（R19 产物备份目录）；§13 `app.json` 示例同步 |
+| 2026-08-13 | 新增 §3.6 `RepoVersionItem` 类型定义（app/name/version 语义 + 实时采集 / 发布快照两种数据源） |
+| 2026-08-13 | §3.4/§3.5 `RepoReleaseRef` 补 `displayName` 快照语义（发布落盘时定格，旧记录缺省回退 `repoName`）；§5.2 `data.json` 示例同步 |
+| 2026-08-13 | 新增 §8.4 提交级排除（`PublishRequest.excludeCommits`：引擎过滤后重算 `changed`；全部排除且 dirty=0 → `syncedOnly`；warnings 记录排除数）；§3.5 `PublishRequest` 行同步 |

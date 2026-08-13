@@ -29,6 +29,8 @@
 7. **禁止修改已定稿的 `shared/types.ts`**：字段与语义已定稿。确需扩展只能**新增字段**（全部可选、不破坏既有语义）并在字段上方标注 `// 扩展：` 原因；禁止删除、重命名、改语义任何既有字段。`shared/constants.ts` 同理（`APP_DATA_DIR_NAME='.bxverse'` 不可改）。
 8. **依赖方向单向**：`web/server/cli → core → shared`；web 与 server 只通过 HTTP/SSE 通信，禁止 web 导入 core/server。
 9. **对业务仓库零侵入**：不自动 commit/amend/force-push；只打标签、写 version.json（可关）、推送标签（可 offline 跳过）。
+10. **改 server 代码必须重启验证**：路由/API 在进程启动时加载，watch 不覆盖；验证前重启 server 进程，否则测的是旧代码。
+11. **文档与代码同步更新**：每次功能合入（如 R19 备份与对比）必须同步更新对应 `docs/*.md` 与 README 功能清单；禁止只写代码不写文档。
 
 ## 3. 开发流程
 
@@ -50,6 +52,9 @@
 | `pnpm test` | 根 | core 单测（`pnpm --filter @bxverse/core test`）；server 单测用 `pnpm --filter @bxverse/server test` |
 | `pnpm dev` | 根 | 并行起 server(8899) + web(5173)，开发联调用 |
 | `pnpm start` | 根 | 生产形态（先 `pnpm build`），浏览器访问 `http://127.0.0.1:8899` |
+| `pnpm seed` | 根 | 造演示数据（演示项目 + 3 个 fixture 仓库）；**需服务已启动**，可选 `--port`/`--project` |
+| `pnpm icons` | 根 | 重新生成 PWA 图标（`apps/web/public/pwa-*.png`） |
+| e2e | `e2e/` | `pip install playwright` + `playwright install chromium`；三个脚本：`prepare-fixture.mjs` + `wizard-flow.py`（向导六步全流程，`BX_PORT=18899`）、`resume.mjs`（中断续跑演练，`BX_PORT=18898`）；详见 `e2e/README.md` |
 
 规则：改 core → 至少跑 `pnpm typecheck && pnpm test`；改 server/web → 至少 `pnpm typecheck && pnpm build`；发布类改动 → 用 fixture 临时仓库走一遍向导全流程。
 
@@ -59,10 +64,12 @@
 
 ```
 packages/shared/src/{types.ts,constants.ts,index.ts}  已定稿，勿动（见规则 7）
-packages/core/src/{home.ts, git/*, version/*, logs/*, publish/*, store/*, detect/*, ai/*}
-apps/server/src/{index.ts, http/*, api/*, queue.ts, sse.ts}
-apps/web/src/{main.ts, App.vue, api/*, stores/*, router/, views/, components/, pwa/}
+packages/core/src/{home.ts, git/*, version/*, logs/*, publish/*, store/*, detect/*, ai/*, backup/*, compare/*}
+apps/server/src/{index.ts, http/*, api/*（含 backups.ts）, queue.ts, sse.ts}
+apps/web/src/{main.ts, App.vue, api/*, stores/*, router/, views/（含 BackupManage.vue）, components/, composables/, pwa/}
 apps/cli/src/index.ts
+scripts/{seed.mjs, gen-pwa-icons.cjs}
+e2e/{prepare-fixture.mjs, wizard-flow.py, resume.mjs, README.md}
 docs/*.md   设计文档
 verse/      参考原型，不在 workspace，不参与构建
 ```
@@ -107,6 +114,25 @@ apps/@bxverse/cli ──────┘
 
 检测 → 版本 → 日志（双轨确认）→ dry-run → 执行（SSE）→ 完成。执行永远由人发起；执行中该项目暂停轮询；单 FIFO 队列，忙返回 409。
 
+### 4.9 R19 备份与对比模块
+
+- core：`packages/core/src/backup/*`（manifest/tar/source/artifact，零依赖 tar.gz + 哈希清单）、`packages/core/src/compare/*`（对比引擎）；engine 发布流程挂接（tag 后源码备份、build 后产物备份）。
+- server：`apps/server/src/api/backups.ts`（列表/下载/删除/compare/verify + repo diff 路由）。
+- web：`apps/web/src/views/BackupManage.vue`（路由 `/project/:id/backups`，name `backups`）+ `api/index.ts` 备份资源函数；仓库设置 artifactDir 用 DirPicker 点选；向导步骤 4 备份开关（`backupSource`/`backupArtifacts` 默认开启）。
+- 数据：备份元数据入 git 数据仓库审计，大文件存本地 `backups/`。
+
+### 4.10 脚本与 e2e
+
+- `scripts/seed.mjs`（根命令 `pnpm seed`）：创建演示项目 + 3 个 fixture 仓库；**对运行中的服务执行**，可选 `--port`/`--project`。
+- `scripts/gen-pwa-icons.cjs`（根命令 `pnpm icons`）：零依赖生成 PWA 图标到 `apps/web/public/`。
+- `e2e/`：`prepare-fixture.mjs` + `wizard-flow.py`（向导六步全流程，`BX_PORT=18899`）、`resume.mjs`（中断续跑演练，`BX_PORT=18898`）；独立 BX_HOME 不碰真实数据；详见 `e2e/README.md`。
+
+### 4.11 前端交互硬约定
+
+- **提交级排除**：向导步骤 1「提交明细」面板，状态 `publishStore.excludedCommits`（`repoId → fullHash[]`），切换走 `toggleCommit(repoId, fullHash, included)` 并置 `planDirty`；仓库排除后无剩余提交且无 dirty 时 core 降级为 `syncedOnly`。
+- **URL 状态同步**：RepoDetail `?tab=`、发布向导 `?step=` 双向同步（初始化读 query 校验，变化 `router.replace` 写回）。
+- **WIG 规范**（frontend.md §12）：装饰图标 `aria-hidden`；icon-only 按钮 `aria-label`；树/行 `role`+`tabindex`+键盘；导航必须 RouterLink；transition 显式属性（禁 `transition-all`）；日期必须 Intl；placeholder 以 `…` 结尾；路径类输入 `autocomplete="off"+spellcheck="false"`。
+
 ## 5. 常见坑（Windows + 本栈专属）
 
 1. **Windows 路径**：git spawn 参数一律数组、不拼 shell 字符串；路径使用正斜杠归一（`path.replaceAll('\\','/')`）再传 git；盘符（`E:\`）在 `path.isAbsolute` 下正常，但 URL/JSON 序列化注意转义。用户路径可能含中文/空格——所有 shell 命令用 `spawn(..., [args])` 而非字符串拼接。
@@ -130,8 +156,8 @@ apps/@bxverse/cli ──────┘
 | `docs/data-model.md` | 数据模型与存储（app.json、数据仓库、records、journal、version.json） | 写 core store/publish 相关代码前 |
 | `docs/core-engine.md` | core 引擎细节（git 封装、版本计算、日志流水线、发布编排） | 写 core 模块前 |
 | `docs/api.md` | REST/SSE 协议细节 | 写 server 路由或 web api 层前 |
-| `docs/frontend.md` | 前端页面/组件/状态/交互设计 | 写 web 页面组件前 |
-| `docs/development.md` | 开发环境、调试、故障排查 | 环境搭建与排障时 |
+| `docs/frontend.md` | 前端页面/组件/状态/交互设计（§3.6 备份管理、§4.16–4.18 RuntimeStatus/VersionExportDropdown/DirPicker、§5.5 composables、§8 提交级排除/URL 同步/beforeunload、§12 WIG 合规约定） | 写 web 页面组件前 |
+| `docs/development.md` | 开发环境、调试、故障排查（§3 seed/icons/e2e、§6 WIG 与 URL 同步/构建顺序、§8 端口冲突/server 重启） | 环境搭建与排障时 |
 
 > 注：除 requirements.md、architecture.md、roadmap.md 外，其余文档由并行任务撰写，可能暂缺——缺失时以 requirements + shared/types.ts + architecture.md 为准，并在实现注释中标注「依赖待补：docs/xxx.md」。
 
