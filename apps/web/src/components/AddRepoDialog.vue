@@ -109,6 +109,10 @@ async function submitUrl() {
             <i class="i-carbon-information" />
             直接引用本地仓库，零拷贝；发布记录与版本数据仍由管理台统一管理。
           </div>
+          <div class="flex items-center gap-2 text-xs text-text-3">
+            <i class="i-carbon-locked" />
+            受浏览器安全限制，系统目录选择器无法返回文件夹绝对路径，请粘贴路径（资源管理器地址栏可复制）。
+          </div>
         </div>
       </NTabPane>
       <NTabPane name="url" tab="Git 地址">

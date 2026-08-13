@@ -4,6 +4,7 @@
 import hljs from 'highlight.js'
 import { api } from '../api'
 import { useMessage } from 'naive-ui'
+import { useFsAccess } from '../composables/useFsAccess'
 
 const props = defineProps<{
   pid: string
@@ -12,6 +13,7 @@ const props = defineProps<{
 }>()
 
 const message = useMessage()
+const fs = useFsAccess()
 const content = ref<string | null>(null)
 const meta = ref<{ size: number; lines: number; binary: boolean; truncated: boolean } | null>(null)
 const loading = ref(false)
@@ -61,6 +63,21 @@ async function copyContent() {
   message.success('已复制到剪贴板')
 }
 
+/** 原生另存为下载当前文件（File System Access API，不支持时回退浏览器下载） */
+const downloading = ref(false)
+async function downloadFile() {
+  if (!content.value || meta.value?.binary) return
+  downloading.value = true
+  try {
+    const name = props.path.split('/').pop() ?? 'file.txt'
+    const result = await fs.saveTextFile(name, content.value, 'application/octet-stream')
+    if (result === 'native') message.success('已保存文件')
+    else if (result === 'fallback') message.success('已开始下载')
+  } finally {
+    downloading.value = false
+  }
+}
+
 watch(() => props.path, load, { immediate: true })
 
 const segments = computed(() => props.path.split('/').filter(Boolean))
@@ -80,6 +97,14 @@ const fmtSize = (n: number): string => (n < 1024 ? `${n} B` : n < 1024 * 1024 ? 
       <span v-if="meta" class="text-xs text-text-3 shrink-0">
         {{ fmtSize(meta.size) }} · {{ meta.lines }} 行
       </span>
+      <button
+        class="w-7 h-7 flex items-center justify-center rounded-md text-text-3 hover:bg-surface-hover hover:text-text-1 transition-colors duration-150"
+        title="下载（另存为）"
+        :disabled="!content || meta?.binary"
+        @click="downloadFile"
+      >
+        <i class="i-carbon-download text-14px" />
+      </button>
       <button
         class="w-7 h-7 flex items-center justify-center rounded-md text-text-3 hover:bg-surface-hover hover:text-text-1 transition-colors duration-150"
         title="复制"
