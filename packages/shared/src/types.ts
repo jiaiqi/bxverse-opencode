@@ -91,6 +91,8 @@ export interface AppConfig {
   port: number
   host: string
   theme: 'light' | 'dark' | 'system'
+  /** 扩展：R20 主题风格（indigo=默认靛蓝套件，含亮/暗/system；wenxi=深色玻璃拟态套件，仅深色） */
+  themeStyle?: 'indigo' | 'wenxi'
   pwa: { enabled: boolean }
   dataDir: string
   pollInterval: number

@@ -142,44 +142,32 @@ html.dark {
 
 ### 1.7 Naive UI themeOverrides 映射表
 
-`App.vue` 中 `NConfigProvider` 按 `appStore.isDark` 切换 `lightThemeOverrides` / `darkThemeOverrides`，值一律引用 `var(--bx-*)`：
+`App.vue` 中 `NConfigProvider` 按 **主题风格 × 明暗** 选择 overrides：
+- `themeStyle='indigo'`（默认）：`isDark` → `darkThemeOverrides`，否则 `lightThemeOverrides`（实色值，见 `apps/web/src/theme.ts`——naive 内部需解析色值计算衍生色，不能用 CSS var）。
+- `themeStyle='wenxi'`（R20 深色玻璃拟态，仅深色）：恒为 `darkTheme` + `wenxiThemeOverrides`（沉稳翠绿 #00C96E 体系 + 18px 卡片圆角 + 胶囊按钮 + 玻璃色值）。
 
 ```ts
-// apps/web/src/theme.ts
-export const themeOverrides: GlobalThemeOverrides = {
+// apps/web/src/theme.ts（示意）
+export const wenxiThemeOverrides: GlobalThemeOverrides = {
   common: {
-    primaryColor: 'var(--bx-brand-500)',
-    primaryColorHover: 'var(--bx-brand-400)',
-    primaryColorPressed: 'var(--bx-brand-600)',
-    primaryColorSuppl: 'var(--bx-brand-400)',
-    borderRadius: '8px',
-    borderRadiusSmall: '4px',
-    fontFamily: 'var(--bx-font-sans)',
-    fontSize: '14px',
-    textColor1: 'var(--bx-text-1)',
-    textColor2: 'var(--bx-text-2)',
-    textColor3: 'var(--bx-text-3)',
-    bodyColor: 'var(--bx-bg)',
-    cardColor: 'var(--bx-surface)',
-    modalColor: 'var(--bx-surface)',
-    popoverColor: 'var(--bx-surface)',
-    tableHeaderColor: 'var(--bx-surface-hover)',
-    hoverColor: 'var(--bx-surface-hover)',
-    borderColor: 'var(--bx-border)',
-    dividerColor: 'var(--bx-border)',
-    inputColor: 'var(--bx-surface)',
-    fontWeightStrong: '600',
+    primaryColor: '#00C96E', primaryColorHover: '#1FD982', primaryColorPressed: '#00B160',
+    borderRadius: '12px', borderRadiusSmall: '7px',
+    textColor1: '#F4F6F5', textColor2: '#B0B6B3', textColor3: '#79807C',
+    bodyColor: '#050507', cardColor: '#14161A', /* … */
   },
-  Button:   { borderRadiusMedium: '8px', heightMedium: '36px', fontWeight: '500' },
-  Card:     { borderRadius: '8px', paddingMedium: '20px' },
-  Dialog:   { borderRadius: '12px' },
-  Menu:     { borderRadius: '8px', itemHeight: '40px' },
-  Tag:      { borderRadius: '6px' },
-  Collapse: { titleFontSize: '14px' },
-  Tabs:     { tabFontSizeMedium: '14px' },
+  Button: { borderRadiusMedium: '999px', heightMedium: '36px' },
+  Card:   { borderRadius: '18px', paddingMedium: '20px' },
+  /* … */
 }
-// darkThemeOverrides 结构相同；差异色值已由 html.dark 下 CSS 变量翻转兜底。
+// lightThemeOverrides / darkThemeOverrides 为靛蓝实色套件；差异色值由 html.dark 下 CSS 变量翻转兜底。
 ```
+
+### 1.9 R20 双主题风格（themeStyle）
+
+- 契约：`AppConfig.themeStyle?: 'indigo' | 'wenxi'`（shared 扩展字段，可选；server POST /api/config 白名单支持，校验 indigo/wenxi）。
+- CSS 变量：`tokens.css` 中 `html.theme-wenxi` 覆盖全部 `--bx-*`（翠绿品牌、近纯黑基底、半透明玻璃面、18px 圆角、`--bx-radius-btn: 999px` 胶囊、`--bx-nav-indicator` 激活指示条）+ 背景氛围光 + `.card/.n-card` 玻璃配方（`backdrop-filter: blur(18px) saturate(140%)`）+ 顶栏/侧栏玻璃化。
+- 交互：设置页「外观与体验」双卡选择（点击即时预览，持久化 app.json）；侧栏/顶栏主题按钮在 wenxi 下点击切回 indigo（保留 mode 语义），indigo 下循环 亮/暗/系统；wenxi 强制深色（`appStore.applyTheme()` 处理 `html.theme-wenxi` class）。
+- 布局：AppLayout 新增顶栏（页标题 / 命令面板搜索 / RuntimeStatus chip / 主题切换 / 同步数据 / 新建项目）；Dashboard 页头同步/新建按钮上移顶栏去重。
 
 ### 1.8 UnoCSS 配置（uno.config.ts）
 
@@ -212,7 +200,7 @@ export default defineConfig({
       error: 'var(--bx-error)', errorSoft: 'var(--bx-error-soft)',
       info: 'var(--bx-info)', infoSoft: 'var(--bx-info-soft)',
     },
-    borderRadius: { sm: '4px', md: '8px', lg: '12px', xl: '16px' },
+    borderRadius: { sm: 'var(--bx-radius-sm)', md: 'var(--bx-radius-md)', lg: 'var(--bx-radius-lg)', xl: 'var(--bx-radius-xl)' },
     boxShadow: { sm: 'var(--bx-shadow-sm)', md: 'var(--bx-shadow-md)', lg: 'var(--bx-shadow-lg)' },
   },
   shortcuts: [

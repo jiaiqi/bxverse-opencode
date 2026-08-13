@@ -35,7 +35,7 @@ export interface PublishEventLike {
 export const api = {
   // 配置
   config: () => http.get<ConfigPayload>('/config'),
-  saveConfig: (body: Partial<Pick<AppConfig, 'theme' | 'pwa' | 'pollInterval' | 'ai'>>) =>
+  saveConfig: (body: Partial<Pick<AppConfig, 'theme' | 'themeStyle' | 'pwa' | 'pollInterval' | 'ai'>>) =>
     http.post<{ config: AppConfig }>('/config', body),
   health: () => http.get<{ ok: boolean; version: string }>('/health'),
 

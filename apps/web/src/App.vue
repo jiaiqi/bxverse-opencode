@@ -3,7 +3,7 @@
 
 import { RouterView } from 'vue-router'
 import { darkTheme, NConfigProvider, NDialogProvider, NMessageProvider, NNotificationProvider, useOsTheme } from 'naive-ui'
-import { darkThemeOverrides, lightThemeOverrides } from './theme'
+import { darkThemeOverrides, lightThemeOverrides, wenxiThemeOverrides } from './theme'
 import { useAppStore } from './stores/app'
 import { useUiStore } from './stores/ui'
 import { useProjectsStore } from './stores/projects'
@@ -14,6 +14,12 @@ const appStore = useAppStore()
 const uiStore = useUiStore()
 const projectsStore = useProjectsStore()
 const osTheme = useOsTheme()
+
+// R20 主题风格：wenxi 为纯深色玻璃拟态套件（theme=dark + wenxiThemeOverrides）；indigo 走亮/暗双套件
+const naiveTheme = computed(() => (appStore.themeStyle === 'wenxi' ? darkTheme : appStore.isDark ? darkTheme : null))
+const naiveOverrides = computed(() =>
+  appStore.themeStyle === 'wenxi' ? wenxiThemeOverrides : appStore.isDark ? darkThemeOverrides : lightThemeOverrides,
+)
 
 const bootError = ref('')
 const booting = ref(true)
@@ -49,8 +55,8 @@ onMounted(() => {
 
 <template>
   <NConfigProvider
-    :theme="appStore.isDark ? darkTheme : null"
-    :theme-overrides="appStore.isDark ? darkThemeOverrides : lightThemeOverrides"
+    :theme="naiveTheme"
+    :theme-overrides="naiveOverrides"
     :locale="null"
     :date-locale="null"
   >

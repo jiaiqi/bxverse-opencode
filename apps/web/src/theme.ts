@@ -82,3 +82,48 @@ export const darkThemeOverrides = base({
   surfaceAlt: '#15171B',
   border: '#2A2E37',
 })
+
+/**
+ * R20 WenXi 深色玻璃拟态风格（themeStyle=wenxi，仅深色）：
+ * 沉稳翠绿主色 + 18px 大圆角 + 胶囊按钮 + 玻璃色值。
+ * 玻璃感（blur/渐变/氛围光）由 tokens.css 的 html.theme-wenxi 规则叠加。
+ */
+export const wenxiThemeOverrides: GlobalThemeOverrides = {
+  common: {
+    primaryColor: '#00C96E',
+    primaryColorHover: '#1FD982',
+    primaryColorPressed: '#00B160',
+    primaryColorSuppl: '#1FD982',
+    infoColor: '#3B82F6',
+    successColor: '#00C96E',
+    warningColor: '#FFA940',
+    errorColor: '#FF4D4F',
+    borderRadius: '12px',
+    borderRadiusSmall: '7px',
+    fontFamily: 'var(--bx-font-sans)',
+    fontSize: '14px',
+    textColorBase: '#F4F6F5',
+    textColor1: '#F4F6F5',
+    textColor2: '#B0B6B3',
+    textColor3: '#79807C',
+    bodyColor: '#050507',
+    cardColor: '#14161A',
+    modalColor: '#14161A',
+    popoverColor: '#14161A',
+    tableColor: 'rgba(255,255,255,.03)',
+    tableHeaderColor: 'rgba(255,255,255,.06)',
+    hoverColor: 'rgba(255,255,255,.08)',
+    borderColor: 'rgba(255,255,255,.1)',
+    dividerColor: 'rgba(255,255,255,.08)',
+    inputColor: 'rgba(255,255,255,.045)',
+    actionColor: '#0A0B0E',
+    fontWeightStrong: '600',
+  },
+  Button: { borderRadiusMedium: '999px', heightMedium: '36px', fontWeight: '500' },
+  Card: { borderRadius: '18px', paddingMedium: '20px' },
+  Dialog: { borderRadius: '14px' },
+  Menu: { borderRadius: '10px', itemHeight: '40px' },
+  Tag: { borderRadius: '7px' },
+  Collapse: { titleFontSize: '14px' },
+  Tabs: { tabFontSizeMedium: '14px' },
+}

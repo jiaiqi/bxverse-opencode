@@ -1,7 +1,8 @@
 <script setup lang="ts">
-// AppLayout.vue —— 侧栏布局壳
+// AppLayout.vue —— 侧栏 + 顶栏布局壳（R20 顶栏：页标题/命令面板/服务状态/主题/同步/新建）
 
 import { RouterLink } from 'vue-router'
+import { useMessage } from 'naive-ui'
 import { useAppStore } from '../stores/app'
 import { useProjectsStore } from '../stores/projects'
 import { useUiStore } from '../stores/ui'
@@ -12,20 +13,49 @@ const route = useRoute()
 const appStore = useAppStore()
 const projectsStore = useProjectsStore()
 const uiStore = useUiStore()
+const message = useMessage()
 const showAddProject = ref(false)
-
+const syncing = ref(false)
 const collapsed = ref(false)
 
+const pageTitle = computed(() => String(route.meta.title ?? ''))
+
 const themeTarget = computed(() => {
+  // wenxi 风格下点击切回 indigo（保留当前 mode 语义）；indigo 下循环 mode
+  if (appStore.themeStyle === 'wenxi') return null
   const mode = appStore.themeMode
   return mode === 'light' ? 'dark' : mode === 'dark' ? 'system' : 'light'
 })
-const themeIcon = computed(() =>
-  appStore.themeMode === 'light' ? 'i-carbon-sun' : appStore.themeMode === 'dark' ? 'i-carbon-moon' : 'i-carbon-screen',
+const themeIcon = computed(() => {
+  if (appStore.themeStyle === 'wenxi') return 'i-carbon-color-palette'
+  return appStore.themeMode === 'light' ? 'i-carbon-sun' : appStore.themeMode === 'dark' ? 'i-carbon-moon' : 'i-carbon-screen'
+})
+const themeLabel = computed(() => {
+  if (appStore.themeStyle === 'wenxi') return 'WenXi'
+  return appStore.themeMode
+})
+const themeTitle = computed(() =>
+  appStore.themeStyle === 'wenxi' ? '主题风格：WenXi 深色玻璃拟态（点击切回靛蓝套件）' : `主题：${appStore.themeMode}（点击切换）`,
 )
 
 async function cycleTheme() {
-  await appStore.setTheme(themeTarget.value)
+  if (appStore.themeStyle === 'wenxi') {
+    await appStore.setThemeStyle('indigo')
+    return
+  }
+  await appStore.setTheme(themeTarget.value as 'light' | 'dark' | 'system')
+}
+
+async function syncData() {
+  syncing.value = true
+  try {
+    const result = await import('../api').then(m => m.api.sync('pull'))
+    message.success(result.ok ? '数据仓库已同步' : `同步失败：${String(result.message ?? '')}`)
+  } catch (e) {
+    message.error((e as Error).message)
+  } finally {
+    syncing.value = false
+  }
 }
 </script>
 
@@ -38,7 +68,7 @@ async function cycleTheme() {
 
     <!-- 侧栏 -->
     <aside
-      class="flex flex-col shrink-0 bg-surface border-r border-border transition-[width] duration-200"
+      class="sidebar flex flex-col shrink-0 bg-surface border-r border-border transition-[width] duration-200"
       :class="collapsed ? 'w-14' : 'w-58'"
     >
       <!-- Logo -->
@@ -64,7 +94,7 @@ async function cycleTheme() {
         <div v-if="!collapsed" class="flex items-center justify-between px-3 pt-4 pb-1">
           <span class="text-xs text-text-3">项目</span>
           <button
-            class="w-6 h-6 flex items-center justify-center rounded-md text-text-3 hover:text-brand-500 hover:bg-surface-hover transition-colors duration-150"
+            class="w-6 h-6 flex items-center justify-center rounded-md text-text-3 hover:text-brand-500 hover:bg-surface-hover transition-colors duration-150 bg-transparent"
             aria-label="新建项目"
             @click="showAddProject = true"
           >
@@ -73,7 +103,7 @@ async function cycleTheme() {
         </div>
         <div v-else class="pt-4 pb-1 flex justify-center">
           <button
-            class="w-6 h-6 flex items-center justify-center rounded-md text-text-3 hover:text-brand-500 hover:bg-surface-hover transition-colors duration-150"
+            class="w-6 h-6 flex items-center justify-center rounded-md text-text-3 hover:text-brand-500 hover:bg-surface-hover transition-colors duration-150 bg-transparent"
             aria-label="新建项目"
             @click="showAddProject = true"
           >
@@ -103,9 +133,6 @@ async function cycleTheme() {
 
       <!-- 底部 -->
       <div class="px-2.5 py-2 border-t border-border space-y-1 shrink-0">
-        <div class="px-1.5 pb-1">
-          <RuntimeStatus />
-        </div>
         <RouterLink
           to="/settings"
           class="sidebar-item no-underline"
@@ -114,10 +141,10 @@ async function cycleTheme() {
           <i aria-hidden="true" class="i-carbon-settings sidebar-icon" />
           <span v-if="!collapsed">设置</span>
         </RouterLink>
-        <button class="sidebar-item w-full text-left" :title="`主题：${appStore.themeMode}（点击切换）`" @click="cycleTheme">
+        <button class="sidebar-item w-full text-left" :title="themeTitle" @click="cycleTheme">
           <i aria-hidden="true" class="sidebar-icon" :class="themeIcon" />
           <span v-if="!collapsed" class="flex-1">主题</span>
-          <span v-if="!collapsed" class="text-xs text-text-3">{{ appStore.themeMode }}</span>
+          <span v-if="!collapsed" class="text-xs text-text-3">{{ themeLabel }}</span>
         </button>
         <button class="sidebar-item w-full text-left" @click="uiStore.togglePalette(true)">
           <i aria-hidden="true" class="i-carbon-search sidebar-icon" />
@@ -127,10 +154,57 @@ async function cycleTheme() {
       </div>
     </aside>
 
-    <!-- 内容区 -->
-    <main id="main-content" class="flex-1 overflow-y-auto" tabindex="-1">
-      <slot />
-    </main>
+    <!-- 顶栏 + 内容区 -->
+    <div class="flex-1 flex flex-col min-w-0">
+      <header class="topbar flex items-center gap-3 px-6 h-14 shrink-0 bg-surface border-b border-border">
+        <div class="flex items-baseline gap-2 min-w-0">
+          <span class="text-sm font-semibold text-text-1 truncate">{{ pageTitle }}</span>
+          <span v-if="!collapsed" class="hidden md:block text-11px text-text-3 whitespace-nowrap">BX 版本管理台</span>
+        </div>
+        <div class="flex-1" />
+
+        <!-- 命令面板搜索（Ctrl+K） -->
+        <button
+          class="hidden md:flex items-center gap-2 h-8 px-3.5 rounded-[var(--bx-radius-btn)] text-xs text-text-3 border border-border bg-surface-alt hover:border-border-strong hover:text-text-2 transition-colors duration-150 focus-ring"
+          @click="uiStore.togglePalette(true)"
+        >
+          <i aria-hidden="true" class="i-carbon-search text-13px" />
+          搜索项目 / 仓库 / 版本…
+          <span class="text-10px border border-border rounded-sm px-1 bg-surface">Ctrl&nbsp;K</span>
+        </button>
+
+        <RuntimeStatus />
+
+        <div class="w-px h-5 bg-border shrink-0" aria-hidden="true" />
+
+        <button
+          class="w-8 h-8 flex items-center justify-center rounded-md text-text-3 hover:text-text-1 hover:bg-surface-hover transition-colors duration-150 focus-ring"
+          :title="themeTitle"
+          aria-label="切换主题"
+          @click="cycleTheme"
+        >
+          <i aria-hidden="true" class="text-16px" :class="themeIcon" />
+        </button>
+
+        <button
+          class="inline-flex items-center gap-1.5 h-8 px-3.5 rounded-[var(--bx-radius-btn)] text-xs text-text-2 border border-border hover:border-border-strong hover:text-text-1 hover:bg-surface-hover transition-colors duration-150 focus-ring"
+          :disabled="syncing"
+          @click="syncData"
+        >
+          <i aria-hidden="true" class="i-carbon-renew text-13px" :class="{ 'animate-spin': syncing }" />
+          <span class="hidden lg:inline">同步数据</span>
+        </button>
+
+        <button class="btn-primary h-8 px-3.5 text-xs" @click="showAddProject = true">
+          <i aria-hidden="true" class="i-carbon-add text-13px" />
+          <span class="hidden lg:inline">新建项目</span>
+        </button>
+      </header>
+
+      <main id="main-content" class="flex-1 overflow-y-auto" tabindex="-1">
+        <slot />
+      </main>
+    </div>
 
     <AddProjectDialog v-model:show="showAddProject" />
   </div>

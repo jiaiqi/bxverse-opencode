@@ -7,6 +7,7 @@ import { api } from '../api'
 import { bootstrap, setToken } from '../api/http'
 
 export type ThemeMode = 'light' | 'dark' | 'system'
+export type ThemeStyle = 'indigo' | 'wenxi'
 
 const prefersDark = () => window.matchMedia('(prefers-color-scheme: dark)')
 
@@ -19,6 +20,8 @@ export const useAppStore = defineStore('app', {
   }),
   getters: {
     themeMode: (s): ThemeMode => s.config?.theme ?? 'system',
+    /** R20 主题风格：indigo=默认靛蓝套件 / wenxi=深色玻璃拟态套件（仅深色） */
+    themeStyle: (s): ThemeStyle => s.config?.themeStyle ?? 'indigo',
     pwaEnabled: (s): boolean => s.config?.pwa.enabled ?? true,
     pollInterval: (s): number => s.config?.pollInterval ?? 30_000,
   },
@@ -38,13 +41,22 @@ export const useAppStore = defineStore('app', {
     },
     applyTheme(): void {
       const mode = this.themeMode
-      this.isDark = mode === 'dark' || (mode === 'system' && prefersDark().matches)
-      document.documentElement.classList.toggle('dark', this.isDark)
+      // wenxi 风格为纯深色设计，强制深色；indigo 保持亮/暗/system 语义
+      this.isDark = this.themeStyle === 'wenxi' || mode === 'dark' || (mode === 'system' && prefersDark().matches)
+      const el = document.documentElement
+      el.classList.toggle('dark', this.isDark)
+      el.classList.toggle('theme-wenxi', this.themeStyle === 'wenxi')
     },
     async setTheme(mode: ThemeMode): Promise<void> {
       if (!this.config) return
       this.config.theme = mode
       await api.saveConfig({ theme: mode })
+      this.applyTheme()
+    },
+    async setThemeStyle(style: ThemeStyle): Promise<void> {
+      if (!this.config) return
+      this.config.themeStyle = style
+      await api.saveConfig({ themeStyle: style })
       this.applyTheme()
     },
     async togglePwa(enabled: boolean): Promise<void> {

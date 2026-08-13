@@ -29,7 +29,7 @@ export function register(router: import('../http/router').Router, services: AppS
     const body = (await readJsonBody(ctx.req)) as Record<string, unknown>
     const cfg = await services.loadCfg()
 
-    const allowed = ['theme', 'pwa', 'pollInterval', 'ai']
+    const allowed = ['theme', 'themeStyle', 'pwa', 'pollInterval', 'ai']
     for (const key of Object.keys(body)) {
       if (!allowed.includes(key)) {
         throw apiError(400, 'VALIDATION', `字段不支持在线修改: ${key}（仅支持 ${allowed.join('/')}）`)
@@ -41,6 +41,12 @@ export function register(router: import('../http/router').Router, services: AppS
         throw apiError(400, 'VALIDATION', 'theme 必须为 light/dark/system')
       }
       cfg.theme = body.theme as AppConfig['theme']
+    }
+    if (body.themeStyle !== undefined) {
+      if (!['indigo', 'wenxi'].includes(String(body.themeStyle))) {
+        throw apiError(400, 'VALIDATION', 'themeStyle 必须为 indigo/wenxi')
+      }
+      cfg.themeStyle = body.themeStyle as AppConfig['themeStyle']
     }
     if (body.pwa !== undefined) {
       const pwa = body.pwa as Record<string, unknown>

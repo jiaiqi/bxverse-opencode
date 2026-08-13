@@ -10,17 +10,14 @@ import EmptyState from '../components/EmptyState.vue'
 import AddProjectDialog from '../components/AddProjectDialog.vue'
 import { useNow } from '../composables/useNow'
 import { usePolling } from '../composables/usePolling'
-import { useMessage } from 'naive-ui'
 import { useAppStore } from '../stores/app'
 import type { OverviewData } from '@bxverse/shared'
 
 const router = useRouter()
 const projectsStore = useProjectsStore()
 const appStore = useAppStore()
-const message = useMessage()
 const now = useNow()
 const showAddProject = ref(false)
-const syncing = ref(false)
 
 const overview = computed(() => projectsStore.overview)
 
@@ -47,18 +44,6 @@ async function refresh() {
   }
 }
 
-async function syncData() {
-  syncing.value = true
-  try {
-    const result = await import('../api').then(m => m.api.sync('pull'))
-    message.success(result.ok ? '数据仓库已同步' : `同步失败：${String(result.message ?? '')}`)
-  } catch (e) {
-    message.error((e as Error).message)
-  } finally {
-    syncing.value = false
-  }
-}
-
 onMounted(() => {
   void refresh()
 })
@@ -69,16 +54,7 @@ usePolling(refresh, computed(() => appStore.pollInterval).value || 30_000)
 
 <template>
   <div class="page">
-    <PageHeader title="总览" :description="`今天是 ${today}`">
-      <NButton size="small" quaternary :loading="syncing" @click="syncData">
-        <template #icon><i aria-hidden="true" class="i-carbon-renew" /></template>
-        同步数据
-      </NButton>
-      <NButton size="small" type="primary" @click="showAddProject = true">
-        <template #icon><i aria-hidden="true" class="i-carbon-add" /></template>
-        新建项目
-      </NButton>
-    </PageHeader>
+    <PageHeader title="总览" :description="`今天是 ${today}`" />
 
     <!-- 统计 -->
     <div v-if="projectsStore.overviewLoading && !overview" class="grid grid-cols-3 gap-4">
@@ -101,7 +77,7 @@ usePolling(refresh, computed(() => appStore.pollInterval).value || 30_000)
         <i aria-hidden="true" class="i-carbon-catalog text-brand-500" /> 项目
       </h2>
       <div v-if="overview && overview.projects.length === 0" class="card">
-        <EmptyState
+          <EmptyState
           title="还没有项目"
           description="创建项目后，将你的代码仓库接入进来，统一管理版本与更新日志。"
           @action="showAddProject = true"

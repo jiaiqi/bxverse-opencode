@@ -46,6 +46,16 @@
   --bx-shadow-md: 0 2px 8px rgba(16, 24, 40, 0.08);
   --bx-shadow-lg: 0 8px 24px rgba(16, 24, 40, 0.12);
 
+  /* 圆角（wenxi 风格整体加大；按钮可胶囊化） */
+  --bx-radius-sm: 4px;
+  --bx-radius-md: 8px;
+  --bx-radius-lg: 12px;
+  --bx-radius-xl: 16px;
+  --bx-radius-card: 8px;
+  --bx-radius-btn: 8px;
+  /* 侧栏激活项左指示条（wenxi 翠绿；indigo 透明保持现状） */
+  --bx-nav-indicator: transparent;
+
   /* 动效 */
   --bx-dur-fast: 150ms;
   --bx-dur-base: 200ms;
@@ -84,6 +94,57 @@ html.dark {
   --bx-shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.6);
 }
 
+/* ==================== R20 WenXi 深色玻璃拟态风格（themeStyle=wenxi，仅深色） ==================== */
+html.theme-wenxi {
+  /* 品牌（沉稳翠绿） */
+  --bx-brand-50: rgba(0, 201, 110, 0.13);
+  --bx-brand-100: rgba(0, 201, 110, 0.2);
+  --bx-brand-200: rgba(0, 201, 110, 0.3);
+  --bx-brand-300: rgba(0, 201, 110, 0.45);
+  --bx-brand-400: #1fd982;
+  --bx-brand-500: #00c96e;
+  --bx-brand-600: #00e07c;
+  --bx-brand-700: #00b160;
+  --bx-brand-800: #009258;
+  --bx-brand-900: #007344;
+  --bx-brand-soft: rgba(0, 201, 110, 0.14);
+  --bx-brand-soft-hover: rgba(0, 201, 110, 0.2);
+
+  /* 中性（近纯黑 + 玻璃面） */
+  --bx-bg: #050507;
+  --bx-surface: rgba(255, 255, 255, 0.045);
+  --bx-surface-hover: rgba(255, 255, 255, 0.08);
+  --bx-surface-alt: #0a0b0e;
+  --bx-border: rgba(255, 255, 255, 0.08);
+  --bx-border-strong: rgba(255, 255, 255, 0.16);
+  --bx-text-1: #f4f6f5;
+  --bx-text-2: #b0b6b3;
+  --bx-text-3: #79807c;
+
+  /* 语义（半透明 soft 底） */
+  --bx-success: #00c96e;
+  --bx-success-soft: rgba(0, 201, 110, 0.14);
+  --bx-warning: #ffa940;
+  --bx-warning-soft: rgba(255, 169, 64, 0.14);
+  --bx-error: #ff4d4f;
+  --bx-error-soft: rgba(255, 77, 79, 0.14);
+  --bx-info: #3b82f6;
+  --bx-info-soft: rgba(59, 130, 246, 0.14);
+
+  --bx-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --bx-shadow-md: 0 2px 8px rgba(0, 0, 0, 0.5);
+  --bx-shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.6);
+
+  /* 形状：卡片 18px 大圆角、按钮胶囊 */
+  --bx-radius-sm: 6px;
+  --bx-radius-md: 10px;
+  --bx-radius-lg: 14px;
+  --bx-radius-xl: 18px;
+  --bx-radius-card: 18px;
+  --bx-radius-btn: 999px;
+  --bx-nav-indicator: var(--bx-brand-500);
+}
+
 /* ==================== 基础 ==================== */
 * {
   box-sizing: border-box;
@@ -105,6 +166,35 @@ body {
   background: var(--bx-bg);
   -webkit-font-smoothing: antialiased;
   touch-action: manipulation;
+}
+
+/* ---- R20 WenXi 玻璃拟态：背景氛围光 + 玻璃卡片 ---- */
+html.theme-wenxi body {
+  background:
+    radial-gradient(64% 34% at 50% 0%, rgba(0, 201, 110, 0.05), transparent 70%),
+    radial-gradient(38% 26% at 100% 100%, rgba(61, 130, 246, 0.04), transparent 70%),
+    var(--bx-bg);
+}
+html.theme-wenxi .card,
+html.theme-wenxi .n-card {
+  background: linear-gradient(160deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.02));
+  backdrop-filter: blur(18px) saturate(140%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 12px 32px rgba(0, 0, 0, 0.35);
+}
+html.theme-wenxi .card-hover:hover {
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 16px 40px rgba(0, 0, 0, 0.45), 0 0 24px rgba(0, 201, 110, 0.07);
+}
+html.theme-wenxi .sidebar-item-active {
+  box-shadow: inset 3px 0 0 0 var(--bx-nav-indicator);
+}
+/* 顶栏 / 侧栏玻璃化（wenxi） */
+html.theme-wenxi .topbar {
+  background: rgba(5, 5, 7, 0.6);
+  backdrop-filter: blur(20px) saturate(140%);
+}
+html.theme-wenxi .sidebar {
+  background: rgba(10, 11, 14, 0.82);
+  backdrop-filter: blur(20px) saturate(140%);
 }
 
 /* 模态/抽屉内滚动不穿透外层 */

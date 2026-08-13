@@ -13,6 +13,7 @@ const message = useMessage()
 
 const form = reactive({
   theme: 'system' as 'light' | 'dark' | 'system',
+  themeStyle: 'indigo' as 'indigo' | 'wenxi',
   pwaEnabled: true,
   pollInterval: 30_000,
   aiEnabled: false,
@@ -29,6 +30,7 @@ watchEffect(() => {
   const c = appStore.config
   if (!c) return
   form.theme = c.theme
+  form.themeStyle = c.themeStyle ?? 'indigo'
   form.pwaEnabled = c.pwa.enabled
   form.pollInterval = c.pollInterval
   form.aiEnabled = c.ai.enabled
@@ -38,12 +40,19 @@ watchEffect(() => {
   dataDir.value = c.dataDir
 })
 
+/** 主题风格即时预览：点击即切换并保存，无需等「保存全部设置」 */
+async function pickStyle(style: 'indigo' | 'wenxi') {
+  form.themeStyle = style
+  await appStore.setThemeStyle(style)
+}
+
 async function save() {
   saving.value = true
   try {
     await appStore.setTheme(form.theme)
     await api.saveConfig({
       theme: form.theme,
+      themeStyle: form.themeStyle,
       pwa: { enabled: form.pwaEnabled },
       pollInterval: form.pollInterval,
       ai: { enabled: form.aiEnabled, baseUrl: form.aiBaseUrl, model: form.aiModel, apiKey: form.aiApiKey },
@@ -95,10 +104,55 @@ function rotateToken() {
     <section>
       <h2 class="section-title"><i aria-hidden="true" class="i-carbon-paint-brush text-brand-500" /> 外观与体验</h2>
       <div class="card card-pad mt-4 space-y-5">
+        <!-- R20 主题风格：indigo 标准套件 / wenxi 深色玻璃拟态套件（点击即时预览） -->
+        <div>
+          <div class="text-sm font-medium text-text-1">主题风格</div>
+          <div class="text-xs text-text-3 mt-0.5">indigo 为默认靛蓝套件（亮/暗/跟随系统）；WenXi 为深色玻璃拟态套件（翠绿强调，仅深色）</div>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
+            <button
+              class="flex items-center gap-3 p-3.5 rounded-lg border text-left transition-colors duration-150 focus-ring bg-surface"
+              :class="form.themeStyle === 'indigo' ? 'border-brand-500 bg-brand-soft' : 'border-border hover:border-border-strong'"
+              :aria-pressed="form.themeStyle === 'indigo'"
+              @click="pickStyle('indigo')"
+            >
+              <span class="w-9 h-9 rounded-md border border-border shrink-0 flex items-center justify-center overflow-hidden">
+                <span class="w-4 h-4 rounded-sm bg-brand-500 shrink-0" />
+              </span>
+              <span class="min-w-0">
+                <span class="block text-sm font-medium text-text-1">Indigo 标准</span>
+                <span class="block text-xs text-text-3 mt-0.5">亮 / 暗 / 跟随系统</span>
+              </span>
+              <i
+                aria-hidden="true"
+                v-if="form.themeStyle === 'indigo'"
+                class="i-carbon-checkmark-filled ml-auto text-16px text-brand-500"
+              />
+            </button>
+            <button
+              class="flex items-center gap-3 p-3.5 rounded-lg border text-left transition-colors duration-150 focus-ring bg-surface"
+              :class="form.themeStyle === 'wenxi' ? 'border-brand-500 bg-brand-soft' : 'border-border hover:border-border-strong'"
+              :aria-pressed="form.themeStyle === 'wenxi'"
+              @click="pickStyle('wenxi')"
+            >
+              <span class="w-9 h-9 rounded-md border border-border shrink-0 flex items-center justify-center overflow-hidden bg-[#050507]">
+                <span class="w-4 h-4 rounded-sm bg-brand-500 shrink-0" style="box-shadow: 0 0 8px rgba(0,201,110,.5)" />
+              </span>
+              <span class="min-w-0">
+                <span class="block text-sm font-medium text-text-1">WenXi 深色玻璃</span>
+                <span class="block text-xs text-text-3 mt-0.5">近纯黑基底 · 翠绿强调 · 仅深色</span>
+              </span>
+              <i
+                aria-hidden="true"
+                v-if="form.themeStyle === 'wenxi'"
+                class="i-carbon-checkmark-filled ml-auto text-16px text-brand-500"
+              />
+            </button>
+          </div>
+        </div>
         <div class="flex items-center justify-between">
           <div>
             <div class="text-sm font-medium text-text-1">主题</div>
-            <div class="text-xs text-text-3 mt-0.5">system 时跟随操作系统</div>
+            <div class="text-xs text-text-3 mt-0.5">system 时跟随操作系统（WenXi 风格固定为深色）</div>
           </div>
           <NRadioGroup v-model:value="form.theme">
             <NRadioButton value="light"><i aria-hidden="true" class="i-carbon-sun mr-1" /> 亮</NRadioButton>
