@@ -12,7 +12,7 @@ import PublishConsole from '../components/PublishConsole.vue'
 import { useDialog, useMessage } from 'naive-ui'
 import type { PublishEventLike } from '../api'
 import { api } from '../api'
-import { useFsAccess } from '../composables/useFsAccess'
+import VersionExportDropdown from '../components/VersionExportDropdown.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -172,26 +172,8 @@ function onFailed(msg: string) {
 const bumpLabel = (b: string): string =>
   b === 'major' ? '重大' : b === 'minor' ? '次版本' : b === 'patch' ? '补丁' : '自动'
 
-// ==================== 完成页：导出版本清单 ====================
-const fs = useFsAccess()
-const exportingVersions = ref(false)
-
-async function exportThisReleaseVersions() {
-  if (!store.result?.releaseId) return
-  exportingVersions.value = true
-  try {
-    const items = await api.releaseVersions(store.result.releaseId)
-    const content = `${JSON.stringify(items, null, 2)}\n`
-    const result = await fs.saveTextFile(`${store.result.version}-versions.json`, content)
-    if (result !== 'cancelled') {
-      message.success(`已导出 ${items.length} 个仓库的版本清单（${store.result.version}）`)
-    }
-  } catch (e) {
-    message.error((e as Error).message)
-  } finally {
-    exportingVersions.value = false
-  }
-}
+/** 完成页导出用的发布记录 id（模板闭包内可安全使用） */
+const resultReleaseId = computed(() => store.result?.releaseId ?? '')
 </script>
 
 <template>
@@ -420,14 +402,12 @@ async function exportThisReleaseVersions() {
           </template>
           <div class="flex justify-center gap-3 mt-6">
             <NButton @click="router.push(`/project/${projectId}`)">返回项目</NButton>
-            <NButton
-              v-if="store.result?.releaseId"
-              :loading="exportingVersions"
-              @click="exportThisReleaseVersions"
-            >
-              <template #icon><i class="i-carbon-download" /></template>
-              导出版本清单
-            </NButton>
+            <VersionExportDropdown
+              v-if="resultReleaseId"
+              :project-id="projectId"
+              :filename="`${store.result!.version}-versions.json`"
+              :load-items="() => api.releaseVersions(resultReleaseId)"
+            />
             <NButton type="primary" secondary @click="store.reset(projectId); detect(); store.setSelected(changedRepoIds)">再次发布</NButton>
           </div>
         </div>

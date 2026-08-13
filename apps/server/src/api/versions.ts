@@ -41,7 +41,22 @@ export function register(
     if (!repo) throw apiError(404, 'NOT_FOUND', `仓库不存在或不属于该项目: ${repoId}`)
     if (!fs.existsSync(repo.path)) throw apiError(400, 'REPO_INVALID', `仓库路径不存在: ${repo.path}`)
 
-    const items = await collectItems(project, services)
+    // 可选：直接使用调用方提供的清单内容（如发布历史快照）；否则实时采集当前版本
+    let items: RepoVersionItem[]
+    if (body.items !== undefined) {
+      const raw = body.items as unknown[]
+      if (!Array.isArray(raw) || raw.some(x =>
+        typeof (x as Record<string, unknown>).app !== 'string'
+        || typeof (x as Record<string, unknown>).name !== 'string'
+        || typeof (x as Record<string, unknown>).version !== 'string',
+      )) {
+        throw apiError(400, 'VALIDATION', 'items 必须是 [{app,name,version}] 数组')
+      }
+      items = raw as RepoVersionItem[]
+    } else {
+      items = await collectItems(project, services)
+    }
+
     const absTarget = path.resolve(repo.path, relPath)
     const repoRoot = path.resolve(repo.path)
     if (absTarget !== repoRoot && !absTarget.startsWith(repoRoot + path.sep)) {

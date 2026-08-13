@@ -11,9 +11,8 @@ import MarkdownView from '../components/MarkdownView.vue'
 import EmptyState from '../components/EmptyState.vue'
 import AddRepoDialog from '../components/AddRepoDialog.vue'
 import AddProjectDialog from '../components/AddProjectDialog.vue'
-import DirPicker from '../components/DirPicker.vue'
+import VersionExportDropdown from '../components/VersionExportDropdown.vue'
 import { useDialog, useMessage } from 'naive-ui'
-import { useFsAccess } from '../composables/useFsAccess'
 import { usePolling } from '../composables/usePolling'
 import { useAppStore } from '../stores/app'
 
@@ -73,120 +72,6 @@ async function refreshRepo(rid: string) {
   }
 }
 
-/** 导出版本清单（R18：原生另存为 / 写入项目仓库 / 导出到本地目录） */
-const exporting = ref(false)
-const fs = useFsAccess()
-
-const showExportWrite = ref(false)
-const exportWriteForm = reactive({ repoId: '', dir: '', filename: 'versions.json' })
-const exportWriteSaving = ref(false)
-
-const showExportLocal = ref(false)
-const exportLocalForm = reactive({ dirName: '', dirHandle: null as FileSystemDirectoryHandle | null, filename: 'versions.json' })
-const exportLocalSaving = ref(false)
-
-async function exportDownload() {
-  if (!project.value) return
-  exporting.value = true
-  try {
-    const items = await api.projectVersions(projectId.value)
-    const content = `${JSON.stringify(items, null, 2)}\n`
-    const result = await fs.saveTextFile(`${project.value.name}-versions.json`, content)
-    if (result !== 'cancelled') {
-      message.success(result === 'native' ? `已保存 ${items.length} 个仓库的版本清单` : `已下载 ${items.length} 个仓库的版本清单`)
-    }
-  } catch (e) {
-    message.error((e as Error).message)
-  } finally {
-    exporting.value = false
-  }
-}
-
-async function pickLocalDir() {
-  const handle = await fs.pickDirectory()
-  if (!handle) return
-  exportLocalForm.dirHandle = handle
-  exportLocalForm.dirName = handle.name
-}
-
-async function submitExportLocal() {
-  if (!project.value || !exportLocalForm.dirHandle || !exportLocalForm.filename.trim()) return
-  if (!exportLocalForm.filename.trim().toLowerCase().endsWith('.json')) {
-    message.warning('文件名必须以 .json 结尾')
-    return
-  }
-  exportLocalSaving.value = true
-  try {
-    const items = await api.projectVersions(projectId.value)
-    const content = `${JSON.stringify(items, null, 2)}\n`
-    await fs.writeToDirectory(exportLocalForm.dirHandle, exportLocalForm.filename.trim(), content)
-    showExportLocal.value = false
-    message.success(`已写入 ${items.length} 个仓库版本 → ${exportLocalForm.dirName}/${exportLocalForm.filename.trim()}`)
-  } catch (e) {
-    message.error((e as Error).message)
-  } finally {
-    exportLocalSaving.value = false
-  }
-}
-
-function openExportWrite() {
-  if (!project.value) return
-  const key = `bxverse-export-${projectId.value}`
-  const saved = JSON.parse(localStorage.getItem(key) ?? '{}') as { repoId?: string; dir?: string; filename?: string }
-  exportWriteForm.repoId = saved.repoId && project.value.repos.some(r => r.id === saved.repoId)
-    ? saved.repoId
-    : (project.value.repos[0]?.id ?? '')
-  exportWriteForm.dir = saved.dir ?? ''
-  exportWriteForm.filename = saved.filename ?? 'versions.json'
-  showExportWrite.value = true
-}
-
-const exportWritePath = computed(() => {
-  const file = exportWriteForm.filename.trim()
-  return exportWriteForm.dir ? `${exportWriteForm.dir}/${file}` : file
-})
-
-async function submitExportWrite() {
-  if (!project.value || !exportWriteForm.repoId || !exportWriteForm.filename.trim()) return
-  if (!exportWriteForm.filename.trim().toLowerCase().endsWith('.json')) {
-    message.warning('文件名必须以 .json 结尾')
-    return
-  }
-  exportWriteSaving.value = true
-  try {
-    const result = await api.exportProjectVersions(projectId.value, {
-      repoId: exportWriteForm.repoId,
-      path: exportWritePath.value,
-    })
-    localStorage.setItem(`bxverse-export-${projectId.value}`, JSON.stringify({
-      repoId: exportWriteForm.repoId,
-      dir: exportWriteForm.dir,
-      filename: exportWriteForm.filename.trim(),
-    }))
-    showExportWrite.value = false
-    message.success(`已写入 ${result.count} 个仓库版本 → ${result.path}`)
-  } catch (e) {
-    message.error((e as Error).message)
-  } finally {
-    exportWriteSaving.value = false
-  }
-}
-
-const exportOptions = [
-  { label: '另存为文件（原生对话框）', key: 'download', icon: () => h('i', { class: 'i-carbon-download text-16px' }) },
-  { label: '写入项目仓库（选择目录）', key: 'write', icon: () => h('i', { class: 'i-carbon-folder-add text-16px' }) },
-  { label: '导出到本地目录（原生选择器）', key: 'local', icon: () => h('i', { class: 'i-carbon-save text-16px' }) },
-]
-
-function onExportSelect(key: string) {
-  if (key === 'download') void exportDownload()
-  else if (key === 'write') openExportWrite()
-  else {
-    exportLocalForm.filename = 'versions.json'
-    showExportLocal.value = true
-  }
-}
-
 function confirmDelete() {
   dialog.warning({
     title: '删除项目',
@@ -220,20 +105,6 @@ const showDetail = ref(false)
 function openDetail(r: ReleaseRecord) {
   detailRelease.value = r
   showDetail.value = true
-}
-
-/** 导出某次发布的版本清单（发布历史快照，R18） */
-async function exportReleaseVersions(r: ReleaseRecord) {
-  try {
-    const items = await api.releaseVersions(r.id)
-    const content = `${JSON.stringify(items, null, 2)}\n`
-    const result = await fs.saveTextFile(`${r.version}-versions.json`, content)
-    if (result !== 'cancelled') {
-      message.success(`已导出 ${items.length} 个仓库的版本清单（${r.version}）`)
-    }
-  } catch (e) {
-    message.error((e as Error).message)
-  }
 }
 
 watch(projectId, async (id) => {
@@ -270,12 +141,11 @@ usePolling(async () => {
           <template #icon><i class="i-carbon-add" /></template>
           接入仓库
         </NButton>
-        <NDropdown trigger="click" :options="exportOptions" @select="onExportSelect">
-          <NButton :loading="exporting">
-            <template #icon><i class="i-carbon-download" /></template>
-            导出版本清单
-          </NButton>
-        </NDropdown>
+        <VersionExportDropdown
+          :project-id="projectId"
+          filename="versions.json"
+          :load-items="() => api.projectVersions(projectId)"
+        />
         <NButton quaternary @click="showEdit = true">
           <template #icon><i class="i-carbon-edit" /></template>
           编辑
@@ -337,10 +207,14 @@ usePolling(async () => {
                 <StatusBadge type="bump" :bump="r.bump" />
                 <StatusBadge type="pushed" :pushed="r.pushed" />
                 <span class="flex-1" />
-                <NButton size="tiny" quaternary title="导出版本清单" @click.stop="exportReleaseVersions(r)">
-                  <template #icon><i class="i-carbon-download" /></template>
-                  版本清单
-                </NButton>
+                <VersionExportDropdown
+                  :project-id="projectId"
+                  :filename="`${r.version}-versions.json`"
+                  :load-items="() => api.releaseVersions(r.id)"
+                  label="版本清单"
+                  size="tiny"
+                  quaternary
+                />
                 <span class="text-xs text-text-3">{{ r.date.slice(0, 10) }}</span>
                 <i class="i-carbon-chevron-right text-text-3" />
               </div>
@@ -354,99 +228,6 @@ usePolling(async () => {
 
       <AddRepoDialog v-model:show="showAddRepo" :project-id="project.id" @added="loadStatuses" />
       <AddProjectDialog v-model:show="showEdit" :editing="project" @saved="projectsStore.load()" />
-
-      <!-- 写入版本清单弹窗：项目仓库内（树选目录，R18） -->
-      <NModal
-        v-model:show="showExportWrite"
-        preset="card"
-        title="写入版本清单到仓库"
-        class="w-130 max-w-95vw"
-      >
-        <div class="space-y-4 py-1">
-          <div>
-            <div class="text-sm font-medium text-text-1 mb-1.5">目标仓库</div>
-            <NSelect
-              v-model:value="exportWriteForm.repoId"
-              :options="project.repos.map(r => ({ label: `${r.displayName || r.name}（${r.name}）`, value: r.id }))"
-              placeholder="选择要写入的仓库"
-            />
-          </div>
-          <div>
-            <div class="text-sm font-medium text-text-1 mb-1.5">目标目录（点选，可展开子目录）</div>
-            <DirPicker
-              v-if="exportWriteForm.repoId"
-              :pid="project.id"
-              :rid="exportWriteForm.repoId"
-              v-model="exportWriteForm.dir"
-            />
-            <div v-else class="text-xs text-text-3 py-3">请先选择目标仓库</div>
-          </div>
-          <div>
-            <div class="text-sm font-medium text-text-1 mb-1.5">文件名</div>
-            <NInput v-model:value="exportWriteForm.filename" placeholder="versions.json" />
-            <div class="text-xs text-text-3 mt-1.5">
-              将生成 <span class="code-text">[{ app, name, version }]</span> JSON 数组，写入路径：
-              <span class="code-text text-brand-600">{{ exportWritePath }}</span>（不 commit，由你自行提交）
-            </div>
-          </div>
-        </div>
-        <template #footer>
-          <div class="flex justify-end gap-2.5">
-            <NButton quaternary @click="showExportWrite = false">取消</NButton>
-            <NButton
-              type="primary"
-              :loading="exportWriteSaving"
-              :disabled="!exportWriteForm.repoId || !exportWriteForm.filename.trim()"
-              @click="submitExportWrite"
-            >
-              写入
-            </NButton>
-          </div>
-        </template>
-      </NModal>
-
-      <!-- 导出到本地目录弹窗（File System Access API 原生选择器） -->
-      <NModal
-        v-model:show="showExportLocal"
-        preset="card"
-        title="导出到本地目录"
-        class="w-120 max-w-95vw"
-      >
-        <div class="space-y-4 py-1">
-          <div>
-            <div class="text-sm font-medium text-text-1 mb-1.5">目标目录</div>
-            <div class="flex items-center gap-2.5">
-              <NButton @click="pickLocalDir">
-                <template #icon><i class="i-carbon-folder-open" /></template>
-                {{ exportLocalForm.dirHandle ? '重新选择' : '选择目录…' }}
-              </NButton>
-              <span class="code-text text-text-2 truncate flex-1">
-                {{ exportLocalForm.dirName || '未选择' }}
-              </span>
-            </div>
-            <div class="text-xs text-text-3 mt-1.5">
-              通过系统资源管理器选择任意本地目录，直接写入文件（不经过服务端路径）
-            </div>
-          </div>
-          <div>
-            <div class="text-sm font-medium text-text-1 mb-1.5">文件名</div>
-            <NInput v-model:value="exportLocalForm.filename" placeholder="versions.json" />
-          </div>
-        </div>
-        <template #footer>
-          <div class="flex justify-end gap-2.5">
-            <NButton quaternary @click="showExportLocal = false">取消</NButton>
-            <NButton
-              type="primary"
-              :loading="exportLocalSaving"
-              :disabled="!exportLocalForm.dirHandle || !exportLocalForm.filename.trim()"
-              @click="submitExportLocal"
-            >
-              写入
-            </NButton>
-          </div>
-        </template>
-      </NModal>
 
       <!-- 记录详情抽屉 -->
       <NDrawer v-model:show="showDetail" :width="560">
