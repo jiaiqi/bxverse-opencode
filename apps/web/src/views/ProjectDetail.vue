@@ -68,9 +68,13 @@ async function refreshRepo(rid: string) {
   }
 }
 
-/** 导出版本清单 JSON 文件（R18：app/name/version 数组） */
+/** 导出版本清单（R18：下载 / 写入指定仓库） */
 const exporting = ref(false)
-async function exportVersions() {
+const showExportWrite = ref(false)
+const exportWriteForm = reactive({ repoId: '', path: 'versions.json' })
+const exportWriteSaving = ref(false)
+
+async function exportDownload() {
   if (!project.value) return
   exporting.value = true
   try {
@@ -82,12 +86,54 @@ async function exportVersions() {
     a.download = `${project.value.name}-versions.json`
     a.click()
     URL.revokeObjectURL(url)
-    message.success(`已导出 ${items.length} 个仓库的版本清单`)
+    message.success(`已下载 ${items.length} 个仓库的版本清单`)
   } catch (e) {
     message.error((e as Error).message)
   } finally {
     exporting.value = false
   }
+}
+
+function openExportWrite() {
+  if (!project.value) return
+  const key = `bxverse-export-${projectId.value}`
+  const saved = JSON.parse(localStorage.getItem(key) ?? '{}') as { repoId?: string; path?: string }
+  exportWriteForm.repoId = saved.repoId && project.value.repos.some(r => r.id === saved.repoId)
+    ? saved.repoId
+    : (project.value.repos[0]?.id ?? '')
+  exportWriteForm.path = saved.path ?? 'versions.json'
+  showExportWrite.value = true
+}
+
+async function submitExportWrite() {
+  if (!project.value || !exportWriteForm.repoId || !exportWriteForm.path.trim()) return
+  exportWriteSaving.value = true
+  try {
+    const result = await api.exportProjectVersions(projectId.value, {
+      repoId: exportWriteForm.repoId,
+      path: exportWriteForm.path.trim(),
+    })
+    localStorage.setItem(`bxverse-export-${projectId.value}`, JSON.stringify({
+      repoId: exportWriteForm.repoId,
+      path: exportWriteForm.path.trim(),
+    }))
+    showExportWrite.value = false
+    message.success(`已写入 ${result.count} 个仓库版本 → ${result.path}`)
+  } catch (e) {
+    message.error((e as Error).message)
+  } finally {
+    exportWriteSaving.value = false
+  }
+}
+
+const exportOptions = [
+  { label: '下载 JSON 文件', key: 'download', icon: () => 'i-carbon-download' },
+  { label: '写入指定仓库', key: 'write', icon: () => 'i-carbon-save' },
+]
+
+function onExportSelect(key: string) {
+  if (key === 'download') void exportDownload()
+  else openExportWrite()
 }
 
 function confirmDelete() {
@@ -154,10 +200,12 @@ watch(projectId, async (id) => {
           <template #icon><i class="i-carbon-add" /></template>
           接入仓库
         </NButton>
-        <NButton :loading="exporting" @click="exportVersions">
-          <template #icon><i class="i-carbon-download" /></template>
-          导出版本清单
-        </NButton>
+        <NDropdown trigger="click" :options="exportOptions" @select="onExportSelect">
+          <NButton :loading="exporting">
+            <template #icon><i class="i-carbon-download" /></template>
+            导出版本清单
+          </NButton>
+        </NDropdown>
         <NButton quaternary @click="showEdit = true">
           <template #icon><i class="i-carbon-edit" /></template>
           编辑
@@ -232,6 +280,45 @@ watch(projectId, async (id) => {
 
       <AddRepoDialog v-model:show="showAddRepo" :project-id="project.id" @added="loadStatuses" />
       <AddProjectDialog v-model:show="showEdit" :editing="project" @saved="projectsStore.load()" />
+
+      <!-- 写入版本清单弹窗（R18） -->
+      <NModal
+        v-model:show="showExportWrite"
+        preset="card"
+        title="写入版本清单到仓库"
+        class="w-130 max-w-95vw"
+      >
+        <div class="space-y-4 py-1">
+          <div>
+            <div class="text-sm font-medium text-text-1 mb-1.5">目标仓库</div>
+            <NSelect
+              v-model:value="exportWriteForm.repoId"
+              :options="project.repos.map(r => ({ label: `${r.displayName || r.name}（${r.name}）`, value: r.id }))"
+              placeholder="选择要写入的仓库"
+            />
+          </div>
+          <div>
+            <div class="text-sm font-medium text-text-1 mb-1.5">文件路径（相对仓库根）</div>
+            <NInput v-model:value="exportWriteForm.path" placeholder="如：versions.json 或 public/versions.json" />
+            <div class="text-xs text-text-3 mt-1.5">
+              生成 <span class="code-text">[{ app, name, version }]</span> JSON 数组并写入该仓库工作树（不 commit，由你自行提交）
+            </div>
+          </div>
+        </div>
+        <template #footer>
+          <div class="flex justify-end gap-2.5">
+            <NButton quaternary @click="showExportWrite = false">取消</NButton>
+            <NButton
+              type="primary"
+              :loading="exportWriteSaving"
+              :disabled="!exportWriteForm.repoId || !exportWriteForm.path.trim()"
+              @click="submitExportWrite"
+            >
+              写入
+            </NButton>
+          </div>
+        </template>
+      </NModal>
 
       <!-- 记录详情抽屉 -->
       <NDrawer v-model:show="showDetail" :width="560">

@@ -223,6 +223,39 @@
 
 实现：`apps/server/src/api/versions.ts`；前端「导出版本清单」按钮下载 `{项目名}-versions.json`。
 
+### 4.3 POST /api/projects/:id/versions/export（R18：写入指定仓库）
+
+用途：把生成的版本清单 JSON **写入项目下某个仓库的指定相对路径**（工作树文件，工具不 commit，由用户自行提交）。
+
+请求体：
+
+```json
+{ "repoId": "r_8k2m", "path": "versions.json" }
+```
+
+| 字段 | 说明 |
+|---|---|
+| `repoId` | 必填；必须属于该项目 |
+| `path` | 必填；相对仓库根的路径，必须以 `.json` 结尾；禁止绝对路径与 `..` 越界 |
+
+响应 `200`：
+
+```json
+{
+  "ok": true,
+  "repoId": "r_8k2m",
+  "path": "versions.json",
+  "fullPath": "E:\\bx-gitee\\l-pc-front\\versions.json",
+  "count": 6,
+  "items": [ { "app": "l-pc-front", "name": "PC 前端", "version": "v1.2.0.26081315" } ]
+}
+```
+
+- 写入前自动创建父目录；内容为格式化 JSON 数组 + 末尾换行。
+- 错误：404（项目/仓库不存在或不属于该项目）；400 `VALIDATION`（字段缺失、非 `.json`、路径越界）；400 `REPO_INVALID`（仓库路径失效）。
+
+实现：`apps/server/src/api/versions.ts`；前端导出按钮下拉「写入指定仓库」弹窗（目标仓库 + 路径，记住上次选择）。
+
 ---
 
 ## 5. 项目

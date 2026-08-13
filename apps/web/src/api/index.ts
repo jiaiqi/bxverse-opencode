@@ -42,6 +42,8 @@ export const api = {
 
   // 版本清单导出（R18）
   projectVersions: (projectId: string) => http.get<RepoVersionItem[]>(`/projects/${projectId}/versions`),
+  exportProjectVersions: (projectId: string, body: { repoId: string; path: string }) =>
+    http.post<{ ok: boolean; repoId: string; path: string; fullPath: string; items: RepoVersionItem[]; count: number }>(`/projects/${projectId}/versions/export`, body),
 
   // 项目
   projects: () => http.get<ProjectDef[]>('/projects'),

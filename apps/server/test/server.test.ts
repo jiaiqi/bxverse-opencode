@@ -274,6 +274,37 @@ describe('发布全链路（api.md §8）', () => {
     const notFound = await client.get('/api/projects/p_nonexistent/versions')
     expect(notFound.status).toBe(404)
   })
+
+  it('POST /api/projects/:id/versions/export 写入指定仓库（R18）', async () => {
+    const { body: projectsBody } = await client.get('/api/projects')
+    const project = (projectsBody as { id: string; repos: { id: string; name: string }[] }[]).find(p => p.id === projectId)!
+    const repo = project.repos[0]
+
+    // 正常写入
+    const { status, body } = await client.post(`/api/projects/${projectId}/versions/export`, {
+      repoId: repo.id,
+      path: 'deploy/versions.json',
+    })
+    expect(status).toBe(200)
+    const result = body as { count: number; items: { app: string; version: string }[]; fullPath: string }
+    expect(result.count).toBe(1)
+    expect(result.items[0].app).toBe(repo.name)
+
+    // 校验文件实际落盘
+    const { readFileSync } = await import('node:fs')
+    const written = JSON.parse(readFileSync(result.fullPath, 'utf8'))
+    expect(written).toEqual(result.items)
+
+    // 路径校验
+    const noJson = await client.post(`/api/projects/${projectId}/versions/export`, { repoId: repo.id, path: 'versions.txt' })
+    expect(noJson.status).toBe(400)
+    const escape = await client.post(`/api/projects/${projectId}/versions/export`, { repoId: repo.id, path: '../../evil.json' })
+    expect(escape.status).toBe(400)
+    const abs = await client.post(`/api/projects/${projectId}/versions/export`, { repoId: repo.id, path: 'C:/evil.json' })
+    expect(abs.status).toBe(400)
+    const badRepo = await client.post(`/api/projects/${projectId}/versions/export`, { repoId: 'r_nonexistent', path: 'versions.json' })
+    expect(badRepo.status).toBe(404)
+  })
 })
 
 describe('日志编辑（api.md §7.3）', () => {
