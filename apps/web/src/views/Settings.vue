@@ -49,15 +49,17 @@ async function pickStyle(style: 'indigo' | 'wenxi') {
 async function save() {
   saving.value = true
   try {
+    const pwaChanged = form.pwaEnabled !== (appStore.config?.pwa.enabled ?? true)
     await appStore.setTheme(form.theme)
+    // PWA 开关单独走 store action：保存配置 + 运行时注册/注销（frontend.md §10）
+    await appStore.togglePwa(form.pwaEnabled)
     await api.saveConfig({
       theme: form.theme,
       themeStyle: form.themeStyle,
-      pwa: { enabled: form.pwaEnabled },
       pollInterval: form.pollInterval,
       ai: { enabled: form.aiEnabled, baseUrl: form.aiBaseUrl, model: form.aiModel, apiKey: form.aiApiKey },
     })
-    message.success('设置已保存')
+    message.success(pwaChanged ? '设置已保存，PWA 开关已即时生效' : '设置已保存')
   } catch (e) {
     message.error((e as Error).message)
   } finally {

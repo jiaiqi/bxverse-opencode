@@ -5,6 +5,7 @@ import { defineStore } from 'pinia'
 import type { AppConfig } from '@bxverse/shared'
 import { api } from '../api'
 import { bootstrap, setToken } from '../api/http'
+import { disablePWA, enablePWA } from '../pwa/register'
 
 export type ThemeMode = 'light' | 'dark' | 'system'
 export type ThemeStyle = 'indigo' | 'wenxi'
@@ -33,6 +34,8 @@ export const useAppStore = defineStore('app', {
         this.config = payload.config as AppConfig
         setToken(payload.token)
         this.applyTheme()
+        // M5-01：PWA 运行时开关——boot 时按配置注册（dev 下自动短路）
+        if (this.pwaEnabled) void enablePWA()
         this.booted = true
       } catch (e) {
         this.bootError = (e as Error).message
@@ -63,6 +66,9 @@ export const useAppStore = defineStore('app', {
       if (!this.config) return
       this.config.pwa.enabled = enabled
       await api.saveConfig({ pwa: { enabled } })
+      // SW 注册/注销即时生效，无需刷新（frontend.md §10）
+      if (enabled) await enablePWA()
+      else await disablePWA()
     },
   },
 })
