@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import fs from 'node:fs'
+import { mkdtempSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { listTree, readFileContent } from '../src/files'
 import { commit, makeRepo } from './helpers/repo'
@@ -38,6 +40,22 @@ describe('files 文件树', () => {
     commit(dir, 'feat: init', { 'a.txt': '1' })
     expect(() => listTree(dir, '../..')).toThrow()
     expect(() => readFileContent(dir, '../../secret')).toThrow()
+  })
+
+  it('符号链接指向仓库外 → 拒绝（realpath 加固）', () => {
+    const dir = makeRepo()
+    commit(dir, 'feat: init', { 'a.txt': '1' })
+    // 仓库外敏感目录 + 仓库内 junction 指向它
+    const outside = mkdtempSync(path.join(tmpdir(), 'bxverse-outside-'))
+    fs.writeFileSync(path.join(outside, 'secret.txt'), 'secret')
+    try {
+      fs.symlinkSync(outside, path.join(dir, 'link-out'), 'junction')
+    } catch {
+      // 平台不支持 junction 时跳过
+      return
+    }
+    expect(() => listTree(dir, 'link-out')).toThrow('越界')
+    expect(() => readFileContent(dir, 'link-out/secret.txt')).toThrow('越界')
   })
 
   it('文本文件读取与二进制判定', () => {

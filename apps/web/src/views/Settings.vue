@@ -93,7 +93,7 @@ function rotateToken() {
     <PageHeader title="设置" icon="i-carbon-settings" />
 
     <section>
-      <h2 class="section-title"><i class="i-carbon-paint-brush text-brand-500" /> 外观与体验</h2>
+      <h2 class="section-title"><i aria-hidden="true" class="i-carbon-paint-brush text-brand-500" /> 外观与体验</h2>
       <div class="card card-pad mt-4 space-y-5">
         <div class="flex items-center justify-between">
           <div>
@@ -101,9 +101,9 @@ function rotateToken() {
             <div class="text-xs text-text-3 mt-0.5">system 时跟随操作系统</div>
           </div>
           <NRadioGroup v-model:value="form.theme">
-            <NRadioButton value="light"><i class="i-carbon-sun mr-1" /> 亮</NRadioButton>
-            <NRadioButton value="dark"><i class="i-carbon-moon mr-1" /> 暗</NRadioButton>
-            <NRadioButton value="system"><i class="i-carbon-screen mr-1" /> 系统</NRadioButton>
+            <NRadioButton value="light"><i aria-hidden="true" class="i-carbon-sun mr-1" /> 亮</NRadioButton>
+            <NRadioButton value="dark"><i aria-hidden="true" class="i-carbon-moon mr-1" /> 暗</NRadioButton>
+            <NRadioButton value="system"><i aria-hidden="true" class="i-carbon-screen mr-1" /> 系统</NRadioButton>
           </NRadioGroup>
         </div>
         <div class="flex items-center justify-between">
@@ -124,7 +124,7 @@ function rotateToken() {
     </section>
 
     <section>
-      <h2 class="section-title"><i class="i-carbon-sparkle text-brand-500" /> AI 日志润色（可选）</h2>
+      <h2 class="section-title"><i aria-hidden="true" class="i-carbon-sparkle text-brand-500" /> AI 日志润色（可选）</h2>
       <div class="card card-pad mt-4 space-y-4">
         <div class="flex items-center justify-between">
           <div>
@@ -153,16 +153,16 @@ function rotateToken() {
     </section>
 
     <section>
-      <h2 class="section-title"><i class="i-carbon-renew text-brand-500" /> 数据仓库同步</h2>
+      <h2 class="section-title"><i aria-hidden="true" class="i-carbon-renew text-brand-500" /> 数据仓库同步</h2>
       <div class="card card-pad mt-4 space-y-3">
         <div class="code-text text-13px text-text-2 bg-surface-alt border border-border rounded-md px-3 py-2">{{ dataDir || '—' }}</div>
         <div class="flex items-center gap-2.5">
           <NButton size="small" :loading="syncing" @click="sync('pull')">
-            <template #icon><i class="i-carbon-cloud-download" /></template>
+            <template #icon><i aria-hidden="true" class="i-carbon-cloud-download" /></template>
             拉取
           </NButton>
           <NButton size="small" :loading="syncing" @click="sync('push')">
-            <template #icon><i class="i-carbon-cloud-upload" /></template>
+            <template #icon><i aria-hidden="true" class="i-carbon-cloud-upload" /></template>
             推送
           </NButton>
           <span v-if="syncResult" class="text-xs text-text-2">{{ syncResult }}</span>
@@ -171,7 +171,7 @@ function rotateToken() {
     </section>
 
     <section>
-      <h2 class="section-title"><i class="i-carbon-locked text-brand-500" /> 安全</h2>
+      <h2 class="section-title"><i aria-hidden="true" class="i-carbon-locked text-brand-500" /> 安全</h2>
       <div class="card card-pad mt-4 flex items-center justify-between">
         <div>
           <div class="text-sm font-medium text-text-1">访问令牌</div>

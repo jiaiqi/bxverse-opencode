@@ -58,13 +58,53 @@ function toggleRepo(id: string) {
   store.setSelected([...next])
 }
 
+/** 步骤 1：提交级条目确认 */
+const commitsExpanded = ref<Set<string>>(new Set())
+
+function toggleCommitsPanel(repoId: string) {
+  const next = new Set(commitsExpanded.value)
+  if (next.has(repoId)) next.delete(repoId)
+  else next.add(repoId)
+  commitsExpanded.value = next
+}
+
+const excludedCount = (repoId: string): number => (store.excludedCommits[repoId] ?? []).length
+
+function commitIncluded(repoId: string, fullHash: string): boolean {
+  return !(store.excludedCommits[repoId] ?? []).includes(fullHash)
+}
+
 watch(projectId, async (id) => {
   if (!projectsStore.byId(id)) await projectsStore.load()
   store.reset(id)
+  // 步骤状态同步 URL（刷新恢复）
+  const q = Number(route.query.step)
+  if (q >= 1 && q <= 6) store.step = q
   await detect()
   // 默认勾选全部变动仓库
   store.setSelected(changedRepoIds.value)
 }, { immediate: true })
+
+// 步骤变化 → URL
+watch(
+  () => store.step,
+  (s) => {
+    if (String(route.query.step ?? '') !== String(s)) {
+      void router.replace({ query: { ...route.query, step: String(s) } })
+    }
+  },
+)
+
+// 未保存守卫：日志已编辑/发布进行中时离开需确认
+function onBeforeUnload(e: BeforeUnloadEvent) {
+  const hasEdits = store.logs.internal.state !== 'auto' || store.logs.external.state !== 'auto'
+  const running = store.phase === 'running'
+  if ((hasEdits || running) && store.step >= 2 && store.step <= 5) {
+    e.preventDefault()
+  }
+}
+onMounted(() => window.addEventListener('beforeunload', onBeforeUnload))
+onScopeDispose(() => window.removeEventListener('beforeunload', onBeforeUnload))
 
 // ==================== 步骤 2：版本号 ====================
 function gotoStep2() {
@@ -123,6 +163,17 @@ const dryRunLines = computed(() => {
     lines.push({ repo: r.name, text: `git tag ${plan.milestoneTag}` })
     const tag = plan.tags.find(t => t.repoId === r.repoId)
     lines.push({ repo: r.name, text: `git tag ${tag?.tag ?? ''}` })
+    const repo = project.value?.repos.find(x => x.id === r.repoId)
+    if (store.backupSource) {
+      lines.push({ repo: r.name, text: `[备份] git bundle（全部历史与标签）+ git archive 快照（遵循 .gitignore）` })
+    }
+    if (store.backupArtifacts) {
+      if (repo?.artifactDir) {
+        lines.push({ repo: r.name, text: `[备份] 产物归档 ${repo.artifactDir}/ → artifact.tar.gz + 哈希清单` })
+      } else {
+        lines.push({ repo: r.name, text: `[备份] 产物备份跳过（未配置产物目录）`, dimmed: true })
+      }
+    }
     lines.push({ repo: r.name, text: `写入 version.json / version-history.json` })
     lines.push({ repo: r.name, text: `更新检测基准 → ${r.to?.slice(0, 7) ?? ''}` })
   }
@@ -204,35 +255,61 @@ const resultReleaseId = computed(() => store.result?.releaseId ?? '')
           </div>
           <template v-else>
             <div class="space-y-3">
-              <div
-                v-for="repo in project.repos"
-                :key="repo.id"
-                class="flex items-center gap-3 px-4 py-3 rounded-md border transition-all duration-150"
-                :class="statuses.get(repo.id)?.changed
-                  ? 'border-brand-200 bg-brand-50 hover:border-brand-300 cursor-pointer'
-                  : 'border-border bg-surface-alt opacity-70'"
-                @click="statuses.get(repo.id)?.changed && toggleRepo(repo.id)"
-              >
-                <NCheckbox
-                  :checked="store.selectedRepoIds.includes(repo.id)"
-                  :disabled="!statuses.get(repo.id)?.changed"
-                  @click.stop
-                  @update:checked="() => toggleRepo(repo.id)"
-                />
-                <i class="i-carbon-git-branch text-text-3" />
-                <div class="min-w-0 flex-1">
-                  <div class="flex items-center gap-2 flex-wrap">
-                    <span class="font-medium text-text-1 text-sm">{{ repo.displayName || repo.name }}</span>
-                    <span class="code-text text-xs text-text-3">{{ repo.name }}</span>
-                    <StatusBadge v-if="statuses.get(repo.id)?.changed" type="changed" :count="statuses.get(repo.id)!.commits.length" />
-                    <StatusBadge v-if="statuses.get(repo.id) && statuses.get(repo.id)!.dirty > 0" type="dirty" :count="statuses.get(repo.id)!.dirty" />
+              <div v-for="repo in project.repos" :key="repo.id" class="rounded-md border transition-[border-color,background-color] duration-150"
+                :class="statuses.get(repo.id)?.changed ? 'border-brand-200 bg-brand-50 hover:border-brand-300' : 'border-border bg-surface-alt opacity-70'">
+                <div class="flex items-center gap-3 px-4 py-3 cursor-pointer" @click="statuses.get(repo.id)?.changed && toggleRepo(repo.id)">
+                  <NCheckbox
+                    :checked="store.selectedRepoIds.includes(repo.id)"
+                    :disabled="!statuses.get(repo.id)?.changed"
+                    @click.stop
+                    @update:checked="() => toggleRepo(repo.id)"
+                  />
+                  <i aria-hidden="true" class="i-carbon-git-branch text-text-3" />
+                  <div class="min-w-0 flex-1">
+                    <div class="flex items-center gap-2 flex-wrap">
+                      <span class="font-medium text-text-1 text-sm">{{ repo.displayName || repo.name }}</span>
+                      <span class="code-text text-xs text-text-3" translate="no">{{ repo.name }}</span>
+                      <StatusBadge v-if="statuses.get(repo.id)?.changed" type="changed" :count="statuses.get(repo.id)!.commits.length" />
+                      <StatusBadge v-if="statuses.get(repo.id) && statuses.get(repo.id)!.dirty > 0" type="dirty" :count="statuses.get(repo.id)!.dirty" />
+                    </div>
+                    <div class="text-xs text-text-3 mt-0.5">
+                      {{ statuses.get(repo.id)?.head.slice(0, 7) }} · {{ statuses.get(repo.id)?.branch }}
+                    </div>
                   </div>
-                  <div class="text-xs text-text-3 mt-0.5">
-                    {{ statuses.get(repo.id)?.head.slice(0, 7) }} · {{ statuses.get(repo.id)?.branch }}
+                  <div class="text-xs" :class="statuses.get(repo.id)?.changed ? 'text-brand-600' : 'text-text-3'">
+                    {{ statuses.get(repo.id)?.changed ? '有变动' : '已同步' }}
                   </div>
                 </div>
-                <div class="text-xs" :class="statuses.get(repo.id)?.changed ? 'text-brand-600' : 'text-text-3'">
-                  {{ statuses.get(repo.id)?.changed ? '有变动' : '已同步' }}
+                <!-- 提交级条目确认（变化收件箱语义：人工甄别哪些提交进版本） -->
+                <div v-if="statuses.get(repo.id)?.changed" class="px-4 pb-3 -mt-1">
+                  <button
+                    class="text-xs flex items-center gap-1.5 transition-colors duration-150 focus-ring"
+                    :class="excludedCount(repo.id) > 0 ? 'text-warning hover:text-text-1' : 'text-text-3 hover:text-brand-500'"
+                    @click.stop="toggleCommitsPanel(repo.id)"
+                  >
+                    <i aria-hidden="true" class="i-carbon-chevron-down transition-transform duration-150" :class="{ 'rotate-180': commitsExpanded.has(repo.id) }" />
+                    {{ commitsExpanded.has(repo.id) ? '收起提交明细' : '提交明细' }}
+                    <span v-if="excludedCount(repo.id) > 0" class="chip text-warning border-warning/30 bg-warning-soft">已排除 {{ excludedCount(repo.id) }} 条</span>
+                  </button>
+                  <div v-if="commitsExpanded.has(repo.id)" class="mt-2 max-h-64 overflow-y-auto rounded-md border border-border bg-surface divide-y divide-border">
+                    <label
+                      v-for="c in statuses.get(repo.id)?.commits ?? []"
+                      :key="c.fullHash"
+                      class="flex items-center gap-2.5 px-3 py-2 cursor-pointer hover:bg-surface-hover transition-colors duration-100"
+                    >
+                      <NCheckbox
+                        size="small"
+                        :checked="commitIncluded(repo.id, c.fullHash)"
+                        @update:checked="v => store.toggleCommit(repo.id, c.fullHash, v)"
+                      />
+                      <span class="chip shrink-0 text-11px">{{ c.type }}</span>
+                      <span class="flex-1 truncate text-sm" :class="{ 'opacity-50 line-through decoration-text-3': !commitIncluded(repo.id, c.fullHash) }">{{ c.subject }}</span>
+                      <span class="code-text text-xs text-text-3 shrink-0" translate="no">{{ c.hash.slice(0, 7) }}</span>
+                    </label>
+                    <div v-if="(statuses.get(repo.id)?.commits ?? []).length === 0" class="px-3 py-4 text-center text-xs text-text-3">
+                      无提交
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -261,7 +338,7 @@ const resultReleaseId = computed(() => store.result?.releaseId ?? '')
                 <div class="stat-label mb-1">项目版本</div>
                 <div class="flex items-center gap-3">
                   <span class="code-text text-text-3 line-through">{{ project.version }}</span>
-                  <i class="i-carbon-arrow-right text-text-3" />
+                  <i aria-hidden="true" class="i-carbon-arrow-right text-text-3" />
                   <span class="stat-value text-brand-500">{{ store.plan.projectVersion }}</span>
                   <StatusBadge type="bump" :bump="store.plan.bump" />
                   <span v-if="store.plan.suggestedBump !== store.plan.bump" class="chip text-text-3">
@@ -279,7 +356,7 @@ const resultReleaseId = computed(() => store.result?.releaseId ?? '')
               <div class="section-title text-base mb-3">参与发布的仓库（{{ store.plan.changed.length }}）</div>
               <div class="card border divide-y divide-border overflow-hidden">
                 <div v-for="r in store.plan.changed" :key="r.repoId" class="px-4 py-3 flex items-center gap-3 flex-wrap">
-                  <i class="i-carbon-git-branch text-brand-500" />
+                  <i aria-hidden="true" class="i-carbon-git-branch text-brand-500" />
                   <span class="font-medium text-text-1 text-sm min-w-30">{{ r.name }}</span>
                   <span class="code-text text-xs text-text-3">{{ r.from?.slice(0, 7) ?? '首次' }} → {{ r.to?.slice(0, 7) }}</span>
                   <span class="code-text text-sm text-brand-600">{{ r.version }}</span>
@@ -293,7 +370,7 @@ const resultReleaseId = computed(() => store.result?.releaseId ?? '')
                 <NCollapseItem :title="`仅同步基版 version.json（${store.plan.syncedOnly.length} 个未变动仓库）`" name="sync">
                   <div class="text-sm text-text-2 space-y-1">
                     <div v-for="s in store.plan.syncedOnly" :key="s.repoId" class="flex items-center gap-2">
-                      <i class="i-carbon-renew text-text-3" />
+                      <i aria-hidden="true" class="i-carbon-renew text-text-3" />
                       <span>{{ s.name }}</span>
                       <span class="code-text text-xs text-text-3">→ {{ store.plan.projectVersion }}（无标签无记录）</span>
                     </div>
@@ -340,7 +417,7 @@ const resultReleaseId = computed(() => store.result?.releaseId ?? '')
 
         <!-- 步骤 4 -->
         <div v-show="store.step === 4">
-          <div class="flex items-center gap-6 mb-4">
+          <div class="flex items-center gap-6 mb-4 flex-wrap">
             <div class="flex items-center gap-2">
               <NSwitch v-model:value="store.offline" />
               <span class="text-sm text-text-2">离线发布（跳过远程推送）</span>
@@ -348,6 +425,14 @@ const resultReleaseId = computed(() => store.result?.releaseId ?? '')
             <div class="flex items-center gap-2">
               <NSwitch v-model:value="store.skipBuild" />
               <span class="text-sm text-text-2">跳过构建命令</span>
+            </div>
+            <div class="flex items-center gap-2">
+              <NSwitch v-model:value="store.backupSource" />
+              <span class="text-sm text-text-2">源码备份</span>
+            </div>
+            <div class="flex items-center gap-2">
+              <NSwitch v-model:value="store.backupArtifacts" />
+              <span class="text-sm text-text-2">产物备份</span>
             </div>
           </div>
           <div class="console-wrap space-y-1">
@@ -386,7 +471,7 @@ const resultReleaseId = computed(() => store.result?.releaseId ?? '')
         <div v-show="store.step === 6">
           <template v-if="store.result">
             <div class="text-center py-8">
-              <i class="i-carbon-checkmark-filled text-48px text-success" />
+              <i aria-hidden="true" class="i-carbon-checkmark-filled text-48px text-success" />
               <div class="mt-3 stat-value text-2xl">{{ store.result.version }}</div>
               <div class="text-sm text-text-2 mt-1">统一发布完成</div>
               <div v-if="store.result.failedRepos.length" class="mt-4">
@@ -402,6 +487,13 @@ const resultReleaseId = computed(() => store.result?.releaseId ?? '')
           </template>
           <div class="flex justify-center gap-3 mt-6">
             <NButton @click="router.push(`/project/${projectId}`)">返回项目</NButton>
+            <NButton
+              v-if="resultReleaseId && (store.backupSource || store.backupArtifacts)"
+              @click="router.push(`/project/${projectId}/backups`)"
+            >
+              <template #icon><i class="i-carbon-document-protected" /></template>
+              查看本次备份
+            </NButton>
             <VersionExportDropdown
               v-if="resultReleaseId"
               :project-id="projectId"
@@ -416,33 +508,33 @@ const resultReleaseId = computed(() => store.result?.releaseId ?? '')
       <!-- 底部步骤操作栏 -->
       <div class="flex items-center justify-between mt-6">
         <NButton :disabled="store.step <= 1 || store.phase === 'running'" @click="store.step -= 1">
-          <template #icon><i class="i-carbon-arrow-left" /></template>
+          <template #icon><i aria-hidden="true" class="i-carbon-arrow-left" /></template>
           上一步
         </NButton>
         <div class="flex items-center gap-2.5">
           <template v-if="store.step === 1">
             <NButton type="primary" :disabled="store.selectedRepoIds.length === 0" @click="gotoStep2">
               下一步
-              <template #icon><i class="i-carbon-arrow-right" /></template>
+              <template #icon><i aria-hidden="true" class="i-carbon-arrow-right" /></template>
             </NButton>
           </template>
           <template v-else-if="store.step === 2">
             <NButton type="primary" :disabled="store.planning || !store.plan" @click="store.step = 3">
               下一步
-              <template #icon><i class="i-carbon-arrow-right" /></template>
+              <template #icon><i aria-hidden="true" class="i-carbon-arrow-right" /></template>
             </NButton>
           </template>
           <template v-else-if="store.step === 3">
             <NButton type="primary" @click="store.step = 4">
               下一步
-              <template #icon><i class="i-carbon-arrow-right" /></template>
+              <template #icon><i aria-hidden="true" class="i-carbon-arrow-right" /></template>
             </NButton>
           </template>
           <template v-else-if="store.step === 4">
             <NTooltip :disabled="store.canExecute" trigger="hover">
               <template #trigger>
                 <NButton type="primary" :disabled="!store.canExecute" :loading="store.phase === 'running'" @click="execute">
-                  <template #icon><i class="i-carbon-rocket" /></template>
+                  <template #icon><i aria-hidden="true" class="i-carbon-rocket" /></template>
                   执行发布
                 </NButton>
               </template>
@@ -451,7 +543,7 @@ const resultReleaseId = computed(() => store.result?.releaseId ?? '')
           </template>
           <template v-else-if="store.step === 5">
             <NButton :disabled="store.phase === 'running'" @click="store.step = 4">
-              <template #icon><i class="i-carbon-arrow-left" /></template>
+              <template #icon><i aria-hidden="true" class="i-carbon-arrow-left" /></template>
               返回预览
             </NButton>
           </template>

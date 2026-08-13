@@ -22,6 +22,8 @@ export const usePublishStore = defineStore('publish', {
     step: 1,
     projectId: '',
     selectedRepoIds: [] as string[],
+    /** 提交级排除：repoId → fullHash[]（向导第 1 步人工甄别） */
+    excludedCommits: {} as Record<string, string[]>,
     plan: null as PublishPlan | null,
     planning: false,
     bumpOverride: 'auto' as 'auto' | BumpType,
@@ -31,6 +33,9 @@ export const usePublishStore = defineStore('publish', {
     },
     offline: false,
     skipBuild: false,
+    /** 本次发布是否备份源码/产物（R19；默认开启） */
+    backupSource: true,
+    backupArtifacts: true,
     taskId: null as string | null,
     phase: 'idle' as WizardPhase,
     events: [] as PublishEventLike[],
@@ -54,6 +59,7 @@ export const usePublishStore = defineStore('publish', {
         step: 1,
         projectId,
         selectedRepoIds: [],
+        excludedCommits: {},
         plan: null,
         planning: false,
         bumpOverride: 'auto',
@@ -63,6 +69,8 @@ export const usePublishStore = defineStore('publish', {
         },
         offline: false,
         skipBuild: false,
+        backupSource: true,
+        backupArtifacts: true,
         taskId: null,
         phase: 'idle',
         events: [],
@@ -77,6 +85,15 @@ export const usePublishStore = defineStore('publish', {
       this.planDirty = true
     },
 
+    /** 切换某仓库某提交的参与状态（true=参与，false=排除） */
+    toggleCommit(repoId: string, fullHash: string, included: boolean) {
+      const current = new Set(this.excludedCommits[repoId] ?? [])
+      if (included) current.delete(fullHash)
+      else current.add(fullHash)
+      this.excludedCommits = { ...this.excludedCommits, [repoId]: [...current] }
+      this.planDirty = true
+    },
+
     async loadPlan(): Promise<void> {
       if (!this.projectId || this.selectedRepoIds.length === 0) return
       this.planning = true
@@ -85,6 +102,7 @@ export const usePublishStore = defineStore('publish', {
           projectId: this.projectId,
           bump: this.bumpOverride,
           repoIds: this.selectedRepoIds,
+          excludeCommits: this.excludedCommits,
           dryRun: true,
         }
         const plan = (await api.publish(req)) as PublishPlan
@@ -132,6 +150,7 @@ export const usePublishStore = defineStore('publish', {
         projectId: this.projectId,
         bump: this.plan.bump,
         repoIds: this.selectedRepoIds,
+        excludeCommits: this.excludedCommits,
         offline: this.offline,
         skipBuild: this.skipBuild,
         externalContent: this.logs.external.state === 'auto' ? undefined : this.logs.external.content,

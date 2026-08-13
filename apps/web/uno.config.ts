@@ -50,7 +50,7 @@ export default defineConfig({
     ['section-title', 'text-lg font-semibold text-text-1 flex items-center gap-2'],
     ['card', 'bg-surface border border-border rounded-md shadow-sm'],
     ['card-pad', 'p-5'],
-    ['card-hover', 'transition-all duration-150 ease-in-out hover:shadow-md hover:border-brand-300 cursor-pointer'],
+    ['card-hover', 'transition-[box-shadow,border-color] duration-150 ease-in-out hover:shadow-md hover:border-brand-300 cursor-pointer'],
     ['btn-primary', 'inline-flex items-center gap-2 h-9 px-4 rounded-md bg-brand-500 text-white text-sm font-medium transition-colors duration-150 hover:bg-brand-400 active:bg-brand-600 disabled:opacity-50 disabled:cursor-not-allowed'],
     ['btn-ghost', 'inline-flex items-center gap-2 h-9 px-4 rounded-md text-text-2 text-sm font-medium transition-colors duration-150 hover:bg-surface-hover hover:text-text-1'],
     ['btn-danger', 'inline-flex items-center gap-2 h-9 px-4 rounded-md text-error text-sm font-medium border border-border transition-colors duration-150 hover:border-error hover:bg-error-soft'],

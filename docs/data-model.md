@@ -184,6 +184,13 @@ AppConfig ─── 1:N ─── ProjectDef ─── 1:N ─── RepoDef
 │       │       ├── internal.md     对内日志 Markdown（人读副本）
 │       │       └── external.md     对外日志 Markdown（人读副本）
 │       └── ...
+├── backups/                         备份大文件（R19/M6，不进 git；目录可用 AppConfig.backup.dir 覆盖）
+│   └── {projectId}/{repoId}/{versionSafeName}/
+│       ├── source.bundle            git bundle（全部历史与标签，可 clone 恢复）
+│       ├── source.tar.gz            git archive 源码快照（仅已跟踪文件，遵循 .gitignore）
+│       ├── source.sha256            两者 sha256（一行一文件）
+│       ├── artifact.tar.gz          产物归档（RepoDef.artifactDir，可缺省）
+│       └── artifact-manifest.json   产物哈希清单（见 §12）
 ├── repos/
 │   └── {projectId}/
 │       └── {repoId}/               URL 克隆的仓库工作树
@@ -199,12 +206,14 @@ AppConfig ─── 1:N ─── ProjectDef ─── 1:N ─── RepoDef
 | `app.json` | 应用配置 | `AppConfig` JSON（UTF-8，2 空格缩进） | 首启生成默认；`PUT /api/config`；项目/仓库 CRUD；发布完成后更新 `lastPublishCommit` | 原子写（tmp + rename） |
 | `credentials.json` | 会话 token、可选 git 远程凭据 | `{ token: string, remoteCredentials?: {...} }`（core 私有 schema） | 首启生成 token；`POST /api/auth/rotate` 轮换 | 原子写；POSIX 0600 / Windows ACL 收紧 |
 | `data/`（整个目录） | 发布记录仓库 | git 仓库 | 首启 `git init` + 首次 commit；每次发布一条 commit；`POST /api/system/sync` 触发 pull/push | git 命令 |
+| `data/backups/{releaseId}-{repoId}.json` | 备份元数据（审计） | `RepoBackupRef`（路径/哈希/大小/commit/tag/时间） | 发布备份完成后 | 原子写，随发布记录一并 commit |
+| `backups/…` | 备份大文件 | bundle / tar.gz / manifest | 发布流程 tag 后（源码）与 build 后（产物） | 流式写入 + rename；失败清理半成品 |
 | `repos/{projectId}/{repoId}/` | 克隆仓库 | git clone 工作树 | `POST /api/projects/:id/repos`（URL 接入）成功后 | `git clone`（`shallow` 按请求） |
 | `journal/{taskId}.json` | 发布断点 | 见 architecture §6.1 | 每个 step 完成后 | 原子写 |
 | `logs/` | 运行日志 | 文本 | server 运行期间 | 追加 |
 | `tmp/` | 原子写中转 | 任意 | 每次原子写前 | 临时文件 + rename |
 
-删除规则：删除项目/仓库时**不删除** `data/releases/` 下已有记录（审计不可变），仅从 `app.json` 移除定义；克隆仓库随仓库移除可删除 `repos/{projectId}/{repoId}/` 目录。
+删除规则：删除项目/仓库时**不删除** `data/releases/` 下已有记录（审计不可变），仅从 `app.json` 移除定义；克隆仓库随仓库移除可删除 `repos/{projectId}/{repoId}/` 目录。备份文件可经 API 手动删除（元数据同步删除，`data/backups/` 随下次发布 commit 落账）；不随项目/仓库删除自动清理（审计优先，自动清理策略留待 M7 评估）。
 
 ---
 
@@ -461,14 +470,82 @@ auto ──(用户编辑 content)──► edited ──(用户点击「确认�
 |---|---|---|---|
 | X1 | 仓库级日志人工编辑确认（R14 全量覆盖） | `PublishRequest` 增加可选 `repoLogs?: { repoId: string; internalContent: string; externalContent: string }[]` | 新可选字段，旧客户端不传即现有行为；**待共享类型正式定稿后再加，此前仓库级记录恒 `state='auto'`** |
 | X2 | 纯时间戳项目级方案 | `ProjectDef.bump`/版本语义扩展为三态方案枚举 | 需新增联合类型，不提前落地 |
-| X3 | 发布附件/制品归档 | `ReleaseRecord` 增加可选 `artifacts?: …` | 可选字段，不影响旧记录读取 |
+| X3 | 发布附件/制品归档 | **已落地（R19/M6）**：见 §12 备份与一致性对比，`ReleaseRecord.backups?` + `backups/` 目录 + `data/backups/` 元数据 | 可选字段，不影响旧记录读取 |
 | X4 | AI 润色草稿缓存 | 数据仓库增加 `drafts/` 目录（非 releases） | 纯存储扩展，不触碰类型 |
 | X5 | Tauri 桌面壳 | 独立应用包 | 无类型影响 |
 | X6 | 多会话 token / 权限分级 | `credentials.json` 结构扩展 | core 私有 schema，无共享类型影响 |
 
 ---
 
-## 12. 完整示例
+## 12. 备份与一致性对比（R19/M6）
+
+### 12.1 备份类型
+
+| 类型 | 产物 | 内容 | .gitignore 语义 |
+|---|---|---|---|
+| `source`（bundle） | `source.bundle` | `git bundle create` 全部 refs 与历史（含本次 tag） | git 原生（全部已提交对象） |
+| `source`（快照） | `source.tar.gz` | `git archive` 某 tag 的工作树快照（无 `.git`） | **仅已跟踪文件，天然遵循 .gitignore** |
+| `artifact` | `artifact.tar.gz` + `artifact-manifest.json` | 用户按仓库配置的产物目录（`RepoDef.artifactDir`，相对仓库根）整体归档；目录本身即使被 gitignore 也**不排除**（否则 dist 类目录会整体丢失） | 目录内 `.git` 排除；不套用业务 .gitignore |
+
+### 12.2 元数据 schema（`data/backups/{releaseId}-{repoId}.json`，进 git 审计）
+
+```ts
+// types.ts 扩展字段（// 扩展：R19）
+export interface RepoBackupRef {
+  releaseId: string
+  repoId: string
+  repoName: string
+  version: string
+  commit: string          // 备份时的 HEAD（full hash）
+  tag?: string            // 本次 build tag
+  date: string
+  items: {
+    kind: 'source-bundle' | 'source-archive' | 'artifact'
+    file: string          // 相对 backups/{projectId}/{repoId}/{versionSafe}/ 的文件名
+    sha256: string
+    size: number
+    files?: number        // 归档内文件数（产物才有）
+  }[]
+}
+```
+
+`ReleaseRecord.backups?: RepoBackupRef[]`（项目级记录聚合各仓库；仓库级记录单项）。
+
+### 12.3 产物哈希清单（`artifact-manifest.json`）
+
+```json
+{
+  "schemaVersion": 1,
+  "createdAt": "2026-08-13T15:30:00+08:00",
+  "root": "dist",
+  "files": [
+    { "path": "index.html", "sha256": "…64hex…", "size": 1234 },
+    { "path": "assets/app-1a2b3c.js", "sha256": "…", "size": 5678 }
+  ],
+  "totals": { "files": 2, "bytes": 6912 }
+}
+```
+
+- `path` 一律正斜杠相对路径；sha256 流式计算（大文件不整读入内存）。
+- manifest 双用途：①两次发布产物对比（见 §12.4）；②归档完整性校验（重算哈希 vs 清单）。
+
+### 12.4 一致性对比三层次
+
+| 层次 | 输入 | 实现 | 输出 |
+|---|---|---|---|
+| 源码级 | 同仓库两个 commit/tag | `git diff --name-status --numstat from..to` | `FileCompareItem[]`（path/status/insertions/deletions）+ stats |
+| 产物级 | 两份 `artifact-manifest.json`（两次发布） | 按 path 合并，比较 sha256/size | `path/status('added'\|'removed'\|'modified'\|'same')/left/right` |
+| 校验级 | manifest + 实际归档文件 | 逐文件重算 sha256 比对 | 校验通过/缺失/不一致清单 |
+
+`CompareResult`：`{ kind: 'source'|'artifact', left, right, files: FileCompareItem[], totals: {added, removed, modified, same} }`，前端渲染差异视图并支持导出校验报告（markdown）。
+
+### 12.5 备份失败策略
+
+`AppConfig.backup.onFailure: 'warn' | 'fail'`（默认 `warn`）：warn → 发布继续，写入 `PublishPlan.warnings`/SSE log；fail → 该仓库发布中止（已有产物清理半成品），记入 `failedRepos`。备份本身幂等（同名文件存在且哈希一致 → 跳过），中断续跑安全。
+
+---
+
+## 13. 完整示例
 
 ### 12.1 `app.json` 示例
 
@@ -601,7 +678,7 @@ auto ──(用户编辑 content)──► edited ──(用户点击「确认�
 
 ---
 
-## 13. 与需求文档的对应关系
+## 14. 与需求文档的对应关系
 
 | 需求编号 | 需求 | 本文章节 |
 |---|---|---|

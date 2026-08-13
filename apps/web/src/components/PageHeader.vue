@@ -19,10 +19,10 @@ const router = useRouter()
       <button
         v-if="backTo"
         class="shrink-0 w-9 h-9 flex items-center justify-center rounded-md border border-border text-text-2 hover:bg-surface-hover hover:text-text-1 transition-colors duration-150 focus-ring"
-        title="返回"
+        aria-label="返回上一页"
         @click="router.push(backTo)"
       >
-        <i class="i-carbon-arrow-left" />
+        <i aria-hidden="true" class="i-carbon-arrow-left" />
       </button>
       <div class="min-w-0">
         <h1 class="flex items-center gap-2.5 text-22px font-semibold text-text-1 m-0 leading-7">

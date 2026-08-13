@@ -4,11 +4,13 @@
 import type { ReleaseRecord, RepoStatus } from '@bxverse/shared'
 import { useProjectsStore } from '../stores/projects'
 import { api } from '../api'
+import { formatDate } from '../utils/format'
 import PageHeader from '../components/PageHeader.vue'
 import StatusBadge from '../components/StatusBadge.vue'
 import MarkdownView from '../components/MarkdownView.vue'
 import FileTree from '../components/FileTree.vue'
 import FileViewer from '../components/FileViewer.vue'
+import DirPicker from '../components/DirPicker.vue'
 import { useDialog, useMessage } from 'naive-ui'
 
 const route = useRoute()
@@ -21,11 +23,30 @@ const pid = computed(() => String(route.params.pid))
 const rid = computed(() => String(route.params.rid))
 const { repo } = computed(() => projectsStore.repoById(pid.value, rid.value)).value
 
-const tab = ref<'files' | 'logs' | 'settings'>('files')
+const VALID_TABS = ['files', 'logs', 'settings'] as const
+const tab = ref<'files' | 'logs' | 'settings'>(
+  VALID_TABS.includes(route.query.tab as (typeof VALID_TABS)[number]) ? (route.query.tab as 'files' | 'logs' | 'settings') : 'files',
+)
+
+// Tab 状态同步 URL（刷新/分享保持状态）
+watch(tab, (t) => {
+  if (String(route.query.tab ?? '') !== t) {
+    void router.replace({ query: { ...route.query, tab: t } })
+  }
+})
+watch(
+  () => route.query.tab,
+  (v) => {
+    if (v && VALID_TABS.includes(v as (typeof VALID_TABS)[number]) && v !== tab.value) {
+      tab.value = v as 'files' | 'logs' | 'settings'
+    }
+  },
+)
 const status = ref<RepoStatus | null>(null)
 const statusLoading = ref(true)
 const releases = ref<ReleaseRecord[]>([])
 const releasesLoading = ref(false)
+const dirPickerOpen = ref(false)
 
 const selectedFile = ref('')
 const logTrack = ref<'external' | 'internal'>('external')
@@ -58,6 +79,7 @@ const settingsForm = reactive({
   buildCommand: '',
   outputDir: 'public',
   writeVersionFile: true,
+  artifactDir: '',
 })
 const saving = ref(false)
 
@@ -68,6 +90,7 @@ function openSettings() {
   settingsForm.buildCommand = repo.buildCommand ?? ''
   settingsForm.outputDir = repo.outputDir ?? 'public'
   settingsForm.writeVersionFile = repo.writeVersionFile ?? true
+  settingsForm.artifactDir = repo.artifactDir ?? ''
 }
 
 async function saveSettings() {
@@ -80,6 +103,7 @@ async function saveSettings() {
       buildCommand: settingsForm.buildCommand || undefined,
       outputDir: settingsForm.outputDir,
       writeVersionFile: settingsForm.writeVersionFile,
+      artifactDir: settingsForm.artifactDir.trim() || undefined,
     })
     message.success('设置已保存')
   } catch (e) {
@@ -137,7 +161,7 @@ watch(tab, (t) => {
       >
         <template #badges>
           <span v-if="status" class="chip">
-            <i class="i-carbon-git-branch" /> {{ status.branch }}
+            <i aria-hidden="true" class="i-carbon-git-branch" /> {{ status.branch }}
           </span>
           <StatusBadge v-if="status?.changed" type="changed" :count="status.commits.length" />
           <StatusBadge v-if="status && status.dirty > 0" type="dirty" :count="status.dirty" />
@@ -145,7 +169,7 @@ watch(tab, (t) => {
         </template>
         <span v-if="repo.remote" class="chip code-text max-w-60 truncate" :title="repo.remote">
           {{ repo.remote }}
-          <i class="i-carbon-copy cursor-pointer hover:text-brand-500" @click="copyRemote" />
+          <i aria-hidden="true" class="i-carbon-copy cursor-pointer hover:text-brand-500" @click="copyRemote" />
         </span>
       </PageHeader>
 
@@ -177,8 +201,8 @@ watch(tab, (t) => {
                     :class="selectedRelease?.id === r.id ? 'bg-brand-soft border-brand-500' : 'border-transparent hover:bg-surface-hover'"
                     @click="selectedRelease = r"
                   >
-                    <div class="code-text text-sm text-text-1">{{ r.version }}</div>
-                    <div class="text-xs text-text-3 mt-0.5">{{ r.date.slice(0, 10) }} · {{ r.stats.commits }} 提交</div>
+                    <div class="code-text text-sm text-text-1" translate="no">{{ r.version }}</div>
+                    <div class="text-xs text-text-3 mt-0.5">{{ formatDate(r.date) }} · {{ r.stats.commits }} 提交</div>
                   </div>
                 </div>
               </div>
@@ -218,6 +242,19 @@ watch(tab, (t) => {
                 <NFormItem label="产物目录">
                   <NInput v-model:value="settingsForm.outputDir" placeholder="public" />
                 </NFormItem>
+                <NFormItem label="备份产物目录">
+                  <div class="flex items-center gap-2 w-full">
+                    <NInput
+                      v-model:value="settingsForm.artifactDir"
+                      placeholder="如：dist（发布时归档备份，可留空）"
+                    />
+                    <NButton secondary size="small" @click="dirPickerOpen = true">
+                      <template #icon><i aria-hidden="true" class="i-carbon-folder-open" /></template>
+                      选择
+                    </NButton>
+                  </div>
+                  <span class="text-xs text-text-3">发布时自动归档该目录（tar.gz + 哈希清单），未配置则跳过产物备份</span>
+                </NFormItem>
                 <NFormItem label="写入版本文件">
                   <NSwitch v-model:value="settingsForm.writeVersionFile" />
                   <span class="ml-2 text-xs text-text-3">关闭后不写 version.json / version-history.json（零侵入）</span>
@@ -226,7 +263,7 @@ watch(tab, (t) => {
               <div class="flex items-center justify-between">
                 <NButton type="primary" :loading="saving" @click="saveSettings">保存设置</NButton>
                 <NButton quaternary type="error" @click="confirmRemove">
-                  <template #icon><i class="i-carbon-trash-can" /></template>
+                  <template #icon><i aria-hidden="true" class="i-carbon-trash-can" /></template>
                   移除仓库
                 </NButton>
               </div>
@@ -235,6 +272,7 @@ watch(tab, (t) => {
         </NTabs>
       </div>
     </template>
+
     <div v-else-if="projectsStore.loading" class="p-10 text-center text-text-3">
       <NSpin size="small" />
     </div>
@@ -243,5 +281,28 @@ watch(tab, (t) => {
         <NButton @click="router.push(`/project/${pid}`)">返回项目</NButton>
       </template>
     </NResult>
+
+    <!-- 产物目录树选择器（R19：仓库设置） -->
+    <NModal
+      v-model:show="dirPickerOpen"
+      preset="card"
+      title="选择备份产物目录"
+      class="max-w-md"
+      :bordered="false"
+    >
+      <DirPicker
+        v-if="repo && dirPickerOpen"
+        :pid="pid"
+        :rid="rid"
+        :model-value="settingsForm.artifactDir"
+        @update:model-value="v => settingsForm.artifactDir = v"
+      />
+      <template #footer>
+        <div class="flex justify-end gap-2">
+          <NButton size="small" @click="dirPickerOpen = false">取消</NButton>
+          <NButton size="small" type="primary" @click="dirPickerOpen = false">确定</NButton>
+        </div>
+      </template>
+    </NModal>
   </div>
 </template>

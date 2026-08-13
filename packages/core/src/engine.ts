@@ -12,9 +12,11 @@ import type {
   PublishPlan,
   PublishRequest,
   ReleaseRecord,
+  RepoBackupRef,
   RepoDef,
   RepoStatus,
 } from '@bxverse/shared'
+import * as backup from './backup'
 import * as changelog from './changelog'
 import * as git from './git'
 import { JournalStore } from './journal'
@@ -119,7 +121,28 @@ export async function planPublish(req: PublishRequest): Promise<PublishPlan> {
     statuses[repo.id] = await collectChanges(repo)
   }
 
-  const changedRepos = project.repos.filter(r => candidateIds.includes(r.id) && statuses[r.id]?.changed)
+  let changedRepos = project.repos.filter(r => candidateIds.includes(r.id) && statuses[r.id]?.changed)
+
+  // 提交级排除（向导人工甄别「哪些 commit 值得进版本」）：
+  // 排除后该仓库若无剩余提交且无 dirty → 降级为 syncedOnly
+  if (req.excludeCommits) {
+    for (const [repoId, hashes] of Object.entries(req.excludeCommits)) {
+      const st = statuses[repoId]
+      if (!st || hashes.length === 0) continue
+      const excluded = new Set(hashes)
+      const before = st.commits.length
+      st.commits = st.commits.filter(c => !excluded.has(c.fullHash))
+      if (st.commits.length < before) {
+        warnings.push(`${st.name} 排除 ${before - st.commits.length} 个提交，参与本次发布 ${st.commits.length} 个`)
+      }
+      if (st.commits.length === 0 && st.dirty === 0) {
+        st.changed = false
+      }
+    }
+    // 排除后重算变动集合
+    changedRepos = project.repos.filter(r => candidateIds.includes(r.id) && statuses[r.id]?.changed)
+  }
+
   const allCommits = changedRepos.flatMap(r => statuses[r.id].commits)
   changelog.classifyCommits(allCommits)
 
@@ -316,7 +339,7 @@ export interface ExecuteResult {
 
 /**
  * 发布执行状态机（串行、失败隔离、journal 续跑）：
- * preflight → [per-repo: build → tags → version-file → push → record] → sync-unchanged
+ * preflight → [per-repo: build → tags → backup(R19) → version-file → push → record] → sync-unchanged
  * → project-record → data-commit（里程碑 tag + commit + push）→ done
  */
 export async function executePublish(
@@ -332,6 +355,10 @@ export async function executePublish(
   if (!project) throw new Error(`项目不存在: ${req.projectId}`)
   const store = new DataStore({ dataDir: cfg.dataDir })
   const journalStore = new JournalStore()
+
+  // ---- 备份配置（R19：默认开启，warn 降级；dir 可配） ----
+  const backupCfg = { enabled: true, source: 'both' as const, onFailure: 'warn' as const, ...(cfg.backup ?? {}) }
+  const backupRoot = backupCfg.dir?.trim() || path.join(store.homeDir, 'backups')
 
   // ---- 续跑检测：同项目存在活跃 journal → 复用其 taskId 与锁存计划 ----
   const existing = journalStore.findActive(project.id)
@@ -397,10 +424,12 @@ export async function executePublish(
 
   // ---- 2. 逐 changed 仓库（串行，try/catch 隔离） ----
   const repoRecords: ReleaseRecord[] = []
+  const backupRefs: RepoBackupRef[] = []
   for (const planned of plan.changed) {
     if (resume && stepOf(planned.repoId, 'record')?.state === 'done') continue
     if (failedRepos.includes(planned.repoId)) continue
     const repo = repoDefOf(planned.repoId)
+    const repoReleaseId = store.nextReleaseId('repo', repo.id, planned.version)
     emit('repo-start', `${planned.name} 开始发布 → ${planned.version}`, { repoId: planned.repoId })
     try {
       // 2.1 构建（失败 → repo-error，未打标签无污染）
@@ -426,13 +455,48 @@ export async function executePublish(
       await git.createTag(repo.path, buildTag, { message: `Build ${planned.version}` })
       setStep(planned.repoId, 'tag-build', 'done', buildTag)
 
-      // 2.3 版本文件（幂等）
+      // 2.3 备份（R19：源码 bundle/快照 + 产物归档；失败策略 AppConfig.backup.onFailure）
+      let repoBackup: RepoBackupRef | null = null
+      const wantSource = backupCfg.enabled && req.backupSource !== false
+      const wantArtifact = backupCfg.enabled && req.backupArtifacts !== false
+      if (wantSource || wantArtifact) {
+        setStep(planned.repoId, 'backup', 'running')
+        try {
+          repoBackup = await backup.backupRepo({
+            projectId: project.id,
+            repoId: repo.id,
+            repoName: planned.name,
+            repoPath: repo.path,
+            version: planned.version,
+            releaseId: repoReleaseId,
+            commit: planned.to || (await git.head(repo.path)),
+            tag: buildTag,
+            backupDir: backupRoot,
+            source: wantSource,
+            sourceMode: backupCfg.source,
+            artifact: wantArtifact,
+            artifactDir: repo.artifactDir,
+            log: msg => emit('log', msg, { repoId: planned.repoId }),
+          })
+          if (repoBackup) {
+            await store.writeBackupMeta(repoBackup)
+            backupRefs.push(repoBackup)
+          }
+          setStep(planned.repoId, 'backup', 'done', repoBackup ? `${repoBackup.items.length} 类备份完成` : '无备份内容')
+        } catch (e) {
+          if (backupCfg.onFailure === 'fail') throw e
+          emit('log', `备份失败（降级为警告，发布继续）: ${(e as Error).message}`, { repoId: planned.repoId })
+          setStep(planned.repoId, 'backup', 'failed', (e as Error).message)
+        }
+      }
+
+      // 2.4 版本文件（幂等）
       setStep(planned.repoId, 'version-file', 'running')
       const prevRecord = (await store.listRecords(repo.id, 1))[0]
       await writeVersionFiles(repo, planned, project, plan.buildStamp, prevRecord?.version)
       setStep(planned.repoId, 'version-file', 'done')
 
-      // 2.4 推送（失败降级纯本地）
+      // 2.5 推送（失败降级纯本地）
       let pushed = false
       if (!req.offline) {
         setStep(planned.repoId, 'push', 'running')
@@ -447,7 +511,7 @@ export async function executePublish(
         }
       }
 
-      // 2.5 仓库记录（不可变落盘）+ 前移检测基准
+      // 2.6 仓库记录（不可变落盘）+ 前移检测基准
       setStep(planned.repoId, 'record', 'running')
       const date = new Date().toISOString()
       const stats = changelog.computeStats(planned.commits)
@@ -471,7 +535,7 @@ export async function executePublish(
         exclude: project.externalExclude,
       })
       const record: ReleaseRecord = {
-        id: store.nextReleaseId('repo', repo.id, planned.version),
+        id: repoReleaseId,
         kind: 'repo',
         scopeId: repo.id,
         scopeName: planned.name,
@@ -491,6 +555,7 @@ export async function executePublish(
         tags: { build: buildTag, milestone },
         pushed,
         builtBy: APP_NAME,
+        backups: repoBackup ? [repoBackup] : undefined,
       }
       await store.writeRecord(record)
       repoRecords.push(record)
@@ -564,6 +629,7 @@ export async function executePublish(
     tags: { milestone: plan.milestoneTag },
     pushed: repoRecords.every(r => r.pushed),
     builtBy: APP_NAME,
+    backups: backupRefs.length > 0 ? backupRefs : undefined,
   }
   await store.writeRecord(projectRecord)
   setStep(null, 'project-record', 'done', projectRecord.id)

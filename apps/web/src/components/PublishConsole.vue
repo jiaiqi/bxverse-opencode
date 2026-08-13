@@ -86,22 +86,29 @@ function onScroll(): void {
 
 onMounted(subscribe)
 onScopeDispose(() => cancel?.())
+
+/** 仅阶段变化（step/done/error）进入 aria-live 播报 */
+const stageAnnouncement = computed(() => {
+  const stage = [...lines.value].reverse().find(l => ['step', 'done', 'error'].includes(l.type))
+  return stage ? stage.message : ''
+})
 </script>
 
 <template>
   <div class="border border-border rounded-md overflow-hidden">
     <div class="flex items-center gap-2.5 px-3.5 py-2 bg-surface-alt border-b border-border text-xs">
-      <i class="i-carbon-terminal text-text-3" />
+      <i aria-hidden="true" class="i-carbon-terminal text-text-3" />
       <span class="code-text text-text-2">task {{ taskId }}</span>
       <span class="flex-1" />
       <NButton size="tiny" quaternary :type="follow ? 'primary' : 'default'" @click="follow = !follow; if (follow) scrollToBottom()">
-        <template #icon><i class="i-carbon-arrow-down" /></template>
+        <template #icon><i aria-hidden="true" class="i-carbon-arrow-down" /></template>
         {{ follow ? '跟随输出' : '已暂停跟随' }}
       </NButton>
     </div>
     <div
       ref="listRef"
       class="console-wrap h-90 overflow-y-auto rounded-none border-none! m-0!"
+      aria-live="off"
       @scroll.passive="onScroll"
     >
       <div v-if="lines.length === 0" class="text-text-3">等待事件流…</div>
@@ -112,7 +119,9 @@ onScopeDispose(() => cancel?.())
       </div>
     </div>
     <div v-if="disconnectMsg" class="px-3.5 py-2 border-t border-border text-xs text-warning">
-      <i class="i-carbon-renew mr-1" />{{ disconnectMsg }}
+      <i aria-hidden="true" class="i-carbon-renew mr-1" />{{ disconnectMsg }}
     </div>
+    <!-- 阶段变化播报（读屏友好，避免逐行轰炸） -->
+    <span class="sr-only" role="status" aria-live="polite">{{ stageAnnouncement }}</span>
   </div>
 </template>

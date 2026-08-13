@@ -15,6 +15,7 @@ import VersionExportDropdown from '../components/VersionExportDropdown.vue'
 import { useDialog, useMessage } from 'naive-ui'
 import { usePolling } from '../composables/usePolling'
 import { useAppStore } from '../stores/app'
+import { formatDate } from '../utils/format'
 
 const route = useRoute()
 const router = useRouter()
@@ -134,12 +135,16 @@ usePolling(async () => {
           <StatusBadge type="log" :log-state="'auto'" />
         </template>
         <NButton type="primary" @click="router.push(`/project/${project.id}/release`)">
-          <template #icon><i class="i-carbon-rocket" /></template>
+          <template #icon><i aria-hidden="true" class="i-carbon-rocket" /></template>
           发布新版本
         </NButton>
         <NButton @click="showAddRepo = true">
-          <template #icon><i class="i-carbon-add" /></template>
+          <template #icon><i aria-hidden="true" class="i-carbon-add" /></template>
           接入仓库
+        </NButton>
+        <NButton @click="router.push(`/project/${project.id}/backups`)">
+          <template #icon><i aria-hidden="true" class="i-carbon-document-protected" /></template>
+          备份与对比
         </NButton>
         <VersionExportDropdown
           :project-id="projectId"
@@ -147,11 +152,11 @@ usePolling(async () => {
           :load-items="() => api.projectVersions(projectId)"
         />
         <NButton quaternary @click="showEdit = true">
-          <template #icon><i class="i-carbon-edit" /></template>
+          <template #icon><i aria-hidden="true" class="i-carbon-edit" /></template>
           编辑
         </NButton>
         <NButton quaternary type="error" @click="confirmDelete">
-          <template #icon><i class="i-carbon-trash-can" /></template>
+          <template #icon><i aria-hidden="true" class="i-carbon-trash-can" /></template>
           删除
         </NButton>
       </PageHeader>
@@ -159,7 +164,7 @@ usePolling(async () => {
       <!-- 仓库 -->
       <section>
         <h2 class="section-title">
-          <i class="i-carbon-git-branch text-brand-500" /> 代码仓库
+          <i aria-hidden="true" class="i-carbon-git-branch text-brand-500" /> 代码仓库
           <span class="chip">{{ project.repos.length }}</span>
         </h2>
         <div v-if="project.repos.length === 0" class="card mt-4">
@@ -185,7 +190,7 @@ usePolling(async () => {
       <!-- 发布历史 -->
       <section>
         <h2 class="section-title">
-          <i class="i-carbon-version text-brand-500" /> 发布历史
+          <i aria-hidden="true" class="i-carbon-version text-brand-500" /> 发布历史
         </h2>
         <div class="card mt-4">
           <div v-if="releasesLoading" class="p-5 text-center text-text-3"><NSpin size="small" /></div>
@@ -200,10 +205,15 @@ usePolling(async () => {
               v-for="r in releases"
               :key="r.id"
               class="px-5 py-3.5 cursor-pointer hover:bg-surface-hover transition-colors duration-150"
+              role="button"
+              tabindex="0"
+              :aria-label="`查看 ${r.version} 发布详情`"
               @click="openDetail(r)"
+              @keydown.enter="openDetail(r)"
+              @keydown.space.prevent="openDetail(r)"
             >
               <div class="flex items-center gap-3 flex-wrap">
-                <span class="code-text font-medium text-text-1">{{ r.version }}</span>
+                <span class="code-text font-medium text-text-1" translate="no">{{ r.version }}</span>
                 <StatusBadge type="bump" :bump="r.bump" />
                 <StatusBadge type="pushed" :pushed="r.pushed" />
                 <span class="flex-1" />
@@ -215,8 +225,8 @@ usePolling(async () => {
                   size="tiny"
                   quaternary
                 />
-                <span class="text-xs text-text-3">{{ r.date.slice(0, 10) }}</span>
-                <i class="i-carbon-chevron-right text-text-3" />
+                <span class="text-xs text-text-3">{{ formatDate(r.date) }}</span>
+                <i aria-hidden="true" class="i-carbon-chevron-right text-text-3" />
               </div>
               <div class="mt-1.5 text-xs text-text-3">
                 {{ (r.repos ?? []).map(x => x.repoName).join('、') || r.scopeName }}

@@ -42,9 +42,10 @@ interface RequestOptions {
 async function request<T>(method: string, path: string, opts: RequestOptions = {}): Promise<T> {
   const headers: Record<string, string> = {}
   if (token) headers['X-BX-Token'] = token
+  // 非 GET/HEAD 一律带 JSON Content-Type（服务端 CSRF 校验要求，DELETE 无 body 也必须带）
+  if (method !== 'GET' && method !== 'HEAD') headers['Content-Type'] = 'application/json'
   let payload: string | undefined
   if (opts.body !== undefined) {
-    headers['Content-Type'] = 'application/json'
     payload = JSON.stringify(opts.body)
   }
   const res = await fetch(`/api${path}`, { method, headers, body: payload, cache: 'no-store' })
@@ -74,6 +75,30 @@ export const http = {
   patch: <T>(path: string, body?: unknown) => request<T>('PATCH', path, { body }),
   put: <T>(path: string, body?: unknown) => request<T>('PUT', path, { body }),
   del: <T>(path: string) => request<T>('DELETE', path),
+}
+
+/**
+ * 附件下载（带 token）：返回 blob 与文件名（解析 Content-Disposition）。
+ * 前端触发浏览器另存为（备份文件较大，不走 JSON）。
+ */
+export async function download(path: string): Promise<{ blob: Blob; filename: string }> {
+  const headers: Record<string, string> = {}
+  if (token) headers['X-BX-Token'] = token
+  const res = await fetch(`/api${path}`, { headers, cache: 'no-store' })
+  if (!res.ok) {
+    let code = 'DOWNLOAD_FAILED'
+    try {
+      const body = (await res.json()) as { code?: string }
+      code = body.code ?? code
+    } catch { /* 非 JSON 错误体 */ }
+    throw new ApiError(code, res.status, `下载失败（${res.status}）`)
+  }
+  const cd = res.headers.get('Content-Disposition') ?? ''
+  const star = /filename\*=UTF-8''([^;]+)/i.exec(cd)
+  const filename = star
+    ? decodeURIComponent(star[1])
+    : (/\bfilename="([^"]+)"/i.exec(cd)?.[1] ?? 'download.bin')
+  return { blob: await res.blob(), filename }
 }
 
 /**

@@ -65,11 +65,11 @@ onMounted(() => {
             </template>
             <template v-else-if="bootError">
               <div class="empty-wrap">
-                <i class="i-carbon-cloud-off text-48px text-text-3" />
+                <i aria-hidden="true" class="i-carbon-cloud-off text-48px text-text-3" />
                 <div class="text-lg font-semibold text-text-1">无法连接 BX 版本管理台服务</div>
                 <div class="text-sm text-text-3 max-w-md">{{ bootError }}</div>
                 <button class="btn-primary" @click="() => { bootError = ''; booting = true; appStore.boot().catch(e => { bootError = e.message }).finally(() => { booting = false }) }">
-                  <i class="i-carbon-renew" /> 重试
+                  <i aria-hidden="true" class="i-carbon-renew" /> 重试
                 </button>
               </div>
             </template>

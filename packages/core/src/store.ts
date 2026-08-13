@@ -5,9 +5,11 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto'
 import { APP_DEFAULT_PORT } from '@bxverse/shared'
-import type { AppConfig, ProjectDef, ReleaseRecord } from '@bxverse/shared'
+import type { AppConfig, ProjectDef, ReleaseRecord, RepoBackupRef } from '@bxverse/shared'
 import { atomicWrite, ensureDirs, resolveHome } from './home'
 import { ensureOk, git } from './git'
+
+export { resolveHome }
 
 const home = ensureDirs()
 
@@ -264,6 +266,55 @@ export class DataStore {
     const r = await git(['push', 'origin', 'HEAD'], { cwd: this.dataDir, timeoutMs: 60_000 })
     if (r.ok) return { action, ok: true }
     return { action, ok: false, message: r.stderr.split('\n')[0] }
+  }
+
+  // ---------- 备份元数据（R19/M6：data/backups/ 进 git 审计，大文件在 backups/） ----------
+
+  private backupMetaDir(): string {
+    return path.join(this.dataDir, 'backups')
+  }
+
+  private backupMetaPath(releaseId: string, repoId: string): string {
+    return path.join(this.backupMetaDir(), `${releaseId}-${repoId}.json`)
+  }
+
+  /** 落盘备份元数据（幂等覆盖，随发布记录一并 commit 入数据仓库） */
+  async writeBackupMeta(ref: RepoBackupRef): Promise<void> {
+    fs.mkdirSync(this.backupMetaDir(), { recursive: true })
+    atomicWrite(this.backupMetaPath(ref.releaseId, ref.repoId), JSON.stringify(ref, null, 2))
+  }
+
+  async readBackupMeta(releaseId: string, repoId: string): Promise<RepoBackupRef | null> {
+    try {
+      const raw = JSON.parse(fs.readFileSync(this.backupMetaPath(releaseId, repoId), 'utf8')) as RepoBackupRef
+      return raw.repoId === repoId ? raw : null
+    } catch {
+      return null
+    }
+  }
+
+  /** 全部备份元数据（倒序按日期） */
+  async listBackupMeta(): Promise<RepoBackupRef[]> {
+    const dir = this.backupMetaDir()
+    if (!fs.existsSync(dir)) return []
+    const out: RepoBackupRef[] = []
+    for (const f of fs.readdirSync(dir)) {
+      if (!f.endsWith('.json')) continue
+      try {
+        out.push(JSON.parse(fs.readFileSync(path.join(dir, f), 'utf8')) as RepoBackupRef)
+      } catch {
+        // 跳过损坏元数据
+      }
+    }
+    return out.sort((a, b) => b.date.localeCompare(a.date))
+  }
+
+  async deleteBackupMeta(releaseId: string, repoId: string): Promise<void> {
+    try {
+      fs.rmSync(this.backupMetaPath(releaseId, repoId), { force: true })
+    } catch {
+      // 不存在视为已删除
+    }
   }
 
   // ---------- 内部：记录扫描与索引重建 ----------

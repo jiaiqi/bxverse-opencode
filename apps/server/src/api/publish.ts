@@ -68,10 +68,19 @@ function validateRequest(body: Record<string, unknown>): PublishRequest {
     }
     repoIds = body.repoIds as string[]
   }
+  let excludeCommits: Record<string, string[]> | undefined
+  if (body.excludeCommits !== undefined && body.excludeCommits !== null) {
+    const raw = body.excludeCommits as Record<string, unknown>
+    if (typeof raw !== 'object' || Object.values(raw).some(v => !Array.isArray(v) || v.some(x => typeof x !== 'string'))) {
+      throw apiError(400, 'VALIDATION', 'excludeCommits 必须为 { repoId: string[] }')
+    }
+    excludeCommits = raw as Record<string, string[]>
+  }
   return {
     projectId,
     bump: bump as PublishRequest['bump'],
     repoIds,
+    excludeCommits,
     skipBuild: body.skipBuild === true,
     offline: body.offline === true,
     dryRun: body.dryRun === true,

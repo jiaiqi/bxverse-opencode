@@ -11,6 +11,7 @@ export type JournalPhase =
   | 'build'
   | 'tag-milestone'
   | 'tag-build'
+  | 'backup'
   | 'version-file'
   | 'push'
   | 'record'

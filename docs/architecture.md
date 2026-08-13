@@ -379,6 +379,14 @@ G:\vibecoding\
 │           │   ├── engine.ts          [待建] 发布执行编排（串行、事件回调、幂等 step）
 │           │   ├── preflight.ts       [待建] §6.2 预检阻塞项
 │           │   └── journal.ts         [待建] journal 落盘/扫描/恢复
+│           ├── backup/（R19/M6 扩展）
+│           │   ├── index.ts           [待建] 备份编排 backupRepo()（幂等、失败策略 warn/fail、元数据落 data/backups/）
+│           │   ├── source.ts          [待建] git bundle + git archive 源码备份（遵循 .gitignore）
+│           │   ├── artifact.ts        [待建] 产物目录归档 + manifest（RepoDef.artifactDir）
+│           │   ├── manifest.ts        [待建] 目录→哈希清单（流式 sha256 + totals）
+│           │   └── tar.ts             [待建] 零依赖 ustar tar.gz（pax 长路径/中文头）
+│           ├── compare/（R19/M6 扩展）
+│           │   └── index.ts           [待建] 三层对比：git diff / 清单对比 / manifest 校验 → CompareResult
 │           ├── store/
 │           │   ├── config.ts          [待建] app.json 读写（原子写、默认值、BX_HOME）
 │           │   ├── records.ts         [待建] releases/{scopeId}/{versionSafeName}/ 读写
@@ -408,6 +416,8 @@ G:\vibecoding\
 │   │       │   ├── publish.ts         [待建] plan/publish
 │   │       │   ├── history.ts         [待建] 发布历史
 │   │       │   ├── overview.ts        [待建] 首页聚合
+│   │       │   ├── sync.ts            [待建] /api/system/sync
+│   │       │   └── backups.ts         [待建] R19/M6 备份列表/下载/删除/对比/校验（api.md §10.5）
 │   │       │   └── sync.ts            [待建] /api/system/sync
 │   │       ├── queue.ts               [待建] PublishQueue 单队列
 │   │       └── sse.ts                 [待建] SSE 连接管理/心跳/广播（fetch-流兼容）

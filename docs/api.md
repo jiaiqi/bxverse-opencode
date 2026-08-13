@@ -838,6 +838,65 @@ data: {"type":"done","message":"发布完成","data":{"releaseId":"rel_p_3f1_v1.
 
 ---
 
+## 10.5 备份与一致性对比（R19/M6）
+
+> 存储布局见 data-model.md §12：大文件在 `backups/{projectId}/{repoId}/{versionSafe}/`，元数据 `data/backups/{releaseId}-{repoId}.json`（进 git 审计）。
+
+### 10.5.1 GET /api/repos/:pid/:rid/backups
+
+用途：某仓库历次发布备份列表（倒序，n 默认 20 上限 100）。
+
+响应 `200`：
+
+```json
+{ "items": [ { "releaseId": "rel_p_…", "repoId": "r_…", "version": "v1.2.0.26081315", "commit": "…", "tag": "build/v1.2.0.26081315", "date": "…", "items": [ { "kind": "source-bundle", "file": "source.bundle", "sha256": "…", "size": 123456 }, { "kind": "artifact", "file": "artifact.tar.gz", "sha256": "…", "size": 45678, "files": 42 } ] } ] }
+```
+
+### 10.5.2 GET /api/backups/download/:releaseId/:repoId/:kind
+
+用途：下载备份文件（`source-bundle` / `source-archive` / `artifact` / `artifact-manifest`），`Content-Type: application/octet-stream` + `Content-Disposition` 附件；服务端按元数据哈希校验后流式响应。错误：404 `NOT_FOUND`。
+
+### 10.5.3 DELETE /api/backups/:releaseId/:repoId
+
+用途：删除一次备份的全部文件与元数据（审计元数据文件随下次数据仓库 commit 移除）。响应 `200 { ok: true }`。
+
+### 10.5.4 POST /api/backups/compare
+
+用途：产物级对比（两份发布清单）或校验级（清单 vs 实际文件）。
+
+请求：
+
+```json
+{ "kind": "artifact", "left": { "releaseId": "…", "repoId": "r_…" }, "right": { "releaseId": "…", "repoId": "r_…" } }
+{ "kind": "verify", "releaseId": "…", "repoId": "r_…" }
+```
+
+响应 `200`（`CompareResult`，data-model.md §12.4）：
+
+```json
+{ "kind": "artifact", "files": [ { "path": "index.html", "status": "modified", "left": { "sha256": "…", "size": 1 }, "right": { "sha256": "…", "size": 2 } } ], "totals": { "added": 0, "removed": 0, "modified": 1, "same": 41 } }
+```
+
+错误：404 `NOT_FOUND`（清单缺失）、422 `COMPARE_UNSUPPORTED`。
+
+### 10.5.5 GET /api/repos/:pid/:rid/diff?from=&to=
+
+用途：源码级对比——同仓库两个 commit/tag（`build/vX.Y.Z.YYMMDDHH`、`vX.Y.Z` 或 hash）间 `git diff --name-status --numstat`。
+
+响应 `200`：
+
+```json
+{ "files": [ { "path": "src/index.ts", "status": "modified", "insertions": 12, "deletions": 3 } ], "stats": { "files": 1, "insertions": 12, "deletions": 3 } }
+```
+
+错误：400 `VALIDATION`（ref 非法或不可达）。
+
+### 10.5.6 发布请求扩展
+
+`POST /api/publish` 请求新增可选字段：`backupSource?: boolean`（默认 true）、`backupArtifacts?: boolean`（默认 true，仓库未配置 `artifactDir` 时自动跳过并 warning）；`PATCH /api/projects/:id/repos/:rid` 新增可选 `artifactDir?: string | null`（相对仓库根，前端树选择器点选）。
+
+---
+
 ## 11. 与 architecture.md §3.2 路由表的差异
 
 | # | architecture.md 原设计 | 本设计 | 原因 |

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 // Dashboard.vue —— 总览页
 
+import { RouterLink } from 'vue-router'
 import { useProjectsStore } from '../stores/projects'
 import PageHeader from '../components/PageHeader.vue'
 import StatCard from '../components/StatCard.vue'
@@ -70,11 +71,11 @@ usePolling(refresh, computed(() => appStore.pollInterval).value || 30_000)
   <div class="page">
     <PageHeader title="总览" :description="`今天是 ${today}`">
       <NButton size="small" quaternary :loading="syncing" @click="syncData">
-        <template #icon><i class="i-carbon-renew" /></template>
+        <template #icon><i aria-hidden="true" class="i-carbon-renew" /></template>
         同步数据
       </NButton>
       <NButton size="small" type="primary" @click="showAddProject = true">
-        <template #icon><i class="i-carbon-add" /></template>
+        <template #icon><i aria-hidden="true" class="i-carbon-add" /></template>
         新建项目
       </NButton>
     </PageHeader>
@@ -97,7 +98,7 @@ usePolling(refresh, computed(() => appStore.pollInterval).value || 30_000)
     <!-- 项目网格 -->
     <section>
       <h2 class="section-title">
-        <i class="i-carbon-catalog text-brand-500" /> 项目
+        <i aria-hidden="true" class="i-carbon-catalog text-brand-500" /> 项目
       </h2>
       <div v-if="overview && overview.projects.length === 0" class="card">
         <EmptyState
@@ -125,7 +126,7 @@ usePolling(refresh, computed(() => appStore.pollInterval).value || 30_000)
     <!-- 变动仓库 -->
     <section v-if="overview && overview.changedRepos.length > 0">
       <h2 class="section-title">
-        <i class="i-carbon-git-commit text-brand-500" /> 待发布仓库
+        <i aria-hidden="true" class="i-carbon-git-commit text-brand-500" /> 待发布仓库
       </h2>
       <div class="card mt-4 divide-y divide-border">
         <template v-for="group in groupByProject(overview.changedRepos)" :key="group.projectId">
@@ -138,22 +139,22 @@ usePolling(refresh, computed(() => appStore.pollInterval).value || 30_000)
                 type="primary"
                 @click="router.push(`/project/${group.projectId}/release`)"
               >
-                <template #icon><i class="i-carbon-rocket" /></template>
+                <template #icon><i aria-hidden="true" class="i-carbon-rocket" /></template>
                 发布
               </NButton>
             </div>
             <div class="flex-1 flex flex-wrap gap-2">
-              <div
+              <RouterLink
                 v-for="r in group.repos"
                 :key="r.repoId"
-                class="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md border border-border hover:border-brand-300 hover:bg-brand-soft cursor-pointer transition-all duration-150 text-sm text-text-2"
-                @click="router.push(`/repo/${r.projectId}/${r.repoId}`)"
+                :to="`/repo/${r.projectId}/${r.repoId}`"
+                class="no-underline flex items-center gap-1.5 px-2.5 py-1.5 rounded-md border border-border hover:border-brand-300 hover:bg-brand-soft transition-colors duration-150 text-sm text-text-2"
               >
-                <i class="i-carbon-git-branch text-13px text-text-3" />
+                <i aria-hidden="true" class="i-carbon-git-branch text-13px text-text-3" />
                 {{ r.repoName }}
                 <span class="chip code-text text-brand-600 border-brand-200 bg-brand-50">{{ r.commits }} 提交</span>
-                <span class="code-text text-xs text-text-3">{{ r.head }}</span>
-              </div>
+                <span class="code-text text-xs text-text-3" translate="no">{{ r.head }}</span>
+              </RouterLink>
             </div>
           </div>
         </template>

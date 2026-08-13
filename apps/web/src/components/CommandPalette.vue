@@ -127,12 +127,15 @@ const flatActive = (groupIdx: number, itemIdx: number): number => {
   >
     <div class="w-160 max-w-90vw rounded-lg bg-surface border border-border shadow-lg overflow-hidden">
       <div class="flex items-center gap-2.5 px-4 h-12 border-b border-border">
-        <i class="i-carbon-search text-text-3 text-16px" />
+        <i aria-hidden="true" class="i-carbon-search text-text-3 text-16px" />
         <input
           ref="inputRef"
           v-model="query"
           class="flex-1 bg-transparent outline-none text-text-1 text-sm placeholder-text-3"
+          aria-label="搜索命令、项目、仓库"
           placeholder="搜索命令、项目、仓库…"
+          autocomplete="off"
+          spellcheck="false"
           @keydown="onKeydown"
         />
         <span class="text-xs text-text-3 border border-border rounded-sm px-1 py-0.5">Esc</span>
@@ -141,15 +144,15 @@ const flatActive = (groupIdx: number, itemIdx: number): number => {
         <template v-for="(group, gi) in grouped" :key="group[0]">
           <div class="px-4 pt-2 pb-1 text-xs text-text-3">{{ group[0] }}</div>
           <template v-for="(cmd, ii) in group[1]" :key="cmd.title">
-            <div
-              class="flex items-center gap-2.5 mx-2 px-3 h-9 rounded-md cursor-pointer transition-colors duration-100"
+            <button
+              class="w-full flex items-center gap-2.5 mx-2 px-3 h-9 rounded-md cursor-pointer transition-colors duration-100 focus-ring"
               :class="flatActive(gi, ii) === activeIndex ? 'bg-brand-soft text-brand-600' : 'text-text-2 hover:bg-surface-hover'"
               @mouseenter="activeIndex = flatActive(gi, ii)"
               @click="uiStore.togglePalette(false); cmd.run()"
             >
-              <i class="text-15px shrink-0" :class="cmd.icon" />
-              <span class="flex-1 truncate text-sm">{{ cmd.title }}</span>
-            </div>
+              <i aria-hidden="true" class="text-15px shrink-0" :class="cmd.icon" />
+              <span class="flex-1 truncate text-left text-sm">{{ cmd.title }}</span>
+            </button>
           </template>
         </template>
         <div v-if="filtered.length === 0" class="px-4 py-8 text-center text-sm text-text-3">

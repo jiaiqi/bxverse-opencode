@@ -1,9 +1,11 @@
 <script setup lang="ts">
-// VersionExportDropdown.vue —— 版本清单导出（三种方式，R18 通用）
+// VersionExportDropdown.vue —— 版本清单导出（四种方式，R18 通用）
 //   1. 另存为文件（File System Access API showSaveFilePicker，回退浏览器下载）
 //   2. 写入项目仓库（弹窗内树形目录选择器点选目录）
 //   3. 导出到本地目录（showDirectoryPicker 原生选择器 + 句柄直写）
+//   4. 直接打开（弹窗内预览 version.json 内容，可复制/另存）
 
+import hljs from 'highlight.js'
 import type { RepoVersionItem } from '@bxverse/shared'
 import { useProjectsStore } from '../stores/projects'
 import { useFsAccess } from '../composables/useFsAccess'
@@ -133,14 +135,61 @@ async function submitLocal() {
   }
 }
 
+// ---------- 方式四：直接打开（预览内容） ----------
+const showPreview = ref(false)
+const previewLoading = ref(false)
+const previewContent = ref('')
+
+const previewHighlighted = computed(() => {
+  if (!previewContent.value) return ''
+  try {
+    return hljs.highlight(previewContent.value, { language: 'json' }).value
+  } catch {
+    return previewContent.value
+  }
+})
+
+async function openPreview() {
+  showPreview.value = true
+  previewLoading.value = true
+  previewContent.value = ''
+  try {
+    const items = await props.loadItems()
+    previewContent.value = `${JSON.stringify(items, null, 2)}\n`
+  } catch (e) {
+    message.error((e as Error).message)
+  } finally {
+    previewLoading.value = false
+  }
+}
+
+async function copyPreview() {
+  if (!previewContent.value) return
+  await navigator.clipboard.writeText(previewContent.value)
+  message.success('已复制到剪贴板')
+}
+
+async function downloadPreview() {
+  if (!previewContent.value) return
+  try {
+    const result = await fs.saveTextFile(props.filename, previewContent.value)
+    if (result === 'native') message.success('已保存文件')
+    else if (result === 'fallback') message.success('已开始下载')
+  } catch (e) {
+    message.error((e as Error).message)
+  }
+}
+
 const exportOptions = [
+  { label: '直接打开（预览内容）', key: 'preview', icon: () => h('i', { class: 'i-carbon-view text-16px' }) },
   { label: '另存为文件（原生对话框）', key: 'download', icon: () => h('i', { class: 'i-carbon-download text-16px' }) },
   { label: '写入项目仓库（选择目录）', key: 'write', icon: () => h('i', { class: 'i-carbon-folder-add text-16px' }) },
   { label: '导出到本地目录（原生选择器）', key: 'local', icon: () => h('i', { class: 'i-carbon-save text-16px' }) },
 ]
 
 function onSelect(key: string) {
-  if (key === 'download') void exportDownload()
+  if (key === 'preview') void openPreview()
+  else if (key === 'download') void exportDownload()
   else if (key === 'write') openWrite()
   else {
     localForm.filename = props.filename
@@ -155,12 +204,38 @@ function onSelect(key: string) {
     <div class="inline-flex" @click.stop>
       <slot>
         <NButton :size="size" :quaternary="quaternary" :loading="exporting">
-          <template #icon><i class="i-carbon-download" /></template>
+          <template #icon><i aria-hidden="true" class="i-carbon-download" /></template>
           {{ label }}
         </NButton>
       </slot>
     </div>
   </NDropdown>
+
+  <!-- 直接打开（预览内容） -->
+  <NModal v-model:show="showPreview" preset="card" title="版本清单预览" class="w-200 max-w-95vw">
+    <div class="py-1">
+      <div class="flex items-center justify-between gap-3 mb-3">
+        <span class="code-text text-xs text-text-3 truncate">{{ filename }}</span>
+        <div class="flex items-center gap-1 shrink-0">
+          <NButton size="tiny" quaternary :disabled="!previewContent" @click="copyPreview">
+            <template #icon><i aria-hidden="true" class="i-carbon-copy text-14px" /></template>
+            复制
+          </NButton>
+          <NButton size="tiny" quaternary :disabled="!previewContent" @click="downloadPreview">
+            <template #icon><i aria-hidden="true" class="i-carbon-download text-14px" /></template>
+            另存为
+          </NButton>
+        </div>
+      </div>
+      <div v-if="previewLoading" class="p-8 text-center text-text-3">
+        <NSpin size="small" />
+      </div>
+      <pre v-else class="console-wrap m-0 max-h-120 overflow-auto"><code class="hljs font-mono" v-html="previewHighlighted" /></pre>
+    </div>
+    <template #footer>
+      <NButton @click="showPreview = false">关闭</NButton>
+    </template>
+  </NModal>
 
   <!-- 写入项目仓库 -->
   <NModal v-model:show="showWrite" preset="card" title="写入版本清单到仓库" class="w-130 max-w-95vw">
@@ -213,7 +288,7 @@ function onSelect(key: string) {
         <div class="text-sm font-medium text-text-1 mb-1.5">目标目录</div>
         <div class="flex items-center gap-2.5">
           <NButton @click="pickLocalDir">
-            <template #icon><i class="i-carbon-folder-open" /></template>
+            <template #icon><i aria-hidden="true" class="i-carbon-folder-open" /></template>
             {{ localForm.dirHandle ? '重新选择' : '选择目录…' }}
           </NButton>
           <span class="code-text text-text-2 truncate flex-1">{{ localForm.dirName || '未选择' }}</span>

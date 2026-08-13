@@ -63,6 +63,8 @@ export interface RepoDef {
   outputDir?: string
   /** 是否在业务仓库内写 version.json / version-history.json（默认 true，零侵入可关） */
   writeVersionFile?: boolean
+  /** 扩展：R19 产物备份目录（相对仓库根；未配置则发布时跳过产物备份并提示） */
+  artifactDir?: string
   /** 上次统一发布时的 commit（变更检测基准） */
   lastPublishCommit?: string | null
   createdAt?: string
@@ -98,10 +100,47 @@ export interface AppConfig {
     model: string
     apiKey: string
   }
+  /** 扩展：R19 发布备份策略（默认 { enabled: true, source: 'both', onFailure: 'warn' }） */
+  backup?: BackupConfig
   projects: ProjectDef[]
 }
 
 // ==================== 发布记录 ====================
+// 扩展：R19 备份类型（发布自动备份的产物引用与哈希清单）
+export interface BackupItem {
+  kind: 'source-bundle' | 'source-archive' | 'artifact'
+  /** 相对备份目录的文件名 */
+  file: string
+  sha256: string
+  size: number
+  /** 归档内文件数（产物备份才有） */
+  files?: number
+}
+
+export interface RepoBackupRef {
+  releaseId: string
+  repoId: string
+  repoName: string
+  /** 所属项目（定位备份目录 backups/{projectId}/{repoId}/{version}） */
+  projectId: string
+  version: string
+  /** 备份时 HEAD（full hash） */
+  commit: string
+  tag?: string
+  date: string
+  items: BackupItem[]
+}
+
+export interface BackupConfig {
+  enabled: boolean
+  /** 备份大文件目录；缺省 ~/.bxverse/backups */
+  dir?: string
+  /** 源码备份形式：both（bundle + 快照，默认）/ bundle / archive */
+  source: 'both' | 'bundle' | 'archive'
+  /** 备份失败策略：warn（发布继续，记 warning）/ fail（该仓库发布中止） */
+  onFailure: 'warn' | 'fail'
+}
+
 export interface RepoReleaseRef {
   repoId: string
   repoName: string
@@ -134,6 +173,8 @@ export interface ReleaseRecord {
   tags: { build?: string; milestone?: string }
   pushed: boolean
   builtBy: string
+  /** 扩展：R19 本次发布备份引用（源码 bundle/快照/产物） */
+  backups?: RepoBackupRef[]
 }
 
 // ==================== 发布计划 / 任务 ====================
@@ -179,6 +220,12 @@ export interface PublishRequest {
   externalContent?: string
   /** 向导中人工编辑后的项目对内日志 */
   internalContent?: string
+  /** 扩展：R19 本次发布是否备份源码（默认 true，受 AppConfig.backup.enabled 总控） */
+  backupSource?: boolean
+  /** 扩展：R19 本次发布是否备份产物（默认 true；仓库未配置 artifactDir 时跳过并 warning） */
+  backupArtifacts?: boolean
+  /** 扩展：提交级排除（向导人工甄别），repoId → 不参与本次发布的 fullHash 列表 */
+  excludeCommits?: Record<string, string[]>
 }
 
 export interface PublishEvent {
@@ -268,4 +315,30 @@ export interface RepoVersionItem {
   name: string
   /** 当前版本号（业务仓库 version.json；缺省回退项目统一版本） */
   version: string
+}
+
+// ==================== 一致性对比（扩展：R19） ====================
+export type FileCompareStatus = 'added' | 'removed' | 'modified' | 'same'
+
+export interface FileSideInfo {
+  sha256?: string
+  size?: number
+}
+
+export interface FileCompareItem {
+  path: string
+  status: FileCompareStatus
+  /** 源码级 diff 的行变化（无则缺省） */
+  insertions?: number
+  deletions?: number
+  left?: FileSideInfo
+  right?: FileSideInfo
+}
+
+export interface CompareResult {
+  kind: 'source' | 'artifact' | 'verify'
+  left?: string
+  right?: string
+  files: FileCompareItem[]
+  totals: { added: number; removed: number; modified: number; same: number }
 }

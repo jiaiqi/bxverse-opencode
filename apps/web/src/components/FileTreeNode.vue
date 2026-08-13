@@ -29,15 +29,38 @@ const isDir = computed(() => props.entry.type === 'dir')
 const isExpanded = computed(() => isDir.value && props.expanded.has(fullPath.value))
 const isLoading = computed(() => props.loadingSet.has(fullPath.value))
 const childTree = computed(() => (isDir.value ? props.childrenMap.get(fullPath.value) ?? null : null))
+
+function onKeydown(e: KeyboardEvent) {
+  if (isDir.value) {
+    if (e.key === 'ArrowRight' && !isExpanded.value) {
+      e.preventDefault()
+      emit('toggle', fullPath.value)
+    } else if (e.key === 'ArrowLeft' && isExpanded.value) {
+      e.preventDefault()
+      emit('toggle', fullPath.value)
+    } else if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault()
+      emit('toggle', fullPath.value)
+    }
+  } else if (e.key === 'Enter' || e.key === ' ') {
+    e.preventDefault()
+    emit('open-file', fullPath.value, props.entry)
+  }
+}
 </script>
 
 <template>
   <div>
     <div
       class="tree-row"
+      role="button"
+      tabindex="0"
+      :aria-expanded="isDir ? isExpanded : undefined"
+      :aria-label="isDir ? `目录 ${entry.name}` : `文件 ${entry.name}`"
       :style="{ paddingLeft: `${10 + depth * 14}px` }"
       :class="{ 'tree-row-selected': !isDir && selectedPath === fullPath }"
       @click="isDir ? emit('toggle', fullPath) : emit('open-file', fullPath, entry)"
+      @keydown="onKeydown"
     >
       <i
         v-if="isDir"
@@ -96,6 +119,10 @@ const childTree = computed(() => (isDir.value ? props.childrenMap.get(fullPath.v
   cursor: pointer;
   transition: background-color var(--bx-dur-fast) var(--bx-ease);
   border-left: 2px solid transparent;
+}
+.tree-row:focus-visible {
+  outline: 2px solid var(--bx-brand-500);
+  outline-offset: -2px;
 }
 .tree-row:hover {
   background: var(--bx-surface-hover);

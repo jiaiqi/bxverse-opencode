@@ -104,6 +104,13 @@ body {
   color: var(--bx-text-1);
   background: var(--bx-bg);
   -webkit-font-smoothing: antialiased;
+  touch-action: manipulation;
+}
+
+/* 模态/抽屉内滚动不穿透外层 */
+.n-modal-container,
+.n-drawer-container {
+  overscroll-behavior: contain;
 }
 
 code,

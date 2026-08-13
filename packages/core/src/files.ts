@@ -44,11 +44,22 @@ function isIgnored(rel: string, patterns: IgnorePattern[]): boolean {
   return false
 }
 
-/** 解析并校验仓库内相对路径，防逃逸 */
+/** 解析并校验仓库内相对路径，防逃逸（含符号链接解析，借鉴 fsguard 思路） */
 function safeAbs(repoPath: string, relPath: string): string {
   const root = path.resolve(repoPath)
   const abs = path.resolve(root, relPath)
   if (abs !== root && !abs.startsWith(root + path.sep)) throw new Error('路径越界')
+  // 符号链接/junction 解析后再校验：指向仓库外的链接一律拒绝
+  let real: string
+  try {
+    real = fs.realpathSync(abs)
+  } catch {
+    return abs // 目标不存在（写入场景），保持原路径
+  }
+  const realRoot = fs.existsSync(root) ? fs.realpathSync(root) : root
+  if (real !== realRoot && !real.startsWith(realRoot + path.sep)) {
+    throw new Error('路径越界（符号链接指向仓库外）')
+  }
   return abs
 }
 

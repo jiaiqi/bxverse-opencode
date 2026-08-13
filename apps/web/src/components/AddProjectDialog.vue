@@ -90,10 +90,10 @@ async function submit() {
   >
     <NForm label-placement="top">
       <NFormItem label="项目名称" required>
-        <NInput v-model:value="form.name" placeholder="如：主产品线" :maxlength="40" @keydown.enter="submit" />
+        <NInput v-model:value="form.name" placeholder="如：主产品线…" :maxlength="40" :input-props="{ autocomplete: 'off', spellcheck: false }" @keydown.enter="submit" />
       </NFormItem>
       <NFormItem label="描述（可选）">
-        <NInput v-model:value="form.description" type="textarea" :rows="2" placeholder="一句话说明该项目" />
+        <NInput v-model:value="form.description" type="textarea" :rows="2" placeholder="一句话说明该项目…" />
       </NFormItem>
       <div class="grid grid-cols-2 gap-4">
         <NFormItem label="版本递增策略">
@@ -110,7 +110,7 @@ async function submit() {
         </NFormItem>
       </div>
       <NFormItem label="对外日志排除的提交类型">
-        <NSelect v-model:value="form.externalExclude" multiple :options="commitTypeOptions" placeholder="这些类型的提交不出现在对外日志" />
+        <NSelect v-model:value="form.externalExclude" multiple :options="commitTypeOptions" placeholder="这些类型的提交不出现在对外日志…" />
       </NFormItem>
     </NForm>
     <template #footer>

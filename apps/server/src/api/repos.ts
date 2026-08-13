@@ -122,6 +122,11 @@ export function register(router: import('../http/router').Router, services: Repo
     }
     if (body.buildCommand !== undefined) repo.buildCommand = String(body.buildCommand) || undefined
     if (body.outputDir !== undefined) repo.outputDir = String(body.outputDir) || 'public'
+    if (body.artifactDir !== undefined) {
+      const dir = String(body.artifactDir).trim().replace(/\\/g, '/').replace(/^\/+/, '')
+      if (dir.split('/').includes('..')) throw apiError(400, 'VALIDATION', 'artifactDir 必须是仓库内的相对目录（禁止 .. 越界）')
+      repo.artifactDir = dir || undefined
+    }
     if (body.writeVersionFile !== undefined) {
       if (typeof body.writeVersionFile !== 'boolean') throw apiError(400, 'VALIDATION', 'writeVersionFile 必须为布尔')
       repo.writeVersionFile = body.writeVersionFile

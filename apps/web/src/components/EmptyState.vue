@@ -19,7 +19,7 @@ const emit = defineEmits<{ action: [] }>()
     <div v-if="description" class="text-sm text-text-3 max-w-md">{{ description }}</div>
     <slot name="action">
       <button v-if="emit" class="btn-primary mt-2" @click="emit('action')">
-        <i class="i-carbon-add" /> 立即创建
+        <i aria-hidden="true" class="i-carbon-add" /> 立即创建
       </button>
     </slot>
   </div>

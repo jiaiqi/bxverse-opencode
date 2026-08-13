@@ -92,26 +92,26 @@ function insertTemplate(key: string) {
       <StatusBadge type="log" :log-state="state" />
       <template v-if="track === 'internal' && !expanded">
         <NButton size="tiny" quaternary @click="expanded = true">
-          <template #icon><i class="i-carbon-edit" /></template>
+          <template #icon><i aria-hidden="true" class="i-carbon-edit" /></template>
           编辑
         </NButton>
       </template>
       <template v-else>
         <span class="flex-1" />
         <NButton size="tiny" quaternary :disabled="locked" @click="emit('reset')">
-          <template #icon><i class="i-carbon-renew" /></template>
+          <template #icon><i aria-hidden="true" class="i-carbon-renew" /></template>
           自动草稿
         </NButton>
         <template v-if="track === 'external'">
           <NDropdown trigger="click" :options="templateOptions" @select="insertTemplate">
             <NButton size="tiny" quaternary :disabled="locked">
-              <template #icon><i class="i-carbon-text-new-line" /></template>
+              <template #icon><i aria-hidden="true" class="i-carbon-text-new-line" /></template>
               插入模板
             </NButton>
           </NDropdown>
         </template>
         <NButton size="tiny" quaternary @click="showDiff = !showDiff">
-          <template #icon><i class="i-carbon-compare" /></template>
+          <template #icon><i aria-hidden="true" class="i-carbon-compare" /></template>
           {{ showDiff ? '退出对比' : '对比草稿' }}
         </NButton>
         <NButton
@@ -121,11 +121,11 @@ function insertTemplate(key: string) {
           secondary
           @click="onConfirm"
         >
-          <template #icon><i class="i-carbon-checkmark" /></template>
+          <template #icon><i aria-hidden="true" class="i-carbon-checkmark" /></template>
           确认
         </NButton>
         <NButton v-else size="tiny" quaternary @click="emit('unconfirm')">
-          <template #icon><i class="i-carbon-close" /></template>
+          <template #icon><i aria-hidden="true" class="i-carbon-close" /></template>
           解除确认
         </NButton>
       </template>

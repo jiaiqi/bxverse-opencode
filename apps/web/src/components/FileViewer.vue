@@ -99,19 +99,19 @@ const fmtSize = (n: number): string => (n < 1024 ? `${n} B` : n < 1024 * 1024 ? 
       </span>
       <button
         class="w-7 h-7 flex items-center justify-center rounded-md text-text-3 hover:bg-surface-hover hover:text-text-1 transition-colors duration-150"
-        title="下载（另存为）"
+        aria-label="下载文件（另存为）"
         :disabled="!content || meta?.binary"
         @click="downloadFile"
       >
-        <i class="i-carbon-download text-14px" />
+        <i aria-hidden="true" class="i-carbon-download text-14px" />
       </button>
       <button
         class="w-7 h-7 flex items-center justify-center rounded-md text-text-3 hover:bg-surface-hover hover:text-text-1 transition-colors duration-150"
-        title="复制"
+        aria-label="复制文件内容"
         :disabled="!content"
         @click="copyContent"
       >
-        <i class="i-carbon-copy text-14px" />
+        <i aria-hidden="true" class="i-carbon-copy text-14px" />
       </button>
     </div>
 
@@ -122,7 +122,7 @@ const fmtSize = (n: number): string => (n < 1024 ? `${n} B` : n < 1024 * 1024 ? 
       </div>
       <template v-else-if="meta?.binary">
         <div class="empty-wrap py-10">
-          <i class="i-carbon-document-blank text-40px text-text-3" />
+          <i aria-hidden="true" class="i-carbon-document-blank text-40px text-text-3" />
           <div class="text-sm text-text-2">二进制文件不支持预览</div>
         </div>
       </template>
@@ -136,7 +136,7 @@ const fmtSize = (n: number): string => (n < 1024 ? `${n} B` : n < 1024 * 1024 ? 
       </template>
       <template v-else>
         <div class="empty-wrap py-10">
-          <i class="i-carbon-document text-40px text-text-3" />
+          <i aria-hidden="true" class="i-carbon-document text-40px text-text-3" />
           <div class="text-sm text-text-2">从左侧选择文件查看</div>
         </div>
       </template>

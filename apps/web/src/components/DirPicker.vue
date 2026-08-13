@@ -85,24 +85,29 @@ onMounted(loadRoot)
   <div class="border border-border rounded-md overflow-hidden">
     <!-- 当前选中 -->
     <div class="flex items-center gap-2 px-3 py-2 bg-surface-alt border-b border-border text-xs">
-      <i class="i-carbon-folder text-warning text-14px" />
+      <i aria-hidden="true" class="i-carbon-folder text-warning text-14px" />
       <span class="code-text text-text-2 flex-1 truncate">{{ modelValue || '（仓库根目录）' }}</span>
       <button
         class="text-text-3 hover:text-brand-500 transition-colors duration-150"
-        title="清空为仓库根目录"
+        aria-label="清空为仓库根目录"
         @click="select('')"
       >
-        <i class="i-carbon-close" />
+        <i aria-hidden="true" class="i-carbon-close" />
       </button>
     </div>
     <div class="max-h-56 overflow-y-auto py-1">
       <!-- 仓库根选项 -->
       <div
         class="picker-row"
+        role="button"
+        tabindex="0"
+        aria-label="选择仓库根目录"
         :class="{ 'picker-row-active': modelValue === '' }"
         @click="select('')"
+        @keydown.enter="select('')"
+        @keydown.space.prevent="select('')"
       >
-        <i class="i-carbon-home text-14px text-text-3" />
+        <i aria-hidden="true" class="i-carbon-home text-14px text-text-3" />
         <span class="flex-1 truncate">（仓库根目录）</span>
       </div>
       <div v-if="rootLoading && !root" class="px-3 py-4 text-center text-text-3">
@@ -143,6 +148,10 @@ onMounted(loadRoot)
   cursor: pointer;
   transition: background-color var(--bx-dur-fast) var(--bx-ease);
   border-left: 2px solid transparent;
+}
+.picker-row:focus-visible {
+  outline: 2px solid var(--bx-brand-500);
+  outline-offset: -2px;
 }
 .picker-row:hover {
   background: var(--bx-surface-hover);

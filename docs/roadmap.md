@@ -10,6 +10,8 @@
 | R18 版本清单导出（下载/写仓库/本地目录） | ✅ 完成 | 2026-08-13 |
 | M4 发布向导六步 + 双轨日志编辑器 + SSE 控制台 + 前端轮询刷新 | ✅ 完成（向导 e2e + 中断续跑演练通过） | 2026-08-13 |
 | M5 自动化 / PWA 运行时启用 / AI / 收尾 | ⬜ 待做 | — |
+| M6 版本一致性对比与发布备份（R19） | ✅ 完成（core 单测 + API E2E 全通过） | 2026-08-13 |
+| M7 备份恢复（R19 低优先级，远期） | ⏸ 暂缓 | — |
 
 ---
 
@@ -30,26 +32,29 @@
 | M3 | 前端三页 | web 脚手架 + Dashboard/Projects/History | ~17 | 三页对真实数据闭环可用 |
 | M4 | 发布向导 + 日志编辑 | 六步向导、双轨日志编辑、设置页、命令面板 | ~16 | fixture 仓库全流程发布通过 |
 | M5 | 自动化/PWA/AI/收尾 | PWA 开关、AI 润色、初始数据、边界回归、文档 | ~12 | 生产形态交付、根三条命令全绿 |
+| M6 | 备份与一致性对比（R19） | 源码/产物自动备份、哈希清单、三层对比、备份管理页 | ~10 | fixture 全流程发布含备份 + 两次发布对比通过 |
+| M7 | 备份恢复（低优先级） | bundle 克隆恢复、产物解包到指定目录、恢复向导 | ~4 | 暂缓：M6 交付后再排期 |
 
-合计约 93 人日（未计并行文档任务）。
+合计约 107 人日（未计并行文档任务；M6 为 R19 新增，M7 暂缓不计入当前排期）。
 
 ### 1.1 里程碑依赖图
 
 ```
-┌──────────────┐   ┌──────────────┐   ┌──────────────┐   ┌──────────────┐   ┌─────────────────┐
-│ M1 核心引擎   │──►│ M2 服务端     │──►│ M3 前端三页   │──►│ M4 发布向导   │──►│ M5 自动化/PWA/  │
-│  packages/core│   │  apps/server  │   │  apps/web    │   │  +日志编辑     │   │  AI/收尾        │
-│              │   │  apps/cli     │   │              │   │              │   │                 │
-└──────────────┘   └──────┬───────┘   └──────┬───────┘   └──────┬───────┘   └─────────────────┘
-                          │                  │                  │
-                          │   M3 依赖 M2（REST/SSE 契约）；M4 依赖 M3（页面/组件/store）与 M2
-                          │   M5 依赖 M4（全流程可跑后才做自动化收尾）
+┌──────────────┐   ┌──────────────┐   ┌──────────────┐   ┌──────────────┐   ┌─────────────────┐   ┌──────────────┐
+│ M1 核心引擎   │──►│ M2 服务端     │──►│ M3 前端三页   │──►│ M4 发布向导   │──►│ M5 自动化/PWA/  │──►│ M6 备份与    │
+│  packages/core│   │  apps/server  │   │  apps/web    │   │  +日志编辑     │   │  AI/收尾        │   │  一致性对比   │
+│              │   │  apps/cli     │   │              │   │              │   │                 │   │  (R19)      │
+└──────────────┘   └──────┬───────┘   └──────┬───────┘   └──────┬───────┘   └─────────────────┘   └──────┬───────┘
+                          │                  │                  │                                        │
+                          │   M3 依赖 M2（REST/SSE 契约）；M4 依赖 M3（页面/组件/store）与 M2               │
+                          │   M5 依赖 M4（全流程可跑后才做自动化收尾）                                     │
+                          │   M6 依赖 M4/M5（发布主流程与轮询就绪后挂接备份步骤）；M7（恢复）暂缓独立排期 ◄─┘
 
 并行通道：docs/data-model.md、api.md、core-engine.md、frontend.md、development.md
           （与 M1–M4 并行撰写，M1 出口前须完成与 data-model.md 的一致性核对）
 ```
 
-- 硬依赖：`M1 → M2 → M3 → M4 → M5` 串行主线；M3 与 M4 都依赖 M2，M4 另依赖 M3 的组件与 store。
+- 硬依赖：`M1 → M2 → M3 → M4 → M5 → M6` 串行主线；M3 与 M4 都依赖 M2，M4 另依赖 M3 的组件与 store；M6 依赖 M4 的发布引擎挂接点与 M5 的自动化收尾；M7（备份恢复）低优先级，M6 出口后单独排期。
 - 软依赖：M5-02（AI）依赖 M1-26 已建、M4-05 已建；M5-03（初始数据）依赖 M3-10 与 M2-17。
 - 里程碑入口软性（依赖就绪即可启动），出口硬性（见各节「出口定义」，不达标不得进入下一里程碑）。
 
@@ -289,7 +294,49 @@ architecture §3.2 全部路由可用且经 curl 验证；SSE 通道、单队列
 
 ---
 
-## 7. 风险清单与缓解措施
+## 7. M6 备份与一致性对比（R19）
+
+### 7.1 目标与范围
+
+- **目标**：每次发布自动备份源码与产物，支持三层次一致性对比（源码 git diff / 产物清单对比 / manifest 校验），备份元数据入 git 数据仓库审计，大文件存本地 `backups/`。
+- **在范围内**：`core backup/`（零依赖 tar.gz + 哈希清单 + bundle/archive/产物归档）、`core compare/`（对比引擎）、engine 发布流程挂接（tag 后源码备份、build 后产物备份）、备份 API 与前端备份管理/对比 UI、仓库级 `artifactDir` 配置。
+- **不在范围内**：**恢复功能**（bundle 克隆恢复 / 产物解包，属 M7 低优先级暂缓）；自动清理过期备份（手动删除 + 磁盘占用展示即可）；对业务仓库的任何自动 commit。
+
+### 7.2 任务清单
+
+| 编号 | 标题 | 涉及文件 | 输入 → 输出 | 依赖 | 人日 |
+|---|---|---|---|---|---|
+| M6-00 | 契约扩展 | `packages/shared/src/types.ts` | 设计 → `RepoDef.artifactDir?`、`AppConfig.backup?{enabled,dir,source,onFailure}`、`PublishRequest.backupSource?/backupArtifacts?`、`ReleaseRecord.backups?: RepoBackupRef[]`、`BackupEntry`/`BackupManifest`/`FileCompareItem`/`CompareResult`（全部可选字段，`// 扩展：` 标注） | — | 0.5 |
+| M6-01 | 哈希清单 | `packages/core/src/backup/manifest.ts` | 目录绝对路径、排除规则 → `BackupManifest`（相对路径→sha256/size 流式哈希，含 `totals`；排除 `.git` 与既定忽略规则） | M6-00 | 0.5 |
+| M6-02 | 零依赖 tar.gz | `packages/core/src/backup/tar.ts` | 文件清单 → ustar tar + `node:zlib` gzip 流式写入（不落临时文件；长路径/中文名 pax 扩展头） | M6-01 | 0.5 |
+| M6-03 | 源码备份 | `packages/core/src/backup/source.ts` | repoPath、tag → `git bundle create`（含全部历史与标签，可 clone 恢复）+ `git archive --format=tar` 快照（仅已跟踪文件，天然遵循 .gitignore）→ `source.bundle`/`source.tar.gz` + sha256 | M6-01/02 | 0.5 |
+| M6-04 | 产物备份 | `packages/core/src/backup/artifact.ts` | `RepoDef.artifactDir`（未配置→跳过并返回空）→ 目录归档 `artifact.tar.gz` + `artifact-manifest.json` | M6-01/02 | 0.5 |
+| M6-05 | 备份编排 | `packages/core/src/backup/index.ts` | 发布上下文、仓库、tag → `backupRepo()`（幂等：同名文件存在即跳过；失败清理半成品；`onFailure: warn\|fail`；元数据 JSON 落 `data/backups/`（git 审计）） | M6-03/04 | 1 |
+| M6-06 | 对比引擎 | `packages/core/src/compare/index.ts` | ①两个 commit/tag → `git diff --name-status --numstat` 文件级差异+统计；②两份 `BackupManifest`（或清单 vs 目录实时哈希）→ 新增/删除/修改/一致 四类 + totals；③输出可序列化 `CompareResult`（前端渲染 + 校验报告导出） | M6-01 | 1.5 |
+| M6-07 | 发布引擎集成 | `packages/core/src/engine.ts` | 发布流程插入：tag 后执行源码备份 → build 后执行产物备份 → `ReleaseRecord.backups` 挂引用；SSE 发 `step` 事件（`备份：源码 bundle 完成`）；失败按策略 warn（记入 warnings）或 fail（中止仓库并清理） | M6-05、M1-25 | 1 |
+| M6-08 | core 单测 | `packages/core/test/backup.test.ts`、`compare.test.ts` | fixture 仓库：发布后备份文件存在且 sha256 一致；manifest 校验通过；两次发布对比得到预期差异；bundle 可被 `git bundle verify` | M6-05/06/07 | 1 |
+| M6-09 | 备份/对比 API | `apps/server/src/api/backups.ts` | 路由：`GET /api/repos/:id/backups`（列表）、`GET /api/backups/:releaseId/:repoId`（元数据）、`GET /api/backups/download/:releaseId/:repoId/:kind`（流式下载）、`DELETE /api/backups/:releaseId/:repoId`、`POST /api/backups/compare`、`POST /api/backups/verify`、`GET /api/repos/:id/diff?from=&to=`（源码 diff） | M6-06/07、M2 路由基建 | 1 |
+| M6-10 | 前端备份管理与对比 | `apps/web/src/views/BackupManage.vue`、`RepoDetail.vue`（artifactDir 树选择）、`ReleaseWizard.vue`（备份开关+完成页摘要）、`ProjectDetail.vue`（发布历史「对比」入口） | 仓库设置选产物目录（复用 R18 树选择器）；向导备份开关；备份管理页（列表/下载/删除/磁盘占用）；对比面板（四类差异着色 + 校验报告导出） | M6-09、M4 页面 | 2 |
+| M6-11 | 文档回写与追溯 | `docs/api.md`、`docs/data-model.md`、`docs/frontend.md` | 备份存储布局、API 协议、前端交互补齐；R19 追溯矩阵核对 | M6-10 | 0.5 |
+
+### 7.3 验收标准
+
+- [ ] fixture 全流程发布：tag 后生成 `source.bundle` + `source.tar.gz`；build 后生成 `artifact.tar.gz` + `artifact-manifest.json`；sha256 与元数据一致
+- [ ] `.gitignore` 语义：源码快照仅含已跟踪文件；bundle 含全部历史与本次 tag
+- [ ] 未配置 `artifactDir` 的仓库发布不报错（跳过产物备份，warnings 提示）
+- [ ] `onFailure=warn` 时备份失败不阻断发布；`fail` 时仓库发布失败且无半成品残留
+- [ ] 两次发布对比：产物级差异四类分类正确；源码级 git diff 与 `git diff` 命令行一致
+- [ ] 备份元数据 JSON 进入数据仓库（`data/backups/`）可被 git 审计；大文件不在数据仓库内
+- [ ] `pnpm typecheck` / `pnpm test` / `pnpm build` 全绿；core 仍零第三方运行时依赖
+- [ ] 备份管理页可下载/删除/对比/校验；向导完成页展示备份摘要
+
+### 7.4 出口定义
+
+每次发布自动产出可审计、可校验、可对比的源码与产物备份；对比功能可支撑「本次归档包 vs 上次投产包」类核验场景；M7（恢复）暂缓排期。
+
+---
+
+## 8. 风险清单与缓解措施
 
 | # | 风险 | 影响 | 缓解措施 |
 |---|---|---|---|
@@ -302,10 +349,12 @@ architecture §3.2 全部路由可用且经 curl 验证；SSE 通道、单队列
 | 7 | Windows 路径（`E:\`、中文、空格）在 git spawn/JSON 序列化出错 | 发布失败/乱码 | 全程数组参数 spawn（不经过 shell）；路径统一正斜杠归一；M5-05 专项 E2E |
 | 8 | 人日估算偏差（并行任务间依赖未就绪、真实工程环境差异） | 排期漂移 | 里程碑出口硬性、入口软性；M 间设集成缓冲任务（M3-15、M4-14、M5-05/11）吸收偏差 |
 | 9 | 需求演进（R15「尽可能完整」可能带来新诉求） | 范围蔓延 | 新诉求先回 requirements.md 变更记录，再进下一轮路线图；本版冻结在 R1-R17 |
+| 10 | 备份体积膨胀（大仓库 bundle/产物归档占磁盘） | 磁盘压力 | 大文件不进 git 数据仓库；备份目录可配（`AppConfig.backup.dir`）；管理页展示磁盘占用 + 手动删除；自动清理策略入 M7 一并评估 |
+| 11 | 零依赖 tar/清单在 Windows 长路径/中文名/大文件下出错 | 备份失败或损坏 | M6-02 pax 扩展头覆盖长路径与中文；流式哈希避免内存峰值；M6-08 fixture 覆盖中文路径与二进制文件 |
 
 ---
 
-## 8. 需求 → 任务追溯矩阵（R1–R17）
+## 9. 需求 → 任务追溯矩阵（R1–R19）
 
 | 需求 | 内容 | 覆盖任务 |
 |---|---|---|
@@ -326,14 +375,18 @@ architecture §3.2 全部路由可用且经 curl 验证；SSE 通道、单队列
 | R15 | 完整性、无历史包袱 | M1 全量（新设计落地）、M5-05（边界回归）、M5-11（全量回归） |
 | R16 | 好用 | M3-15（三页联调）、M4-14（向导端到端）、M5-07/08（键盘可达性/首次引导） |
 | R17 | UI/UX 美观优雅精致 | M3-14（主题与暗色）、M4-13（命令面板）、M5-07/08（可达性与引导打磨） |
+| R18 | 版本清单导出（下载/写仓库/本地目录/发布快照） | M4 相关任务（版本清单）、M6-00（契约扩展与清单复用） |
+| R19 | 版本一致性对比与发布备份 | M6 全链（备份存储/打包/对比引擎/引擎集成/API/前端管理页）；恢复功能 M7 暂缓 |
 
-> 每条需求至少有一个里程碑任务覆盖；验收时以 M5-11 全量回归逐条核对本矩阵。
+> 每条需求至少有一个里程碑任务覆盖；验收时以 M5-11 / M6-11 全量回归逐条核对本矩阵。
 
 ---
 
-## 9. 变更记录
+## 10. 变更记录
 
 | 日期 | 变更 |
 |---|---|
 | 2026-08-13 | 首版：M1–M5 里程碑、任务分解、验收标准、风险清单、需求追溯矩阵 |
+| 2026-08-13 | 新增 R19/M6：备份与一致性对比（备份范围= bundle + archive 快照，遵循 .gitignore；产物目录按仓库由用户选择 artifactDir；恢复功能 M7 低优先级暂缓）；风险清单补 #10/#11 |
+| 2026-08-13 | M6 完成：core backup/compare 零依赖引擎 + 发布流程挂接 + 备份 API + 前端备份管理页；验收全过（core 单测 / API E2E：备份、下载、校验、产物与源码对比、删除） |
 

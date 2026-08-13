@@ -77,15 +77,6 @@ describe('engine 发布全链路（fixture）', () => {
     expect(events.some(e => e.type === 'repo-done')).toBe(true)
     expect(events.at(-1)?.type).toBe('done')
 
-    // 业务仓库：标签 + version.json
-    const { listTags } = await import('../src/git')
-    const tags = await listTags(repoPath)
-    expect(tags).toContain(`build/${plan.changed[0].version}`)
-    expect(tags).toContain('v1.1.0')
-    const vf = JSON.parse(fs.readFileSync(path.join(repoPath, 'public', 'version.json'), 'utf8'))
-    expect(vf.version).toBe(plan.changed[0].version)
-    expect(fs.existsSync(path.join(repoPath, 'public', 'version-history.json'))).toBe(true)
-
     // 数据仓库：项目记录 + 仓库记录 + 里程碑 tag
     const cfg = await loadAppConfig()
     const store = new DataStore({ dataDir: cfg.dataDir })
@@ -99,6 +90,17 @@ describe('engine 发布全链路（fixture）', () => {
     expect(repoRecords).toHaveLength(1)
     expect(repoRecords[0].logs.internal.state).toBe('auto')
     expect(repoRecords[0].logs.external.autoDraft).toContain('## 新增')
+    // 以实际落盘版本为准（plan 与 execute 各自计算 buildStamp，跨分钟会不同）
+    const repoVersion = repoRecords[0].version
+
+    // 业务仓库：标签 + version.json
+    const { listTags } = await import('../src/git')
+    const tags = await listTags(repoPath)
+    expect(tags).toContain(`build/${repoVersion}`)
+    expect(tags).toContain('v1.1.0')
+    const vf = JSON.parse(fs.readFileSync(path.join(repoPath, 'public', 'version.json'), 'utf8'))
+    expect(vf.version).toBe(repoVersion)
+    expect(fs.existsSync(path.join(repoPath, 'public', 'version-history.json'))).toBe(true)
 
     // 项目版本前移 + 检测基准更新
     const updated = (await loadAppConfig()).projects[0]

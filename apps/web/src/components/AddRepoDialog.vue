@@ -97,20 +97,21 @@ async function submitUrl() {
             <NFormItem label="仓库本地路径（git 仓库，含 .git）" required>
               <NInput
                 v-model:value="path"
-                placeholder="如：E:\bx-gitee\l-pc-front"
+                placeholder="如：E:\bx-gitee\l-pc-front…"
+                :input-props="{ autocomplete: 'off', spellcheck: false }"
                 @keydown.enter="submitPath"
               />
             </NFormItem>
             <NFormItem label="中文名（可选，版本清单导出用）">
-              <NInput v-model:value="displayName" placeholder="如：PC 前端" />
+              <NInput v-model:value="displayName" placeholder="如：PC 前端…" :input-props="{ autocomplete: 'off', spellcheck: false }" />
             </NFormItem>
           </NForm>
           <div class="flex items-center gap-2 text-xs text-text-3">
-            <i class="i-carbon-information" />
+            <i aria-hidden="true" class="i-carbon-information" />
             直接引用本地仓库，零拷贝；发布记录与版本数据仍由管理台统一管理。
           </div>
           <div class="flex items-center gap-2 text-xs text-text-3">
-            <i class="i-carbon-locked" />
+            <i aria-hidden="true" class="i-carbon-locked" />
             受浏览器安全限制，系统目录选择器无法返回文件夹绝对路径，请粘贴路径（资源管理器地址栏可复制）。
           </div>
         </div>
@@ -121,22 +122,23 @@ async function submitUrl() {
             <NFormItem label="仓库地址（https / ssh / git@）" required>
               <NInput
                 v-model:value="url"
-                placeholder="https://gitee.com/xxx/yyy.git 或 git@gitee.com:xxx/yyy.git"
+                placeholder="https://gitee.com/xxx/yyy.git 或 git@gitee.com:xxx/yyy.git…"
+                :input-props="{ autocomplete: 'off', spellcheck: false }"
                 @keydown.enter="submitUrl"
               />
             </NFormItem>
             <NFormItem label="名称（可选，默认取地址）">
-              <NInput v-model:value="name" placeholder="如：l-pc-front" />
+              <NInput v-model:value="name" placeholder="如：l-pc-front…" :input-props="{ autocomplete: 'off', spellcheck: false }" />
             </NFormItem>
             <NFormItem label="中文名（可选，版本清单导出用）">
-              <NInput v-model:value="displayName" placeholder="如：PC 前端" />
+              <NInput v-model:value="displayName" placeholder="如：PC 前端…" :input-props="{ autocomplete: 'off', spellcheck: false }" />
             </NFormItem>
             <NFormItem label="浅克隆（--depth 1，大仓库建议开启）">
               <NSwitch v-model:value="shallow" />
             </NFormItem>
           </NForm>
           <div class="flex items-center gap-2 text-xs text-text-3">
-            <i class="i-carbon-information" />
+            <i aria-hidden="true" class="i-carbon-information" />
             将克隆到数据目录的 repos 子目录，克隆进度视仓库大小而定。
           </div>
         </div>

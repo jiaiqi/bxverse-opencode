@@ -64,7 +64,7 @@ function toggleFiles(hash: string) {
       </div>
       <div v-if="showFiles && expandedFiles.has(c.fullHash)" class="ml-7 mt-1.5 space-y-0.5">
         <div v-for="f in c.files" :key="f" class="flex items-center gap-1.5 text-xs text-text-3">
-          <i class="i-carbon-document" />
+          <i aria-hidden="true" class="i-carbon-document" />
           <span class="code-text truncate">{{ f }}</span>
         </div>
       </div>
