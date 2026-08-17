@@ -90,6 +90,9 @@ export const api = {
   sync: (action: string, extra: Record<string, unknown> = {}) => http.post<Record<string, unknown>>('/sync', { action, ...extra }),
   rotateToken: () => http.post<{ token: string }>('/auth/rotate'),
 
+  // AI 日志润色（M5-02）
+  aiPolish: (text: string) => http.post<{ ok: boolean; content: string }>('/ai/polish', { text }),
+
   // 备份与一致性对比（R19）
   repoBackups: (pid: string, rid: string, n = 20) =>
     http.get<{ items: RepoBackupRef[] }>(`/repos/${pid}/${rid}/backups?n=${n}`),

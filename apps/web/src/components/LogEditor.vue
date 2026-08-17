@@ -8,6 +8,8 @@ import MarkdownView from './MarkdownView.vue'
 import DiffView from './DiffView.vue'
 import StatusBadge from './StatusBadge.vue'
 import { useMessage } from 'naive-ui'
+import { api } from '../api'
+import { useAppStore } from '../stores/app'
 
 const props = withDefaults(defineProps<{
   track: 'internal' | 'external'
@@ -32,8 +34,41 @@ const emit = defineEmits<{
 }>()
 
 const message = useMessage()
+const appStore = useAppStore()
 const showDiff = ref(false)
 const locked = computed(() => props.state === 'confirmed')
+
+// ---------- AI 润色（M5-02）：仅对外日志；设置页启用且配置完整时可点 ----------
+const polishing = ref(false)
+const aiReady = computed(() =>
+  !!appStore.config?.ai.enabled && !!appStore.config.ai.baseUrl && !!appStore.config.ai.model,
+)
+
+async function onPolish() {
+  const base = pendingInput ?? props.content
+  if (!base.trim()) {
+    message.warning('内容为空，无法润色')
+    return
+  }
+  polishing.value = true
+  try {
+    const { content } = await api.aiPolish(base)
+    if (content && content !== base) {
+      // 先落盘未提交的输入再整体替换，避免竞态丢字
+      clearTimeout(debounceTimer)
+      debounceTimer = undefined
+      pendingInput = null
+      emit('update:content', content)
+      message.success('已生成 AI 润色草稿（仍须人工核对后确认）')
+    } else {
+      message.info('润色结果与原文一致，未做替换')
+    }
+  } catch (e) {
+    message.error((e as Error).message)
+  } finally {
+    polishing.value = false
+  }
+}
 
 // internal 默认折叠只读，点「编辑」展开
 const expanded = ref(false)
@@ -203,6 +238,19 @@ function insertTemplate(key: string) {
             插入模板
           </NButton>
         </NDropdown>
+        <NButton
+          v-if="aiReady"
+          size="tiny"
+          secondary
+          type="primary"
+          :loading="polishing"
+          :disabled="locked"
+          title="调用设置页配置的 AI 服务润色为面向用户的文案（仅生成草稿，仍须人工确认）"
+          @click="onPolish"
+        >
+          <template #icon><i aria-hidden="true" class="i-carbon-sparkle" /></template>
+          AI 润色
+        </NButton>
       </template>
       <NButton size="tiny" quaternary @click="showDiff = !showDiff">
         <template #icon><i aria-hidden="true" class="i-carbon-compare" /></template>

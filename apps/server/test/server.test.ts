@@ -406,3 +406,54 @@ async function collectSse(base: string, token: string, taskId: string): Promise<
   }
   return events
 }
+describe('AI 日志润色（/api/ai/polish）', () => {
+  let stub: import('node:http').Server | null = null
+
+  afterAll(async () => {
+    stub?.close()
+    // 恢复默认配置，不影响其它用例
+    await client.post('/api/config', { ai: { enabled: false, baseUrl: '', model: '', apiKey: '' } })
+  })
+
+  it('未启用 → 400 AI_DISABLED（不静默返回原文）', async () => {
+    await client.post('/api/config', { ai: { enabled: false, baseUrl: 'http://127.0.0.1:9', model: 'x', apiKey: '' } })
+    const { status, body } = await client.post('/api/ai/polish', { text: 'hello world' })
+    expect(status).toBe(400)
+    expect((body as { code: string }).code).toBe('AI_DISABLED')
+  })
+
+  it('启用后调用 OpenAI 兼容接口，返回去代码块包裹的润色结果', async () => {
+    const { createServer } = await import('node:http')
+    await new Promise<void>((resolve) => {
+      stub = createServer((req, res) => {
+        let data = ''
+        req.on('data', (c: Buffer) => { data += c.toString('utf8') })
+        req.on('end', () => {
+          const payload = JSON.parse(data) as { model: string; messages: { role: string; content: string }[] }
+          expect(payload.model).toBe('stub-model')
+          expect(payload.messages[0].role).toBe('system')
+          expect(payload.messages[1].content).toBe('hello world')
+          res.writeHead(200, { 'Content-Type': 'application/json' })
+          res.end(JSON.stringify({ choices: [{ message: { content: '```markdown\n润色后的对外日志\n```' } }] }))
+        })
+      })
+      stub.listen(0, '127.0.0.1', () => {
+        const addr = stub!.address() as { port: number }
+        const base = `http://127.0.0.1:${addr.port}`
+        void client.post('/api/config', { ai: { enabled: true, baseUrl: base, model: 'stub-model', apiKey: '' } })
+          .then(() => resolve())
+      })
+    })
+    const { status, body } = await client.post('/api/ai/polish', { text: 'hello world' })
+    expect(status).toBe(200)
+    expect((body as { content: string }).content).toBe('润色后的对外日志')
+  })
+
+  it('AI 服务异常 → 502 AI_FAILED（失败显式呈现，不静默回退原文）', async () => {
+    await client.post('/api/config', { ai: { enabled: true, baseUrl: 'http://127.0.0.1:9', model: 'x', apiKey: '' } })
+    const { status, body } = await client.post('/api/ai/polish', { text: 'hello world' })
+    expect(status).toBe(502)
+    expect((body as { code: string }).code).toBe('AI_FAILED')
+  })
+})
+

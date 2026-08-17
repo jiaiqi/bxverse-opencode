@@ -104,6 +104,7 @@
 | POST | `/api/sync` | 数据仓库 pull/push/commit/status | — | `apps/server/src/api/sync.ts` |
 | POST | `/api/auth/rotate` | 轮换 token（可选） | — | `apps/server/src/http/auth.ts` |
 | GET | `/api/publish/current` | 当前任务查询（可选，续跑 UI） | — | `apps/server/src/api/publish.ts` |
+| POST | `/api/ai/polish` | AI 日志润色（M5-02，未启用/缺配置 400） | `{ok, content}` | `apps/server/src/api/ai.ts` |
 | GET | `/api/repos/:pid/:rid/backups` | 仓库历次发布备份列表（R19） | `RepoBackupRef[]` | `apps/server/src/api/backups.ts` |
 | GET | `/api/backups/:releaseId/:repoId` | 备份元数据（R19） | `RepoBackupRef` | `apps/server/src/api/backups.ts` |
 | GET | `/api/backups/download/:releaseId/:repoId/:kind` | 备份文件流式下载（R19） | — | `apps/server/src/api/backups.ts` |

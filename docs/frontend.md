@@ -552,6 +552,8 @@ props: { before: string; after: string; labelBefore?: string; labelAfter?: strin
 
 详见 §9 完整规格。
 
+- **AI 润色按钮（M5-02）**：对外日志（`track==='external'`）在设置页 AI 已启用且 Base URL/模型已配置时显示「AI 润色」（`i-carbon-sparkle`，secondary 主色按钮）。点击后 `api.aiPolish(current)`（含未落盘输入），成功则整体替换为润色草稿并 `update:content`（状态机仍走 auto→edited→confirmed，**仅生成草稿，仍须人工确认**）；失败 message.error 呈现服务端错误，绝不静默回退原文。
+
 ### 4.15 ReleaseConsole
 
 ```ts

@@ -6,11 +6,6 @@ declare module '*.vue' {
   export default component
 }
 
-// vite-plugin-pwa 注入的虚拟模块（生产构建才有，运行时动态 import；dev 下不存在）
-declare module 'virtual:pwa-register' {
-  export function registerSW(options?: { immediate?: boolean }): (reloadPage?: boolean) => Promise<void>
-}
-
 // File System Access API（lib.dom 未收录部分，最小声明）
 interface SaveFilePickerOptions {
   suggestedName?: string
