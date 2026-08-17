@@ -9,5 +9,9 @@ Thumbs.db
 coverage/
 
 # 自动生成的类型声明
-apps/web/auto-imports.d.ts
 apps/web/components.d.ts
+
+# 设计稿与待评审文档——本地保留,不进仓库
+design/*.html
+design/*.webp
+docs/bxverse-redevelopment-requirements.md
