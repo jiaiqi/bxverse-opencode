@@ -25,12 +25,14 @@ const router = useRouter()
         <i aria-hidden="true" class="i-carbon-arrow-left" />
       </button>
       <div class="min-w-0">
-        <h1 class="flex items-center gap-2.5 text-22px font-semibold text-text-1 m-0 leading-7">
-          <i v-if="icon" class="text-brand-500" :class="icon" />
+        <h1 class="flex items-center gap-2.5 text-20px font-bold text-text-1 m-0 leading-8 tracking-tight">
+          <span v-if="icon" class="ph-ic text-brand-500 bg-brand-soft border-brand-200">
+            <i aria-hidden="true" class="text-15px" :class="icon" />
+          </span>
           <span class="truncate">{{ title }}</span>
           <slot name="badges" />
         </h1>
-        <p v-if="description" class="text-sm text-text-2 m-0 mt-0.5 truncate">{{ description }}</p>
+        <p v-if="description" class="text-xs text-text-3 m-0 mt-1 truncate">{{ description }}</p>
       </div>
     </div>
     <div class="flex items-center gap-2.5 shrink-0">

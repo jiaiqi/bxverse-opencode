@@ -1,5 +1,6 @@
 // apps/web/src/theme.ts
 // Naive UI themeOverrides：亮/暗两套实色值（naive 内部需解析色值计算衍生色，不能用 CSS var）
+// 精密仪器语言：翠绿主色 + 6/10/14 圆角；wenxi 仅叠加玻璃质感（tokens.css html.theme-wenxi）
 
 import type { GlobalThemeOverrides } from 'naive-ui'
 
@@ -15,18 +16,23 @@ const base = (colors: {
   surfaceHover: string
   surfaceAlt: string
   border: string
+  borderStrong: string
+  info: string
+  success: string
+  warning: string
+  error: string
 }): GlobalThemeOverrides => ({
   common: {
     primaryColor: colors.primary,
     primaryColorHover: colors.primaryHover,
     primaryColorPressed: colors.primaryPressed,
     primaryColorSuppl: colors.primaryHover,
-    infoColor: '#1971C2',
-    successColor: '#2F9E44',
-    warningColor: '#F08C00',
-    errorColor: '#E03131',
-    borderRadius: '8px',
-    borderRadiusSmall: '4px',
+    infoColor: colors.info,
+    successColor: colors.success,
+    warningColor: colors.warning,
+    errorColor: colors.error,
+    borderRadius: '10px',
+    borderRadiusSmall: '6px',
     fontFamily: 'var(--bx-font-sans)',
     fontSize: '14px',
     textColorBase: colors.text1,
@@ -46,84 +52,84 @@ const base = (colors: {
     actionColor: colors.surfaceAlt,
     fontWeightStrong: '600',
   },
-  Button: { borderRadiusMedium: '8px', heightMedium: '36px', fontWeight: '500' },
-  Card: { borderRadius: '8px', paddingMedium: '20px' },
-  Dialog: { borderRadius: '12px' },
-  Menu: { borderRadius: '8px', itemHeight: '40px' },
-  Tag: { borderRadius: '6px' },
+  Button: {
+    borderRadiusMedium: '10px',
+    heightMedium: '34px',
+    fontSizeMedium: '13px',
+    fontWeight: '500',
+    // 默认/次级态 = 描边按钮（原型 .btn：surface 底 + 1px 边框）
+    color: colors.surface,
+    textColor: colors.text2,
+    border: colors.border,
+    colorHover: colors.surfaceHover,
+    textColorHover: colors.text1,
+    borderHover: colors.borderStrong,
+    colorPressed: colors.surfaceHover,
+    textColorPressed: colors.text1,
+    borderPressed: colors.borderStrong,
+    colorSecondary: colors.surface,
+    textColorSecondary: colors.text2,
+    borderSecondary: colors.border,
+    colorSecondaryHover: colors.surfaceHover,
+    textColorSecondaryHover: colors.text1,
+    borderSecondaryHover: colors.borderStrong,
+    colorSecondaryPressed: colors.surfaceHover,
+    textColorSecondaryPressed: colors.text1,
+    borderSecondaryPressed: colors.borderStrong,
+    // primary = 翠绿实心 + 深色字（原型 btn-primary）
+    textColorPrimary: '#04140B',
+    textColorPrimaryHover: '#04140B',
+    textColorPrimaryPressed: '#04140B',
+  },
+  Card: { borderRadius: '14px', paddingMedium: '20px' },
+  Dialog: { borderRadius: '14px' },
+  Menu: { borderRadius: '10px', itemHeight: '40px' },
+  Tag: { borderRadius: '999px' },
   Collapse: { titleFontSize: '14px' },
   Tabs: { tabFontSizeMedium: '14px' },
 })
 
 export const lightThemeOverrides = base({
-  primary: '#4C6EF5',
-  primaryHover: '#748FFC',
-  primaryPressed: '#3B5BDB',
-  text1: '#1F2328',
-  text2: '#57606A',
-  text3: '#8B949E',
-  bg: '#F5F6F8',
+  primary: '#00A85E',
+  primaryHover: '#26C983',
+  primaryPressed: '#009353',
+  text1: '#11161D',
+  text2: '#4B5563',
+  text3: '#8B96A3',
+  bg: '#F4F6F8',
   surface: '#FFFFFF',
-  surfaceHover: '#F9FAFB',
-  surfaceAlt: '#FAFBFC',
-  border: '#E5E7EB',
+  surfaceHover: '#F2F4F7',
+  surfaceAlt: '#F0F2F5',
+  border: '#E2E6EC',
+  borderStrong: '#C9D0DA',
+  info: '#2563EB',
+  success: '#00A85E',
+  warning: '#D97706',
+  error: '#DC2626',
 })
 
 export const darkThemeOverrides = base({
-  primary: '#5C7CFA',
-  primaryHover: '#748FFC',
-  primaryPressed: '#4C6EF5',
-  text1: '#E9EBEE',
-  text2: '#A6ADB8',
-  text3: '#717985',
-  bg: '#121316',
-  surface: '#1A1C21',
-  surfaceHover: '#23262D',
-  surfaceAlt: '#15171B',
-  border: '#2A2E37',
+  primary: '#00C96E',
+  primaryHover: '#1FD982',
+  primaryPressed: '#00B160',
+  text1: '#E9EDF2',
+  text2: '#9AA4B2',
+  text3: '#5E6A78',
+  bg: '#0B0D10',
+  surface: '#12151B',
+  surfaceHover: '#1A1F28',
+  surfaceAlt: '#0A0C0F',
+  border: '#20262F',
+  borderStrong: '#2C3542',
+  info: '#4D9FFF',
+  success: '#00C96E',
+  warning: '#FFB454',
+  error: '#FF6B6B',
 })
 
 /**
- * R20 WenXi 深色玻璃拟态风格（themeStyle=wenxi，仅深色）：
- * 沉稳翠绿主色 + 18px 大圆角 + 胶囊按钮 + 玻璃色值。
- * 玻璃感（blur/渐变/氛围光）由 tokens.css 的 html.theme-wenxi 规则叠加。
+ * R20 WenXi 深色玻璃拟态（themeStyle=wenxi，仅深色）：
+ * 精密仪器统一语言（同 dark 套件）；玻璃感（blur/渐变/氛围光）
+ * 由 tokens.css 的 html.theme-wenxi 规则叠加，形状在 tokens 内调整。
  */
-export const wenxiThemeOverrides: GlobalThemeOverrides = {
-  common: {
-    primaryColor: '#00C96E',
-    primaryColorHover: '#1FD982',
-    primaryColorPressed: '#00B160',
-    primaryColorSuppl: '#1FD982',
-    infoColor: '#3B82F6',
-    successColor: '#00C96E',
-    warningColor: '#FFA940',
-    errorColor: '#FF4D4F',
-    borderRadius: '12px',
-    borderRadiusSmall: '7px',
-    fontFamily: 'var(--bx-font-sans)',
-    fontSize: '14px',
-    textColorBase: '#F4F6F5',
-    textColor1: '#F4F6F5',
-    textColor2: '#B0B6B3',
-    textColor3: '#79807C',
-    bodyColor: '#050507',
-    cardColor: '#14161A',
-    modalColor: '#14161A',
-    popoverColor: '#14161A',
-    tableColor: 'rgba(255,255,255,.03)',
-    tableHeaderColor: 'rgba(255,255,255,.06)',
-    hoverColor: 'rgba(255,255,255,.08)',
-    borderColor: 'rgba(255,255,255,.1)',
-    dividerColor: 'rgba(255,255,255,.08)',
-    inputColor: 'rgba(255,255,255,.045)',
-    actionColor: '#0A0B0E',
-    fontWeightStrong: '600',
-  },
-  Button: { borderRadiusMedium: '999px', heightMedium: '36px', fontWeight: '500' },
-  Card: { borderRadius: '18px', paddingMedium: '20px' },
-  Dialog: { borderRadius: '14px' },
-  Menu: { borderRadius: '10px', itemHeight: '40px' },
-  Tag: { borderRadius: '7px' },
-  Collapse: { titleFontSize: '14px' },
-  Tabs: { tabFontSizeMedium: '14px' },
-}
+export const wenxiThemeOverrides: GlobalThemeOverrides = darkThemeOverrides

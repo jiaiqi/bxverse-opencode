@@ -6,9 +6,13 @@ export interface DiffLine {
   line: string
 }
 
+/** 行级 LCS 为 O(n×m)，超限拒绝计算（调用方应展示提示） */
+const MAX_DIFF_LINES = 1500
+
 export function diffLines(a: string, b: string): DiffLine[] {
   const A = a.split('\n')
   const B = b.split('\n')
+  if (A.length > MAX_DIFF_LINES || B.length > MAX_DIFF_LINES) return []
   const m = A.length
   const n = B.length
   const dp: number[][] = Array.from({ length: m + 1 }, () => new Array<number>(n + 1).fill(0))

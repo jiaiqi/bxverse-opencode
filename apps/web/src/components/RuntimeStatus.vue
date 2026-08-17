@@ -18,12 +18,20 @@ const display = computed(() => {
 
 <template>
   <button
-    class="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs transition-colors duration-150 focus-ring"
-    :class="status === 'connected' ? 'bg-success-soft' : status === 'unavailable' ? 'bg-warning-soft' : 'bg-surface-hover'"
+    class="focus-ring"
+    :class="
+      status === 'connected'
+        ? 'status-pill'
+        : status === 'unavailable'
+          ? 'flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs transition-colors duration-150 bg-warning-soft'
+          : 'flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs transition-colors duration-150 bg-surface-hover'
+    "
+    aria-label="重新检测服务状态"
     :title="status === 'connected' ? `bxverse v${version}` : errorMessage"
     @click="check"
   >
-    <i aria-hidden="true" class="text-13px" :class="[display.icon, display.cls]" />
+    <span v-if="status === 'connected'" class="pulse" />
+    <i v-else aria-hidden="true" class="text-13px" :class="[display.icon, display.cls]" />
     <span :class="display.cls">{{ display.label }}</span>
   </button>
 </template>

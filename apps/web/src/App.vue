@@ -65,16 +65,18 @@ onMounted(() => {
         <NNotificationProvider>
           <template v-if="booting">
               <div class="flex h-screen items-center justify-center gap-3 bg-bg">
-                <NSpin size="large" />
-                <span class="text-text-3">正在连接本地服务…</span>
+                <div class="flex flex-col items-center gap-4">
+                  <span class="sb-logo-mark w-11 h-11 rounded-xl"><i aria-hidden="true" class="i-carbon-cube text-18px" /></span>
+                  <span class="text-text-3 text-sm">正在连接本地服务…</span>
+                </div>
               </div>
             </template>
             <template v-else-if="bootError">
               <div class="empty-wrap">
-                <i aria-hidden="true" class="i-carbon-cloud-off text-48px text-text-3" />
+                <span class="e-ic"><i aria-hidden="true" class="i-carbon-cloud-off text-24px text-text-3" /></span>
                 <div class="text-lg font-semibold text-text-1">无法连接 BX 版本管理台服务</div>
                 <div class="text-sm text-text-3 max-w-md">{{ bootError }}</div>
-                <button class="btn-primary" @click="() => { bootError = ''; booting = true; appStore.boot().catch(e => { bootError = e.message }).finally(() => { booting = false }) }">
+                <button class="btn-primary mt-2" @click="() => { bootError = ''; booting = true; appStore.boot().catch(e => { bootError = e.message }).finally(() => { booting = false }) }">
                   <i aria-hidden="true" class="i-carbon-renew" /> 重试
                 </button>
               </div>

@@ -7,6 +7,7 @@ import { useProjectsStore } from '../stores/projects'
 import { api } from '../api'
 import PageHeader from '../components/PageHeader.vue'
 import EmptyState from '../components/EmptyState.vue'
+import { formatDateTime } from '../utils/format'
 import { useDialog, useMessage } from 'naive-ui'
 
 const route = useRoute()
@@ -25,6 +26,13 @@ const KIND_LABEL: Record<string, string> = {
   'source-bundle': '源码 bundle',
   'source-archive': '源码快照',
   artifact: '产物归档',
+}
+
+/** 备份类型图标（对齐原型 .bi-kind 容器） */
+const KIND_ICON: Record<string, string> = {
+  'source-bundle': 'i-carbon-git-branch',
+  'source-archive': 'i-carbon-document',
+  artifact: 'i-carbon-cube',
 }
 
 async function load() {
@@ -59,10 +67,6 @@ function fmtBytes(n: number): string {
   if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`
   if (n < 1024 ** 3) return `${(n / 1024 / 1024).toFixed(1)} MB`
   return `${(n / 1024 ** 3).toFixed(2)} GB`
-}
-
-function fmtTime(iso: string): string {
-  return iso ? iso.replace('T', ' ').slice(0, 19) : ''
 }
 
 // ---------- 下载 / 删除 / 校验 ----------
@@ -214,8 +218,28 @@ function exportReport() {
   URL.revokeObjectURL(url)
 }
 
+/** 对比状态 → 四色 chip（新增/变更/一致/缺失） */
+const STATUS_CHIP: Record<string, string> = {
+  added: 'chip-brand',
+  modified: 'chip-info',
+  same: 'chip-dim',
+  removed: 'chip-error',
+}
+const STATUS_PREFIX: Record<string, string> = {
+  added: '+',
+  modified: '~',
+  same: '=',
+  removed: '-',
+}
+
 const compareColumns = [
-  { title: '状态', key: 'status', width: 70 },
+  {
+    title: '状态',
+    key: 'status',
+    width: 70,
+    render: (row: { status: string }) =>
+      h('span', { class: `chip code-text ${STATUS_CHIP[row.status] ?? 'chip-dim'}` }, `${STATUS_PREFIX[row.status] ?? ''} ${STATUS_LABEL[row.status] ?? row.status}`),
+  },
   { title: '文件', key: 'path', ellipsis: { tooltip: true } },
   { title: '插入', key: 'insertions', width: 70 },
   { title: '删除', key: 'deletions', width: 70 },
@@ -284,17 +308,22 @@ const compareRows = computed(() =>
           <div v-if="(backupsByRepo[repo.id]?.length ?? 0) === 0" class="py-4 text-center text-xs text-text-3">
             暂无备份——发布一次后自动生成
           </div>
-          <div v-else class="divide-y divide-border">
+          <div v-else class="space-y-2">
             <div
               v-for="r in backupsByRepo[repo.id]"
               :key="r.releaseId"
-              class="flex items-center gap-3 py-2.5"
+              class="flex items-center gap-3 px-3.5 py-3 rounded-[var(--bx-radius-md)] border bg-surface transition-[border-color,background-color] duration-150"
+              :class="isSelected(r) ? 'border-brand-500 bg-brand-soft' : 'border-border hover:border-border-strong'"
             >
               <NCheckbox :checked="isSelected(r)" @update:checked="toggleSelect(r)" />
+              <!-- 类型图标容器（对齐原型 .bi-kind） -->
+              <span class="w-[34px] h-[34px] flex items-center justify-center rounded-[9px] bg-surface-alt border border-border text-text-3 shrink-0">
+                <i aria-hidden="true" class="text-16px" :class="KIND_ICON[r.items[0]?.kind ?? ''] ?? 'i-carbon-database'" />
+              </span>
               <div class="min-w-0 flex-1">
                 <div class="flex items-center gap-2">
                   <span class="code-text text-13px">{{ r.version }}</span>
-                  <span class="text-xs text-text-3">{{ fmtTime(r.date) }}</span>
+                  <span class="text-xs text-text-3">{{ formatDateTime(r.date) }}</span>
                   <span v-if="r.tag" class="code-text text-xs text-text-3">{{ r.tag }}</span>
                 </div>
                 <div class="flex items-center gap-2 mt-1 flex-wrap">
@@ -307,23 +336,37 @@ const compareRows = computed(() =>
                   </span>
                 </div>
               </div>
-              <NDropdown
-                trigger="click"
-                :options="r.items.map(i => ({ label: `下载 ${KIND_LABEL[i.kind] ?? i.kind}（${fmtBytes(i.size)}）`, key: i.kind }))"
-                @select="(k: string) => downloadItem(r, k)"
-              >
-                <NButton size="tiny" secondary>
-                  <template #icon><i aria-hidden="true" class="i-carbon-download" /></template>
-                  下载
-                </NButton>
-              </NDropdown>
-              <NButton size="tiny" secondary @click="runVerify(r)">
-                <template #icon><i aria-hidden="true" class="i-carbon-checkmark-outline" /></template>
-                校验
-              </NButton>
-              <NButton size="tiny" quaternary type="error" @click="confirmRemove(r)">
-                <template #icon><i aria-hidden="true" class="i-carbon-trash-can" /></template>
-              </NButton>
+              <div class="flex items-center gap-1 shrink-0">
+                <NDropdown
+                  trigger="click"
+                  :options="r.items.map(i => ({ label: `下载 ${KIND_LABEL[i.kind] ?? i.kind}（${fmtBytes(i.size)}）`, key: i.kind }))"
+                  @select="(k: string) => downloadItem(r, k)"
+                >
+                  <button
+                    class="w-7 h-7 flex items-center justify-center rounded-md text-text-3 hover:bg-surface-hover hover:text-text-1 transition-colors duration-150"
+                    aria-label="下载"
+                    title="下载"
+                  >
+                    <i aria-hidden="true" class="i-carbon-download" />
+                  </button>
+                </NDropdown>
+                <button
+                  class="w-7 h-7 flex items-center justify-center rounded-md text-text-3 hover:bg-surface-hover hover:text-text-1 transition-colors duration-150"
+                  aria-label="校验"
+                  title="校验"
+                  @click="runVerify(r)"
+                >
+                  <i aria-hidden="true" class="i-carbon-checkmark-outline" />
+                </button>
+                <button
+                  class="w-7 h-7 flex items-center justify-center rounded-md text-text-3 hover:bg-error-soft hover:text-error transition-colors duration-150"
+                  aria-label="删除"
+                  title="删除"
+                  @click="confirmRemove(r)"
+                >
+                  <i aria-hidden="true" class="i-carbon-trash-can" />
+                </button>
+              </div>
             </div>
           </div>
         </section>

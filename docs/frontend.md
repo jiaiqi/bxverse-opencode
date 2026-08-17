@@ -165,9 +165,22 @@ export const wenxiThemeOverrides: GlobalThemeOverrides = {
 ### 1.9 R20 双主题风格（themeStyle）
 
 - 契约：`AppConfig.themeStyle?: 'indigo' | 'wenxi'`（shared 扩展字段，可选；server POST /api/config 白名单支持，校验 indigo/wenxi）。
-- CSS 变量：`tokens.css` 中 `html.theme-wenxi` 覆盖全部 `--bx-*`（翠绿品牌、近纯黑基底、半透明玻璃面、18px 圆角、`--bx-radius-btn: 999px` 胶囊、`--bx-nav-indicator` 激活指示条）+ 背景氛围光 + `.card/.n-card` 玻璃配方（`backdrop-filter: blur(18px) saturate(140%)`）+ 顶栏/侧栏玻璃化。
+- CSS 变量：`tokens.css` 中 `html.theme-wenxi` 覆盖全部 `--bx-*`（翠绿品牌、近纯黑基底、半透明玻璃面、`--bx-radius-card: 18px`、`--bx-nav-indicator` 激活指示条）+ 背景氛围光 + `.card/.n-card` 玻璃配方（`backdrop-filter: blur(18px) saturate(140%)`）+ 顶栏/侧栏玻璃化。
 - 交互：设置页「外观与体验」双卡选择（点击即时预览，持久化 app.json）；侧栏/顶栏主题按钮在 wenxi 下点击切回 indigo（保留 mode 语义），indigo 下循环 亮/暗/系统；wenxi 强制深色（`appStore.applyTheme()` 处理 `html.theme-wenxi` class）。
 - 布局：AppLayout 新增顶栏（页标题 / 命令面板搜索 / RuntimeStatus chip / 主题切换 / 同步数据 / 新建项目）；Dashboard 页头同步/新建按钮上移顶栏去重。
+
+### 1.10 R21 精密仪器视觉语言（UI 重设计落地）
+
+> 背景：R20 后按已确认原型 `design/bxverse-v2-prototype.html` 整体换肤，用户认可后落地。功能零变更，纯视觉/可达性层。
+
+- **令牌**：`tokens.css` 全部 `--bx-*` 重定义——翠绿主色（亮 `#00A85E` / 深 `#00C96E`）、深色基底 `#0B0D10`、表面分层 `#12151B/#1A1F28`、边框 `#20262F`；圆角 6/10/14/20；动效 `--bx-ease: cubic-bezier(0.23,1,0.32,1)` + 140/200/260ms 三档；字体 `--bx-font-sans` 增加 Sora 首选、`--bx-font-mono` 增加 JetBrains Mono 首选（无网络字体加载，系统回退）。
+- **背景**：`body` 顶部品牌光晕渐变（深色叠加右上部蓝色光晕）+ `body::before` 细网格线（32px，呼应 git graph，radial mask 淡出）；顶栏/侧栏半透明 + `backdrop-filter: blur(14px)`（小面积玻璃，非 wenxi 大卡片玻璃）。
+- **版本徽章 `.version-badge`**（视觉主角）：等宽 tabular 数字 + 发光左缘 `tick`（品牌色 3px 竖条），`.ghost` 变体用 info 蓝；用于项目卡、仓库卡、发布历史行、向导步骤 2。
+- **组件类**：`.ph-ic/.stat-ic` 图标容器（品牌软底方块）、`.status-pill` 服务状态 pill（发光 pulse 动画）、`.release-row::before` 发布行左缘指示条、`.sb-logo-mark` 品牌方块 logo、`.sb-kbd` 快捷键、`.empty-wrap .e-ic` 空态图标容器。
+- **UnoCSS shortcuts**：`card-hover`（hover 抬升 + 深阴影）、`btn-primary`（翠绿实心 + 深色字 + `active:scale-97` 按压）、`chip-*` 语义色胶囊（brand/info/warn/error）、`stat-value`（26px mono 加粗读数）、`skeleton`（shimmer 渐变）、`console-wrap`（固定深底终端窗，亮暗主题一致）。
+- **Naive overrides**：`theme.ts` 三套统一翠绿主色与 6/10/14 圆角；wenxi 与 dark 同色值，玻璃差异全在 tokens.css。
+- **可达性修复（随本次落地）**：卡片/发布行/日志行 `role`+`tabindex`+Enter/Space 键盘；icon-only 按钮 aria-label；装饰图标 aria-hidden；`EmptyState` 按钮 `v-if="$attrs.onAction"`（无 @action 不再渲染无效按钮）；RepoDetail `back-to` 补冒号绑定（原为字面量字符串跳 404）；Dashboard/BackupManage 日期走 Intl 工具。
+- **侧栏**：logo 品牌方块 + 副标；底部三按钮统一左对齐（`<button>` 默认居中已显式 `text-left`）；激活项品牌软底 + 左指示条。
 
 ### 1.8 UnoCSS 配置（uno.config.ts）
 

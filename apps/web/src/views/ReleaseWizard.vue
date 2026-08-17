@@ -60,6 +60,20 @@ function toggleRepo(id: string) {
 
 /** 步骤 1：提交级条目确认 */
 const commitsExpanded = ref<Set<string>>(new Set())
+/** 提交明细预览上限：仓库提交可能上千条，先渲染前 N 条避免整列 DOM 卡顿 */
+const COMMITS_PREVIEW_LIMIT = 100
+const commitsShowAll = ref(false)
+
+function visibleCommits(repoId: string) {
+  const list = statuses.value.get(repoId)?.commits ?? []
+  return commitsShowAll.value ? list : list.slice(0, COMMITS_PREVIEW_LIMIT)
+}
+
+function hiddenCommitsCount(repoId: string): number {
+  if (commitsShowAll.value) return 0
+  const list = statuses.value.get(repoId)?.commits ?? []
+  return Math.max(0, list.length - COMMITS_PREVIEW_LIMIT)
+}
 
 function toggleCommitsPanel(repoId: string) {
   const next = new Set(commitsExpanded.value)
@@ -255,8 +269,8 @@ const resultReleaseId = computed(() => store.result?.releaseId ?? '')
           </div>
           <template v-else>
             <div class="space-y-3">
-              <div v-for="repo in project.repos" :key="repo.id" class="rounded-md border transition-[border-color,background-color] duration-150"
-                :class="statuses.get(repo.id)?.changed ? 'border-brand-200 bg-brand-50 hover:border-brand-300' : 'border-border bg-surface-alt opacity-70'">
+              <div v-for="repo in project.repos" :key="repo.id" class="wz-row rounded-md border bg-surface"
+                :class="statuses.get(repo.id)?.changed ? 'border-brand-200 bg-brand-soft hover:border-brand-300' : 'border-border opacity-65 hover:border-border-strong'">
                 <div class="flex items-center gap-3 px-4 py-3 cursor-pointer" @click="statuses.get(repo.id)?.changed && toggleRepo(repo.id)">
                   <NCheckbox
                     :checked="store.selectedRepoIds.includes(repo.id)"
@@ -293,7 +307,7 @@ const resultReleaseId = computed(() => store.result?.releaseId ?? '')
                   </button>
                   <div v-if="commitsExpanded.has(repo.id)" class="mt-2 max-h-64 overflow-y-auto rounded-md border border-border bg-surface divide-y divide-border">
                     <label
-                      v-for="c in statuses.get(repo.id)?.commits ?? []"
+                      v-for="c in visibleCommits(repo.id)"
                       :key="c.fullHash"
                       class="flex items-center gap-2.5 px-3 py-2 cursor-pointer hover:bg-surface-hover transition-colors duration-100"
                     >
@@ -308,6 +322,11 @@ const resultReleaseId = computed(() => store.result?.releaseId ?? '')
                     </label>
                     <div v-if="(statuses.get(repo.id)?.commits ?? []).length === 0" class="px-3 py-4 text-center text-xs text-text-3">
                       无提交
+                    </div>
+                    <div v-if="hiddenCommitsCount(repo.id) > 0" class="text-center py-2.5 bg-surface-alt">
+                      <button class="link text-xs" @click="commitsShowAll = true">
+                        展开全部 {{ hiddenCommitsCount(repo.id) }} 条提交（{{ (statuses.get(repo.id)?.commits ?? []).length }} 条共）
+                      </button>
                     </div>
                   </div>
                 </div>
@@ -359,7 +378,7 @@ const resultReleaseId = computed(() => store.result?.releaseId ?? '')
                   <i aria-hidden="true" class="i-carbon-git-branch text-brand-500" />
                   <span class="font-medium text-text-1 text-sm min-w-30">{{ r.name }}</span>
                   <span class="code-text text-xs text-text-3">{{ r.from?.slice(0, 7) ?? '首次' }} → {{ r.to?.slice(0, 7) }}</span>
-                  <span class="code-text text-sm text-brand-600">{{ r.version }}</span>
+                  <span class="version-badge"><span class="tick"></span>{{ r.version }}</span>
                   <span class="chip">{{ r.commits.length }} 提交</span>
                 </div>
               </div>

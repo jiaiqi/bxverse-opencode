@@ -131,7 +131,7 @@ const flatActive = (groupIdx: number, itemIdx: number): number => {
         <input
           ref="inputRef"
           v-model="query"
-          class="flex-1 bg-transparent outline-none text-text-1 text-sm placeholder-text-3"
+          class="flex-1 bg-transparent rounded-md text-text-1 text-sm placeholder-text-3 outline-none focus:ring-2 focus:ring-brand-500"
           aria-label="搜索命令、项目、仓库"
           placeholder="搜索命令、项目、仓库…"
           autocomplete="off"

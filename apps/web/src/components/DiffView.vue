@@ -13,7 +13,16 @@ const props = withDefaults(defineProps<{
   labelAfter: '当前内容',
 })
 
-const diff = computed(() => diffLines(props.before, props.after))
+/** 行级 LCS 是 O(n×m)，超限不做全量计算（超长日志草稿直接提示） */
+const MAX_DIFF_LINES = 1500
+
+const tooLarge = computed(
+  () =>
+    props.before.split('\n').length > MAX_DIFF_LINES ||
+    props.after.split('\n').length > MAX_DIFF_LINES,
+)
+
+const diff = computed(() => (tooLarge.value ? [] : diffLines(props.before, props.after)))
 const stats = computed(() => {
   let add = 0
   let del = 0
@@ -35,7 +44,10 @@ const stats = computed(() => {
       <span class="chip text-success border-success/30 bg-success-soft">+{{ stats.add }}</span>
       <span class="chip text-error border-error/30 bg-error-soft">-{{ stats.del }}</span>
     </div>
-    <div class="max-h-100 overflow-auto py-1">
+    <div v-if="tooLarge" class="px-4 py-6 text-center text-xs text-text-3">
+      两侧内容过长（超过 {{ MAX_DIFF_LINES.toLocaleString('zh-CN') }} 行），已跳过逐行对比——请直接在编辑器中人工核对，或使用「自动草稿」重置后重新编辑。
+    </div>
+    <div v-else class="max-h-100 overflow-auto py-1">
       <div
         v-for="(d, i) in diff"
         :key="i"

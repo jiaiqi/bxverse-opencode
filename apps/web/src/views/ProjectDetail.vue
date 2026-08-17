@@ -204,7 +204,7 @@ usePolling(async () => {
             <div
               v-for="r in releases"
               :key="r.id"
-              class="px-5 py-3.5 cursor-pointer hover:bg-surface-hover transition-colors duration-150"
+              class="release-row px-5 py-3.5 cursor-pointer hover:bg-surface-hover transition-colors duration-150"
               role="button"
               tabindex="0"
               :aria-label="`查看 ${r.version} 发布详情`"
@@ -213,7 +213,7 @@ usePolling(async () => {
               @keydown.space.prevent="openDetail(r)"
             >
               <div class="flex items-center gap-3 flex-wrap">
-                <span class="code-text font-medium text-text-1" translate="no">{{ r.version }}</span>
+                <span class="version-badge" translate="no"><span class="tick" />{{ r.version }}</span>
                 <StatusBadge type="bump" :bump="r.bump" />
                 <StatusBadge type="pushed" :pushed="r.pushed" />
                 <span class="flex-1" />

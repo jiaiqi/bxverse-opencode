@@ -2,6 +2,7 @@
 // 发布向导六步状态机（数据全部保留，步骤切换不销毁）
 
 import { defineStore } from 'pinia'
+import { markRaw } from 'vue'
 import type { BumpType, LogState, PublishPlan, PublishRequest } from '@bxverse/shared'
 import { api } from '../api'
 import type { PublishEventLike } from '../api'
@@ -106,7 +107,9 @@ export const usePublishStore = defineStore('publish', {
           dryRun: true,
         }
         const plan = (await api.publish(req)) as PublishPlan
-        this.plan = plan
+        // markRaw：plan 可达数 MB（提交明细 + 双轨草稿），生成后整体替换不再变更，
+        // 深度 reactive 代理大对象会拖慢 getter/依赖收集，只保留浅层引用
+        this.plan = markRaw(plan)
         this.planDirty = false
         // 草稿同步：state=auto 时跟随新草稿；edited/confirmed 保留人工内容（调用方确认重置）
         if (this.logs.external.state === 'auto') {
@@ -146,6 +149,10 @@ export const usePublishStore = defineStore('publish', {
 
     async execute(): Promise<string> {
       if (!this.plan) throw new Error('发布计划不存在')
+      // 日志未编辑（含 confirmed 但内容仍等于自动草稿）时不携带 content：
+      // 超长日志（首次发布可达数 MB）无需重复传输，engine 会用 plan 草稿兜底
+      const extEdited = this.logs.external.state !== 'auto' && this.logs.external.content !== this.logs.external.autoDraft
+      const intEdited = this.logs.internal.state !== 'auto' && this.logs.internal.content !== this.logs.internal.autoDraft
       const req: PublishRequest = {
         projectId: this.projectId,
         bump: this.plan.bump,
@@ -153,8 +160,8 @@ export const usePublishStore = defineStore('publish', {
         excludeCommits: this.excludedCommits,
         offline: this.offline,
         skipBuild: this.skipBuild,
-        externalContent: this.logs.external.state === 'auto' ? undefined : this.logs.external.content,
-        internalContent: this.logs.internal.state === 'auto' ? undefined : this.logs.internal.content,
+        externalContent: extEdited ? this.logs.external.content : undefined,
+        internalContent: intEdited ? this.logs.internal.content : undefined,
       }
       const res = (await api.publish(req)) as { taskId: string; queued: boolean }
       this.taskId = res.taskId

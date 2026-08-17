@@ -156,7 +156,7 @@ watch(tab, (t) => {
     <template v-if="repo">
       <PageHeader
         :title="repo.name"
-        back-to="`/project/${pid}`"
+        :back-to="`/project/${pid}`"
         icon="i-carbon-git-branch"
       >
         <template #badges>
@@ -169,7 +169,15 @@ watch(tab, (t) => {
         </template>
         <span v-if="repo.remote" class="chip code-text max-w-60 truncate" :title="repo.remote">
           {{ repo.remote }}
-          <i aria-hidden="true" class="i-carbon-copy cursor-pointer hover:text-brand-500" @click="copyRemote" />
+          <button
+            type="button"
+            class="shrink-0 inline-flex items-center justify-center text-text-3 transition-colors duration-140 hover:text-brand-500 focus-ring rounded"
+            aria-label="复制远程地址"
+            title="复制远程地址"
+            @click="copyRemote"
+          >
+            <i aria-hidden="true" class="i-carbon-copy" />
+          </button>
         </span>
       </PageHeader>
 
@@ -199,7 +207,12 @@ watch(tab, (t) => {
                     :key="r.id"
                     class="px-4 py-2.5 cursor-pointer transition-colors duration-100 border-l-2"
                     :class="selectedRelease?.id === r.id ? 'bg-brand-soft border-brand-500' : 'border-transparent hover:bg-surface-hover'"
+                    role="button"
+                    tabindex="0"
+                    :aria-label="`查看 ${r.version} 发布记录`"
                     @click="selectedRelease = r"
+                    @keydown.enter="selectedRelease = r"
+                    @keydown.space.prevent="selectedRelease = r"
                   >
                     <div class="code-text text-sm text-text-1" translate="no">{{ r.version }}</div>
                     <div class="text-xs text-text-3 mt-0.5">{{ formatDate(r.date) }} · {{ r.stats.commits }} 提交</div>

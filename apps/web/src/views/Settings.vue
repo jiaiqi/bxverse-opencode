@@ -111,15 +111,16 @@ function rotateToken() {
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
             <button
               class="flex items-center gap-3 p-3.5 rounded-lg border text-left transition-colors duration-150 focus-ring bg-surface"
-              :class="form.themeStyle === 'indigo' ? 'border-brand-500 bg-brand-soft' : 'border-border hover:border-border-strong'"
+              :class="form.themeStyle === 'indigo' ? 'border-brand-500 bg-brand-soft shadow-[0_0_0_1px_var(--bx-brand-500)]' : 'border-border hover:border-border-strong'"
               :aria-pressed="form.themeStyle === 'indigo'"
               @click="pickStyle('indigo')"
             >
-              <span class="w-9 h-9 rounded-md border border-border shrink-0 flex items-center justify-center overflow-hidden">
-                <span class="w-4 h-4 rounded-sm bg-brand-500 shrink-0" />
+              <!-- swatch：精密仪器深色基底 + 翠绿强调点（对齐原型 .theme-opt） -->
+              <span class="w-10 h-10 rounded-[10px] border border-border shrink-0 relative overflow-hidden bg-[#0B0D10]">
+                <span class="absolute w-3.5 h-3.5 rounded-[4px] bg-brand-500" style="left: 12px; top: 12px" />
               </span>
               <span class="min-w-0">
-                <span class="block text-sm font-medium text-text-1">Indigo 标准</span>
+                <span class="block text-13px font-semibold text-text-1">Indigo 标准</span>
                 <span class="block text-xs text-text-3 mt-0.5">亮 / 暗 / 跟随系统</span>
               </span>
               <i
@@ -130,15 +131,15 @@ function rotateToken() {
             </button>
             <button
               class="flex items-center gap-3 p-3.5 rounded-lg border text-left transition-colors duration-150 focus-ring bg-surface"
-              :class="form.themeStyle === 'wenxi' ? 'border-brand-500 bg-brand-soft' : 'border-border hover:border-border-strong'"
+              :class="form.themeStyle === 'wenxi' ? 'border-brand-500 bg-brand-soft shadow-[0_0_0_1px_var(--bx-brand-500)]' : 'border-border hover:border-border-strong'"
               :aria-pressed="form.themeStyle === 'wenxi'"
               @click="pickStyle('wenxi')"
             >
-              <span class="w-9 h-9 rounded-md border border-border shrink-0 flex items-center justify-center overflow-hidden bg-[#050507]">
-                <span class="w-4 h-4 rounded-sm bg-brand-500 shrink-0" style="box-shadow: 0 0 8px rgba(0,201,110,.5)" />
+              <span class="w-10 h-10 rounded-[10px] border border-border shrink-0 relative overflow-hidden bg-[#050507]">
+                <span class="absolute w-3.5 h-3.5 rounded-[4px] bg-brand-500" style="left: 12px; top: 12px; box-shadow: 0 0 8px rgba(0,201,110,.5)" />
               </span>
               <span class="min-w-0">
-                <span class="block text-sm font-medium text-text-1">WenXi 深色玻璃</span>
+                <span class="block text-13px font-semibold text-text-1">WenXi 深色玻璃</span>
                 <span class="block text-xs text-text-3 mt-0.5">近纯黑基底 · 翠绿强调 · 仅深色</span>
               </span>
               <i
@@ -172,7 +173,7 @@ function rotateToken() {
             <div class="text-sm font-medium text-text-1">变动检测周期</div>
             <div class="text-xs text-text-3 mt-0.5">仓库变更自动检测间隔（毫秒）</div>
           </div>
-          <NInputNumber v-model:value="form.pollInterval" :min="5000" :max="3600000" :step="5000" class="w-40" />
+          <NInputNumber v-model:value="form.pollInterval" :min="5000" :max="3600000" :step="5000" class="w-40" :input-props="{ 'aria-label': '变动检测周期' }" />
         </div>
       </div>
     </section>
@@ -190,17 +191,17 @@ function rotateToken() {
         <template v-if="form.aiEnabled">
           <div class="grid grid-cols-2 gap-4">
             <div>
-              <div class="text-xs text-text-2 mb-1">Base URL（OpenAI 兼容）</div>
-              <NInput v-model:value="form.aiBaseUrl" placeholder="http://127.0.0.1:11434/v1" />
+              <label class="field-label">Base URL（OpenAI 兼容）</label>
+              <NInput v-model:value="form.aiBaseUrl" placeholder="http://127.0.0.1:11434/v1" :input-props="{ 'aria-label': 'Base URL（OpenAI 兼容）' }" />
             </div>
             <div>
-              <div class="text-xs text-text-2 mb-1">模型</div>
-              <NInput v-model:value="form.aiModel" placeholder="qwen2.5:7b" />
+              <label class="field-label">模型</label>
+              <NInput v-model:value="form.aiModel" placeholder="qwen2.5:7b" :input-props="{ 'aria-label': '模型' }" />
             </div>
           </div>
           <div>
-            <div class="text-xs text-text-2 mb-1">API Key（仅存本机）</div>
-            <NInput v-model:value="form.aiApiKey" type="password" show-password-on="click" placeholder="sk-…" />
+            <label class="field-label">API Key（仅存本机）</label>
+            <NInput v-model:value="form.aiApiKey" type="password" show-password-on="click" placeholder="sk-…" :input-props="{ 'aria-label': 'API Key（仅存本机）' }" />
           </div>
         </template>
       </div>

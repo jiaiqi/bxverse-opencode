@@ -73,9 +73,12 @@ async function syncData() {
     >
       <!-- Logo -->
       <RouterLink to="/" class="flex items-center gap-2.5 px-4 h-14 shrink-0 no-underline hover:bg-surface-hover transition-colors duration-150" :class="collapsed ? 'justify-center px-0' : ''">
-        <i aria-hidden="true" class="i-carbon-cube text-22px text-brand-500 shrink-0" />
+        <span class="sb-logo-mark"><i aria-hidden="true" class="i-carbon-cube text-13px" /></span>
         <template v-if="!collapsed">
-          <span class="font-semibold text-15px text-text-1">BX 版本管理台</span>
+          <span class="font-semibold text-13.5px text-text-1 leading-4 whitespace-nowrap">
+            BX 版本管理台
+            <small class="block text-10px font-normal text-text-3 tracking-widest font-mono">BXVERSE · LOCAL</small>
+          </span>
         </template>
       </RouterLink>
 
@@ -132,14 +135,14 @@ async function syncData() {
       </nav>
 
       <!-- 底部 -->
-      <div class="px-2.5 py-2 border-t border-border space-y-1 shrink-0">
+      <div class="sb-foot px-2.5 py-2 border-t border-border space-y-1 shrink-0">
         <RouterLink
           to="/settings"
-          class="sidebar-item no-underline"
+          class="sidebar-item w-full text-left no-underline"
           :class="{ 'sidebar-item-active': route.path === '/settings' }"
         >
           <i aria-hidden="true" class="i-carbon-settings sidebar-icon" />
-          <span v-if="!collapsed">设置</span>
+          <span v-if="!collapsed" class="flex-1">设置</span>
         </RouterLink>
         <button class="sidebar-item w-full text-left" :title="themeTitle" @click="cycleTheme">
           <i aria-hidden="true" class="sidebar-icon" :class="themeIcon" />
@@ -149,7 +152,7 @@ async function syncData() {
         <button class="sidebar-item w-full text-left" @click="uiStore.togglePalette(true)">
           <i aria-hidden="true" class="i-carbon-search sidebar-icon" />
           <span v-if="!collapsed" class="flex-1">命令面板</span>
-          <span v-if="!collapsed" class="text-xs text-text-3 border border-border rounded-sm px-1">Ctrl&nbsp;K</span>
+          <span v-if="!collapsed" class="sb-kbd">Ctrl K</span>
         </button>
       </div>
     </aside>
@@ -158,19 +161,19 @@ async function syncData() {
     <div class="flex-1 flex flex-col min-w-0">
       <header class="topbar flex items-center gap-3 px-6 h-14 shrink-0 bg-surface border-b border-border">
         <div class="flex items-baseline gap-2 min-w-0">
-          <span class="text-sm font-semibold text-text-1 truncate">{{ pageTitle }}</span>
-          <span v-if="!collapsed" class="hidden md:block text-11px text-text-3 whitespace-nowrap">BX 版本管理台</span>
+          <span class="text-14px font-semibold text-text-1 truncate">{{ pageTitle }}</span>
+          <span v-if="!collapsed" class="hidden md:block text-11px text-text-3 whitespace-nowrap">BX 版本管理台 · 本地</span>
         </div>
         <div class="flex-1" />
 
         <!-- 命令面板搜索（Ctrl+K） -->
         <button
-          class="hidden md:flex items-center gap-2 h-8 px-3.5 rounded-[var(--bx-radius-btn)] text-xs text-text-3 border border-border bg-surface-alt hover:border-border-strong hover:text-text-2 transition-colors duration-150 focus-ring"
+          class="hidden md:flex items-center gap-2 h-8 px-3.5 rounded-[var(--bx-radius-md)] text-xs text-text-3 border border-border bg-surface-hover hover:border-border-strong hover:text-text-2 transition-[border-color,box-shadow] duration-140 ease-[cubic-bezier(0.23,1,0.32,1)] focus-ring w-56"
           @click="uiStore.togglePalette(true)"
         >
           <i aria-hidden="true" class="i-carbon-search text-13px" />
           搜索项目 / 仓库 / 版本…
-          <span class="text-10px border border-border rounded-sm px-1 bg-surface">Ctrl&nbsp;K</span>
+          <span class="sb-kbd ml-auto">Ctrl K</span>
         </button>
 
         <RuntimeStatus />

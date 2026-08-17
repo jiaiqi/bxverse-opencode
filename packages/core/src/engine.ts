@@ -234,6 +234,16 @@ export async function planPublish(req: PublishRequest): Promise<PublishPlan> {
     warnings.push('数据仓库未配置远程，发布后仅本地提交（可稍后手动同步）')
   }
 
+  // 截断提交文件列表（日志已用完整数据生成；截断仅减少计划响应体积，前端展示足够）
+  const MAX_FILES_PER_COMMIT = 20
+  for (const repo of changed) {
+    repo.commits = repo.commits.map(c =>
+      c.files.length > MAX_FILES_PER_COMMIT
+        ? { ...c, files: c.files.slice(0, MAX_FILES_PER_COMMIT) }
+        : c,
+    )
+  }
+
   return {
     projectId: project.id,
     projectName: project.name,
@@ -307,8 +317,8 @@ export async function writeVersionFiles(
   appendHistory(outDir, data)
 }
 
-/** 未变动仓库仅同步基版：version.json 的 version 更新为项目版本，build/buildTime 保持上次值 */
-export async function syncUnchangedVersionFile(repo: RepoDef, project: ProjectDef): Promise<void> {
+/** 未变动仓库仅同步基版：version.json 的 version 更新为本次发布的项目版本，build/buildTime 保持上次值 */
+export async function syncUnchangedVersionFile(repo: RepoDef, projectVersion: string): Promise<void> {
   if (repo.writeVersionFile === false) return
   const outDir = path.join(repo.path, repo.outputDir ?? 'public')
   fs.mkdirSync(outDir, { recursive: true })
@@ -322,7 +332,7 @@ export async function syncUnchangedVersionFile(repo: RepoDef, project: ProjectDe
     }
   }
   const data: HistoryItem = {
-    version: project.version,
+    version: projectVersion,
     build: base.build ?? '',
     buildTime: base.buildTime ?? '',
   }
@@ -576,7 +586,7 @@ export async function executePublish(
   for (const s of plan.syncedOnly) {
     const repo = repoDefOf(s.repoId)
     try {
-      await syncUnchangedVersionFile(repo, project)
+      await syncUnchangedVersionFile(repo, plan.projectVersion)
       emit('log', `${s.name} 同步基版版本号 → ${plan.projectVersion}（未变动，无标签无记录）`)
     } catch (e) {
       emit('log', `${s.name} 基版同步失败: ${(e as Error).message}`)
@@ -585,7 +595,8 @@ export async function executePublish(
 
   // ---- 4. 项目聚合记录 ----
   const okCount = plan.changed.length - failedRepos.length
-  if (okCount === 0) {
+  // changed 全失败且无任何基版同步动作 → 无有效产出，报整体失败
+  if (okCount === 0 && plan.syncedOnly.length === 0) {
     emit('error', '全部仓库失败，未生成发布记录')
     journal.status = 'failed'
     journalStore.save(journal)
@@ -619,13 +630,37 @@ export async function executePublish(
         autoDraft: plan.externalDraft,
       },
     },
-    repos: repoRecords.map(r => ({
-      repoId: r.scopeId,
-      repoName: r.scopeName,
-      displayName: repoDefOf(r.scopeId).displayName,
-      version: r.version,
-      commits: r.commits,
-    })),
+    repos: project.repos.map(repo => {
+      const rec = repoRecords.find(r => r.scopeId === repo.id)
+      if (rec) {
+        return {
+          repoId: rec.scopeId,
+          repoName: rec.scopeName,
+          displayName: repoDefOf(rec.scopeId).displayName,
+          version: rec.version,
+          commits: rec.commits,
+        }
+      }
+      // 未变动（同步基版）或发布失败的仓库也要进清单：版本取仓库当前 version.json
+      // （syncedOnly 已被 syncUnchangedVersionFile 写为项目基版；失败仓库保持旧版本）
+      let v = project.version
+      try {
+        const vfPath = path.join(repo.path, repo.outputDir ?? 'public', 'version.json')
+        if (fs.existsSync(vfPath)) {
+          const vf = JSON.parse(fs.readFileSync(vfPath, 'utf8')) as { version?: string }
+          if (vf.version) v = vf.version
+        }
+      } catch {
+        // 版本文件缺失/损坏 → 用项目版本兜底
+      }
+      return {
+        repoId: repo.id,
+        repoName: repo.name,
+        displayName: repo.displayName,
+        version: v,
+        commits: [],
+      }
+    }),
     tags: { milestone: plan.milestoneTag },
     pushed: repoRecords.every(r => r.pushed),
     builtBy: APP_NAME,

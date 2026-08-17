@@ -17,7 +17,14 @@ const emit = defineEmits<{ open: []; refresh: [] }>()
 </script>
 
 <template>
-  <div class="card card-pad card-hover group" @click="emit('open')">
+  <div
+    class="card card-pad card-hover repo-card group"
+    role="link"
+    tabindex="0"
+    @click="emit('open')"
+    @keydown.enter.self="emit('open')"
+    @keydown.space.self.prevent="emit('open')"
+  >
     <template v-if="loading">
       <div class="skeleton h-5 w-2/3 mb-3" />
       <div class="skeleton h-4 w-1/2" />
@@ -44,9 +51,7 @@ const emit = defineEmits<{ open: []; refresh: [] }>()
           <i aria-hidden="true" class="i-carbon-git-branch" /> {{ status?.branch ?? '?' }}
         </span>
         <span v-if="status" class="chip code-text">{{ status.head.slice(0, 7) }}</span>
-        <span v-if="status?.versionFile" class="chip code-text text-brand-600 border-brand-200 bg-brand-50">
-          {{ status.versionFile.version }}
-        </span>
+        <span v-if="status?.versionFile" class="version-badge"><span class="tick"></span>{{ status.versionFile.version }}</span>
         <span v-else class="chip">未生成版本</span>
       </div>
       <div class="mt-3 pt-3 border-t border-border flex items-center gap-3 text-xs text-text-3">

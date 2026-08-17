@@ -18,11 +18,11 @@ export function formatDate(iso: string): string {
   return Number.isNaN(d.getTime()) ? iso : dateFmt.format(d)
 }
 
-/** ISO 字符串 → 2026-08-13 15:30 */
-export function formatDateTime(iso: string): string {
+/** ISO 字符串或 Date → 2026-08-13 15:30 */
+export function formatDateTime(iso: string | Date): string {
   if (!iso) return '—'
   const d = new Date(iso)
-  return Number.isNaN(d.getTime()) ? iso : dateTimeFmt.format(d)
+  return Number.isNaN(d.getTime()) ? String(iso) : dateTimeFmt.format(d)
 }
 
 /** 文件大小可读化（Intl.NumberFormat） */

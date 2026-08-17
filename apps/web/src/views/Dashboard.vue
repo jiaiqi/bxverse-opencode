@@ -11,6 +11,7 @@ import AddProjectDialog from '../components/AddProjectDialog.vue'
 import { useNow } from '../composables/useNow'
 import { usePolling } from '../composables/usePolling'
 import { useAppStore } from '../stores/app'
+import { formatDateTime } from '../utils/format'
 import type { OverviewData } from '@bxverse/shared'
 
 const router = useRouter()
@@ -30,11 +31,7 @@ function groupByProject(repos: OverviewData['changedRepos']): { projectId: strin
   return [...map.values()]
 }
 
-const today = computed(() => {
-  const d = now.value
-  const p = (n: number) => String(n).padStart(2, '0')
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`
-})
+const today = computed(() => formatDateTime(now.value))
 
 async function refresh() {
   try {
@@ -128,7 +125,7 @@ usePolling(refresh, computed(() => appStore.pollInterval).value || 30_000)
               >
                 <i aria-hidden="true" class="i-carbon-git-branch text-13px text-text-3" />
                 {{ r.repoName }}
-                <span class="chip code-text text-brand-600 border-brand-200 bg-brand-50">{{ r.commits }} 提交</span>
+                <span class="chip chip-brand code-text">{{ r.commits }} 提交</span>
                 <span class="code-text text-xs text-text-3" translate="no">{{ r.head }}</span>
               </RouterLink>
             </div>

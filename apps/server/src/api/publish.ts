@@ -4,7 +4,7 @@
 import type { AppConfig, PublishRequest } from '@bxverse/shared'
 import { engine } from '@bxverse/core'
 import type { Ctx } from '../http/router'
-import { apiError, readJsonBody, sendJson } from '../http/json'
+import { apiError, readJsonBody, sendJson, sendJsonGzip } from '../http/json'
 import type { PublishQueue } from '../queue'
 
 export function register(
@@ -22,7 +22,7 @@ export function register(
     if (req.dryRun) {
       try {
         const plan = await engine.planPublish(req)
-        sendJson(ctx.res, 200, plan)
+        sendJsonGzip(ctx.res, 200, plan, ctx.req)
       } catch (e) {
         const msg = (e as Error).message
         if (msg.includes('仓库')) throw apiError(400, 'VALIDATION', msg)

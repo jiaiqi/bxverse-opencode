@@ -28,7 +28,9 @@
 
 | 状态码 | 含义 |
 |---|---|
-| 400 | 参数/请求体校验失败（`VALIDATION`、`REPO_INVALID`、`CLONE_FAILED`） |
+| 400 | 参数/请求体校验失败（`VALIDATION`、`REPO_INVALID`、`CLONE_FAILED`）；请求体超过 32MB 上限 |
+
+> 请求体上限：32MB（JSON）。超限返回 400 `VALIDATION`（不会断开连接；发布执行可携带大体积日志内容，如首次发布的对内日志草稿可达数 MB）。
 | 401 | token 缺失或错误（`UNAUTHORIZED`） |
 | 403 | Origin / Content-Type 校验失败（`FORBIDDEN`） |
 | 404 | 资源不存在（`NOT_FOUND`） |
@@ -589,6 +591,7 @@
 ```
 
 - 仓库级记录（`kind: "repo"`）的 `tags` 为 `{ "build": "build/v1.2.0.26081315", "milestone": "v1.2.0" }`，且无 `repos` 字段。
+- 项目级记录的 `repos` **快照项目下全部仓库**（导出清单不缺项）：发布成功仓库 = 发布版本（`commits` 非空）；未变动仓库 = 本次同步基版（`projectVersion`，`commits: []`）；发布失败仓库 = 仓库当前 `version.json` 版本（旧版本，`commits: []`）。
 
 错误：400 `VALIDATION`（`scopeId` 缺失）；404 `NOT_FOUND`（记录不存在）。
 
