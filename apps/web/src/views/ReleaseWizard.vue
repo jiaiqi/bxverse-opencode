@@ -130,7 +130,47 @@ watch(projectId, async (id) => {
   await detect()
   // 默认勾选全部变动仓库
   store.setSelected(changedRepoIds.value)
+  // 刷新/重进时检测全局进行中任务 → 提供接管查看进度
+  void checkRunningTask()
 }, { immediate: true })
+
+// ==================== 进行中任务接管（刷新/重进后可恢复控制台） ====================
+const takeoverTask = ref('')
+const takeoverProjectId = ref('')
+
+async function checkRunningTask() {
+  try {
+    const cur = await api.publishCurrent()
+    takeoverTask.value = cur.taskId ?? ''
+    takeoverProjectId.value = cur.projectId ?? ''
+  } catch {
+    takeoverTask.value = ''
+    takeoverProjectId.value = ''
+  }
+}
+
+async function takeOver() {
+  if (!takeoverTask.value) return
+  store.taskId = takeoverTask.value
+  store.phase = 'running'
+  store.step = 5
+  // 接管后隐藏横幅（避免与步骤 5 控制台并存）
+  takeoverTask.value = ''
+}
+
+// 站内路由切换守卫：步骤 2-5 有未保存日志编辑或发布进行中时离开需确认
+// （window.beforeunload 只覆盖刷新/关页，站内导航需在此拦截）
+onBeforeRouteLeave((_to, _from, next) => {
+  const hasEdits = store.logs.internal.state !== 'auto' || store.logs.external.state !== 'auto'
+  const running = store.phase === 'running'
+  if ((hasEdits || running) && store.step >= 2 && store.step <= 5) {
+    if (!window.confirm('发布向导中有未保存的日志编辑或进行中的任务，确定离开？')) {
+      next(false)
+      return
+    }
+  }
+  next()
+})
 
 // 步骤变化 → URL
 watch(
@@ -294,6 +334,19 @@ const resultReleaseId = computed(() => store.result?.releaseId ?? '')
     />
 
     <template v-if="project">
+      <!-- 刷新/重进时：该项目有发布任务进行中 → 提供接管查看进度 -->
+      <NAlert
+        v-if="takeoverTask && takeoverProjectId === projectId && store.step !== 5 && store.phase !== 'running'"
+        type="warning"
+        :show-icon="true"
+        class="mb-4"
+      >
+        <div class="flex items-center justify-between gap-3 flex-wrap">
+          <span class="flex-1 min-w-56">检测到该项目的发布任务正在进行中（{{ takeoverTask }}），可查看实时进度。</span>
+          <NButton size="tiny" type="primary" secondary @click="takeOver">查看进度</NButton>
+        </div>
+      </NAlert>
+
       <NSteps :current="store.step" :status="store.phase === 'error' && store.step === 5 ? 'error' : 'process'">
         <NStep title="检测变更" />
         <NStep title="版本号" />
