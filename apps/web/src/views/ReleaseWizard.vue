@@ -26,25 +26,51 @@ const project = computed(() => projectsStore.byId(projectId.value))
 
 // ==================== 步骤 1：检测变更 ====================
 const statuses = ref<Map<string, RepoStatus | null>>(new Map())
+/** 步骤 1：检测失败的仓库（repoId → 原因）。失败必须显式呈现（红条 + 错误信息），
+ *  绝不能冒认为「已同步」，否则用户会基于错误信息跳过该仓库的发布。 */
+const failedRepos = ref<Map<string, string>>(new Map())
 const detecting = ref(true)
 
 async function detect() {
   if (!project.value) return
   detecting.value = true
   statuses.value = new Map()
+  failedRepos.value = new Map()
+  commitsShowAllRepos.value = new Set()
   await Promise.all(
     project.value.repos.map(async (repo) => {
       try {
         const st = await projectsStore.repoStatus(projectId.value, repo.id, true)
         statuses.value.set(repo.id, st)
-      } catch {
+      } catch (e) {
         statuses.value.set(repo.id, null)
+        failedRepos.value.set(repo.id, (e as Error).message || '检测失败')
       }
     }),
   )
   statuses.value = new Map(statuses.value)
+  failedRepos.value = new Map(failedRepos.value)
   detecting.value = false
 }
+
+/** 单仓库重试（失败行内按钮） */
+async function detectRepo(repoId: string) {
+  const repo = project.value?.repos.find(r => r.id === repoId)
+  if (!repo) return
+  statuses.value.set(repoId, null)
+  failedRepos.value.delete(repoId)
+  failedRepos.value = new Map(failedRepos.value)
+  try {
+    const st = await projectsStore.repoStatus(projectId.value, repo.id, true)
+    statuses.value.set(repoId, st)
+  } catch (e) {
+    failedRepos.value.set(repoId, (e as Error).message || '检测失败')
+  }
+  statuses.value = new Map(statuses.value)
+  failedRepos.value = new Map(failedRepos.value)
+}
+
+const failedRepoIds = computed(() => [...failedRepos.value.keys()])
 
 const changedRepoIds = computed(() => {
   if (!project.value) return []
@@ -62,17 +88,24 @@ function toggleRepo(id: string) {
 const commitsExpanded = ref<Set<string>>(new Set())
 /** 提交明细预览上限：仓库提交可能上千条，先渲染前 N 条避免整列 DOM 卡顿 */
 const COMMITS_PREVIEW_LIMIT = 100
-const commitsShowAll = ref(false)
+/** 「展开全部」按仓库记录（Set<repoId>），避免一个仓库的展开状态波及其它仓库 */
+const commitsShowAllRepos = ref<Set<string>>(new Set())
 
 function visibleCommits(repoId: string) {
   const list = statuses.value.get(repoId)?.commits ?? []
-  return commitsShowAll.value ? list : list.slice(0, COMMITS_PREVIEW_LIMIT)
+  return commitsShowAllRepos.value.has(repoId) ? list : list.slice(0, COMMITS_PREVIEW_LIMIT)
 }
 
 function hiddenCommitsCount(repoId: string): number {
-  if (commitsShowAll.value) return 0
+  if (commitsShowAllRepos.value.has(repoId)) return 0
   const list = statuses.value.get(repoId)?.commits ?? []
   return Math.max(0, list.length - COMMITS_PREVIEW_LIMIT)
+}
+
+function showAllCommits(repoId: string) {
+  const next = new Set(commitsShowAllRepos.value)
+  next.add(repoId)
+  commitsShowAllRepos.value = next
 }
 
 function toggleCommitsPanel(repoId: string) {
@@ -200,6 +233,16 @@ const dryRunLines = computed(() => {
   return lines
 })
 
+/** 步骤 4：所选仓库中是否存在带远程地址的（离线默认开启，需明确提示不会推送） */
+const selectedHasRemote = computed(() => {
+  if (!project.value) return false
+  return store.selectedRepoIds.some((id) => {
+    const s = statuses.value.get(id)
+    if (s) return s.hasRemote
+    return project.value?.repos.find(r => r.id === id)?.remote != null
+  })
+})
+
 // ==================== 步骤 5：执行 ====================
 async function execute() {
   try {
@@ -270,7 +313,9 @@ const resultReleaseId = computed(() => store.result?.releaseId ?? '')
           <template v-else>
             <div class="space-y-3">
               <div v-for="repo in project.repos" :key="repo.id" class="wz-row rounded-md border bg-surface"
-                :class="statuses.get(repo.id)?.changed ? 'border-brand-200 bg-brand-soft hover:border-brand-300' : 'border-border opacity-65 hover:border-border-strong'">
+                :class="failedRepos.has(repo.id)
+                  ? 'border-error/50 bg-error-soft'
+                  : statuses.get(repo.id)?.changed ? 'border-brand-200 bg-brand-soft hover:border-brand-300' : 'border-border opacity-65 hover:border-border-strong'">
                 <div class="flex items-center gap-3 px-4 py-3 cursor-pointer" @click="statuses.get(repo.id)?.changed && toggleRepo(repo.id)">
                   <NCheckbox
                     :checked="store.selectedRepoIds.includes(repo.id)"
@@ -290,9 +335,15 @@ const resultReleaseId = computed(() => store.result?.releaseId ?? '')
                       {{ statuses.get(repo.id)?.head.slice(0, 7) }} · {{ statuses.get(repo.id)?.branch }}
                     </div>
                   </div>
-                  <div class="text-xs" :class="statuses.get(repo.id)?.changed ? 'text-brand-600' : 'text-text-3'">
-                    {{ statuses.get(repo.id)?.changed ? '有变动' : '已同步' }}
+                  <div class="text-xs" :class="failedRepos.has(repo.id) ? 'text-error font-medium' : statuses.get(repo.id)?.changed ? 'text-brand-600' : 'text-text-3'">
+                    {{ failedRepos.has(repo.id) ? '检测失败' : statuses.get(repo.id)?.changed ? '有变动' : '已同步' }}
                   </div>
+                </div>
+                <!-- 失败原因 + 单仓库重试 -->
+                <div v-if="failedRepos.has(repo.id)" class="px-4 pb-3 -mt-1 flex items-center gap-2 text-xs text-error">
+                  <i aria-hidden="true" class="i-carbon-warning-alt shrink-0" />
+                  <span class="flex-1 break-all">{{ failedRepos.get(repo.id) }}</span>
+                  <button class="link shrink-0" @click.stop="detectRepo(repo.id)">重试</button>
                 </div>
                 <!-- 提交级条目确认（变化收件箱语义：人工甄别哪些提交进版本） -->
                 <div v-if="statuses.get(repo.id)?.changed" class="px-4 pb-3 -mt-1">
@@ -324,7 +375,7 @@ const resultReleaseId = computed(() => store.result?.releaseId ?? '')
                       无提交
                     </div>
                     <div v-if="hiddenCommitsCount(repo.id) > 0" class="text-center py-2.5 bg-surface-alt">
-                      <button class="link text-xs" @click="commitsShowAll = true">
+                      <button class="link text-xs" @click="showAllCommits(repo.id)">
                         展开全部 {{ hiddenCommitsCount(repo.id) }} 条提交（{{ (statuses.get(repo.id)?.commits ?? []).length }} 条共）
                       </button>
                     </div>
@@ -334,6 +385,17 @@ const resultReleaseId = computed(() => store.result?.releaseId ?? '')
             </div>
             <div v-if="project.repos.length === 0" class="py-8">
               <EmptyState title="还没有仓库" description="请先接入仓库再发起发布" />
+            </div>
+            <div v-else-if="failedRepoIds.length > 0 && changedRepoIds.length === 0" class="py-8">
+              <NAlert type="error" :show-icon="true" title="部分仓库检测失败">
+                <div class="flex items-center justify-between gap-3 flex-wrap">
+                  <span class="flex-1 min-w-56">
+                    {{ failedRepoIds.length }} 个仓库状态获取失败，无法确认是否有变动：{{ failedRepoIds.join('、') }}。
+                    请先处理下方列出的错误（如仓库路径失效、git 权限等），再重新检测。
+                  </span>
+                  <NButton size="tiny" type="primary" secondary @click="detect()">重新检测</NButton>
+                </div>
+              </NAlert>
             </div>
             <div v-else-if="changedRepoIds.length === 0" class="py-8">
               <EmptyState
@@ -436,6 +498,9 @@ const resultReleaseId = computed(() => store.result?.releaseId ?? '')
 
         <!-- 步骤 4 -->
         <div v-show="store.step === 4">
+          <NAlert v-if="store.offline && selectedHasRemote" type="info" :show-icon="true" class="mb-4">
+            当前为<strong>离线发布</strong>：本次不会推送标签到远程仓库与数据仓库。如需推送，请关闭「离线发布」开关。
+          </NAlert>
           <div class="flex items-center gap-6 mb-4 flex-wrap">
             <div class="flex items-center gap-2">
               <NSwitch v-model:value="store.offline" />
