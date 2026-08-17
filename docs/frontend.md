@@ -371,6 +371,7 @@ NConfigProvider(theme + themeOverrides)
 - 顶部分段：`NSegmented`「对外 / 对内」；右侧「修订」切换按钮（有 `logs.*.autoDraft !== content` 差异时才出现）。
 - 列表：`GET /api/projects/:id/releases` 过滤 `kind==='repo' && scopeId===rid`；每行 version/date/bump/pushed；选中行 → MarkdownView 渲染 `logs.internal` 或 `logs.external` 的 `content`。
 - 修订视图：DiffView（§4.12）对比 `autoDraft` ↔ `content`，行级 LCS 标注（增=success 底、删=error 底）。
+- **历史日志编辑（M5-02 收尾，接线 `PATCH /api/releases/:id/log`）**：选中记录后「编辑日志」进入编辑态（textarea 受控编辑）；操作：保存（action=edit，状态→edited）/ 确认（action=confirm）/ 恢复自动草稿（action=reset，需确认）/ 取消；切换内外轨自动退出编辑态。保存后立即替换列表与选中记录（状态徽标同步），记录不可变约束内的可编辑性由此落地。
 - 空 → EmptyState「该仓库暂无发布记录」。
 
 **Tab 3 设置**：`NDynamicInput`/`NForm` 编辑 RepoDef 字段：`name`、`buildCommand`（placeholder 示例）、`outputDir`（默认 public 提示）、`writeVersionFile`（NSwitch + 说明「关闭后不写 version.json，零侵入」）、`remote` 只读展示；保存 → `PUT /api/projects/:pid`（整体保存 projects 中该仓库项，见 architecture §3.2）；「移除仓库」danger 按钮（确认后同路由保存）。

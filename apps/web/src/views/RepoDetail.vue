@@ -52,6 +52,78 @@ const selectedFile = ref('')
 const logTrack = ref<'external' | 'internal'>('external')
 const selectedRelease = ref<ReleaseRecord | null>(null)
 
+// ---------- 历史发布日志人工编辑（api.editLog，server history.ts 已实现） ----------
+const editing = ref(false)
+const editText = ref('')
+const editSaving = ref(false)
+
+function startEdit() {
+  if (!selectedRelease.value) return
+  editText.value = selectedRelease.value.logs[logTrack.value].content
+  editing.value = true
+}
+
+function cancelEdit() {
+  editing.value = false
+  editText.value = ''
+}
+
+function applyUpdated(updated: ReleaseRecord) {
+  const idx = releases.value.findIndex(r => r.id === updated.id)
+  if (idx !== -1) releases.value[idx] = updated
+  selectedRelease.value = updated
+}
+
+async function saveEdit() {
+  if (!selectedRelease.value) return
+  editSaving.value = true
+  try {
+    const updated = await api.editLog(selectedRelease.value.id, { track: logTrack.value, action: 'edit', content: editText.value })
+    applyUpdated(updated)
+    message.success('日志已保存（状态「已编辑」，仍可继续确认）')
+    editing.value = false
+  } catch (e) {
+    message.error((e as Error).message)
+  } finally {
+    editSaving.value = false
+  }
+}
+
+async function confirmEdit() {
+  if (!selectedRelease.value) return
+  editSaving.value = true
+  try {
+    const updated = await api.editLog(selectedRelease.value.id, { track: logTrack.value, action: 'confirm' })
+    applyUpdated(updated)
+    message.success('日志已确认')
+  } catch (e) {
+    message.error((e as Error).message)
+  } finally {
+    editSaving.value = false
+  }
+}
+
+async function resetEdit() {
+  if (!selectedRelease.value) return
+  if (!window.confirm('恢复为自动草稿将丢弃当前人工编辑，确定继续？')) return
+  editSaving.value = true
+  try {
+    const updated = await api.editLog(selectedRelease.value.id, { track: logTrack.value, action: 'reset' })
+    applyUpdated(updated)
+    editText.value = updated.logs[logTrack.value].content
+    editing.value = false
+  } catch (e) {
+    message.error((e as Error).message)
+  } finally {
+    editSaving.value = false
+  }
+}
+
+// 编辑中切换内外轨 → 丢弃编辑态（内容按新轨重新可编辑）
+watch(logTrack, () => {
+  if (editing.value) cancelEdit()
+})
+
 async function loadAll() {
   statusLoading.value = true
   releasesLoading.value = true
@@ -227,10 +299,29 @@ watch(tab, (t) => {
                   </NRadioGroup>
                   <StatusBadge type="log" :log-state="selectedRelease.logs[logTrack].state" />
                   <span class="flex-1" />
+                  <template v-if="editing">
+                    <NButton size="tiny" secondary type="primary" :loading="editSaving" @click="saveEdit">保存</NButton>
+                    <NButton size="tiny" quaternary :disabled="editSaving" @click="confirmEdit">确认</NButton>
+                    <NButton size="tiny" quaternary :disabled="editSaving" @click="resetEdit">恢复自动草稿</NButton>
+                    <NButton size="tiny" quaternary @click="cancelEdit">取消</NButton>
+                  </template>
+                  <NButton v-else size="tiny" quaternary @click="startEdit">
+                    <template #icon><i aria-hidden="true" class="i-carbon-edit" /></template>
+                    编辑日志
+                  </NButton>
                   <span class="text-xs text-text-3">{{ selectedRelease.stats.commits }} 提交 · +{{ selectedRelease.stats.insertions }} / -{{ selectedRelease.stats.deletions }}</span>
                 </div>
                 <div class="flex-1 overflow-y-auto p-5">
-                  <MarkdownView v-if="selectedRelease" :content="selectedRelease.logs[logTrack].content" />
+                  <textarea
+                    v-if="editing"
+                    v-model="editText"
+                    class="h-full w-full bg-transparent resize-none outline-none font-mono text-13px leading-6 text-text-1"
+                    placeholder="在此编辑日志内容…"
+                    autocomplete="off"
+                    spellcheck="false"
+                    aria-label="编辑发布日志"
+                  />
+                  <MarkdownView v-else-if="selectedRelease" :content="selectedRelease.logs[logTrack].content" />
                 </div>
               </div>
             </div>
