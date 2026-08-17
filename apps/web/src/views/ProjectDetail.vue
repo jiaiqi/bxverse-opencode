@@ -1,8 +1,10 @@
 <script setup lang="ts">
 // ProjectDetail.vue —— 项目详情（仓库网格 + 发布历史 + 项目管理）
 
-import type { ReleaseRecord, RepoStatus } from '@bxverse/shared'
+import type { ReleaseRecord, RepoStatus, BranchAlignmentResult } from '@bxverse/shared'
 import { useProjectsStore } from '../stores/projects'
+import { useAppStore } from '../stores/app'
+import { usePolling } from '../composables/usePolling'
 import { api } from '../api'
 import PageHeader from '../components/PageHeader.vue'
 import RepoCard from '../components/RepoCard.vue'
@@ -13,8 +15,6 @@ import AddRepoDialog from '../components/AddRepoDialog.vue'
 import AddProjectDialog from '../components/AddProjectDialog.vue'
 import VersionExportDropdown from '../components/VersionExportDropdown.vue'
 import { useDialog, useMessage } from 'naive-ui'
-import { usePolling } from '../composables/usePolling'
-import { useAppStore } from '../stores/app'
 import { formatDate } from '../utils/format'
 
 const route = useRoute()
@@ -115,16 +115,86 @@ function openDetail(r: ReleaseRecord) {
   showDetail.value = true
 }
 
+// ---------- 分支协同巡检 (R25 / 建议 1) ----------
+const branchAlignment = ref<BranchAlignmentResult | null>(null)
+const checkingBranches = ref(false)
+
+async function checkBranchAlignment() {
+  if (!projectId.value) return
+  checkingBranches.value = true
+  try {
+    branchAlignment.value = await api.branchAlignment(projectId.value, 'master')
+  } catch {
+    // 忽略
+  } finally {
+    checkingBranches.value = false
+  }
+}
+
+async function doBatchCheckout(branch = 'master') {
+  try {
+    await api.batchCheckout(projectId.value, branch)
+    message.success(`已批量将所有工程切至「${branch}」分支`)
+    await Promise.all([loadStatuses(), checkBranchAlignment()])
+  } catch (e) {
+    message.error((e as Error).message)
+  }
+}
+
+async function doBatchPull() {
+  try {
+    const res = await api.batchPull(projectId.value)
+    message.success(res.ok ? '全矩阵工程批量快进拉取成功！' : '部分仓库拉取存在警告')
+    await Promise.all([loadStatuses(), checkBranchAlignment()])
+  } catch (e) {
+    message.error((e as Error).message)
+  }
+}
+
+// ---------- 标为废弃 (R24 / 建议 4) ----------
+const deprecateModal = reactive({
+  open: false,
+  release: null as ReleaseRecord | null,
+  reason: '',
+  cleanupTags: true,
+  submitting: false,
+})
+
+function openDeprecate(r: ReleaseRecord) {
+  deprecateModal.release = r
+  deprecateModal.reason = ''
+  deprecateModal.cleanupTags = true
+  deprecateModal.open = true
+}
+
+async function submitDeprecate() {
+  if (!deprecateModal.release) return
+  deprecateModal.submitting = true
+  try {
+    const updated = await api.deprecateRelease(deprecateModal.release.id, {
+      reason: deprecateModal.reason.trim() || '人为标为废弃',
+      cleanupTags: deprecateModal.cleanupTags,
+    })
+    message.success(`版本 ${updated.version} 已标为废弃`)
+    deprecateModal.open = false
+    await loadReleases()
+  } catch (e) {
+    message.error((e as Error).message)
+  } finally {
+    deprecateModal.submitting = false
+  }
+}
+
 watch(projectId, async (id) => {
   statuses.value = new Map()
   releaseExpanded.value = false
   if (!projectsStore.byId(id)) await projectsStore.load()
-  await Promise.all([loadStatuses(), loadReleases()])
+  await Promise.all([loadStatuses(), loadReleases(), checkBranchAlignment()])
 }, { immediate: true })
 
 // 状态轮询（30s 或配置周期）
 usePolling(async () => {
-  if (project.value) await Promise.all([loadStatuses(), loadReleases()])
+  if (project.value) await Promise.all([loadStatuses(), loadReleases(), checkBranchAlignment()])
 }, appStore.pollInterval || 30_000)
 </script>
 
@@ -168,6 +238,28 @@ usePolling(async () => {
           删除
         </NButton>
       </PageHeader>
+      <!-- 分支协同巡检警示条 (R25 / 建议 1) -->
+      <div
+        v-if="branchAlignment && !branchAlignment.isAllAligned"
+        class="mb-4 p-3.5 rounded-lg border border-warning/40 bg-warning/10 flex items-center justify-between gap-3 text-xs"
+      >
+        <div class="flex items-center gap-2">
+          <i aria-hidden="true" class="i-carbon-warning-filled text-warning shrink-0 text-base" />
+          <span class="text-text-1">
+            分支协同预警：检测到
+            <strong class="text-warning">{{ branchAlignment.items.filter(x => !x.isAligned).map(x => `${x.repoName} (${x.branch})`).join('、') }}</strong>
+            未停留在主发布分支 ({{ branchAlignment.defaultBranch }})
+          </span>
+        </div>
+        <div class="flex items-center gap-2 shrink-0">
+          <NButton size="tiny" type="warning" @click="doBatchCheckout(branchAlignment.defaultBranch)">
+            ⚡ 一键切至主分支
+          </NButton>
+          <NButton size="tiny" quaternary @click="doBatchPull">
+            ↓ 批量快进拉取
+          </NButton>
+        </div>
+      </div>
 
       <!-- 仓库 -->
       <section>
@@ -221,9 +313,14 @@ usePolling(async () => {
               @keydown.space.prevent="openDetail(r)"
             >
               <div class="flex items-center gap-3 flex-wrap">
-                <span class="version-badge" translate="no"><span class="tick" />{{ r.version }}</span>
+                <span class="version-badge" :class="r.deprecated ? 'opacity-50 line-through' : ''" translate="no">
+                  <span class="tick" />{{ r.version }}
+                </span>
                 <StatusBadge type="bump" :bump="r.bump" />
                 <StatusBadge type="pushed" :pushed="r.pushed" />
+                <span v-if="r.deprecated" class="chip chip-error text-xs" :title="'废弃原因: ' + r.deprecateReason">
+                  ⚠️ 已废弃 ({{ r.deprecateReason || '人为撤销' }})
+                </span>
                 <span class="flex-1" />
                 <VersionExportDropdown
                   :project-id="projectId"
@@ -233,6 +330,9 @@ usePolling(async () => {
                   size="tiny"
                   quaternary
                 />
+                <NButton v-if="!r.deprecated" size="tiny" quaternary type="warning" @click.stop="openDeprecate(r)">
+                  标为废弃
+                </NButton>
                 <span class="text-xs text-text-3">{{ formatDate(r.date) }}</span>
                 <i aria-hidden="true" class="i-carbon-chevron-right text-text-3" />
               </div>
@@ -248,7 +348,7 @@ usePolling(async () => {
         </div>
       </section>
 
-      <AddRepoDialog v-model:show="showAddRepo" :project-id="project.id" @added="loadStatuses" />
+      <AddRepoDialog v-model:show="showAddRepo" :project-id="projectId" @added="loadStatuses" />
       <AddProjectDialog v-model:show="showEdit" :editing="project" @saved="projectsStore.load()" />
 
       <!-- 记录详情抽屉 -->
@@ -264,6 +364,42 @@ usePolling(async () => {
           </NTabs>
         </NDrawerContent>
       </NDrawer>
+
+      <!-- 标为废弃模态框 (R24 / 建议 4) -->
+      <NModal
+        v-model:show="deprecateModal.open"
+        preset="card"
+        :title="`标记版本 ${deprecateModal.release?.version} 为已废弃`"
+        class="w-130 max-w-95vw"
+      >
+        <div class="space-y-4 text-xs">
+          <p class="text-text-2 leading-relaxed">
+            标记废弃会将该版本的审计状态更新为 <strong class="text-error font-semibold">已废弃 (Deprecated)</strong>。
+            审计记录安全存入 Git 数据仓库，便于团队追溯。
+          </p>
+          <div class="field">
+            <label for="deprecate-reason" class="text-xs font-medium text-text-1 mb-1 block">废弃原因说明</label>
+            <NInput
+              id="deprecate-reason"
+              v-model:value="deprecateModal.reason"
+              placeholder="如：发现严重线上崩溃缺陷，已被后续紧急版本覆盖"
+            />
+          </div>
+          <div class="p-3 rounded-lg bg-surface-alt border border-border space-y-1">
+            <label class="flex items-center gap-2 text-text-1 cursor-pointer">
+              <input type="checkbox" v-model="deprecateModal.cleanupTags" class="accent-error rounded">
+              <span>同时安全撤销当次 Git 里程碑与构建标签 (Tag Cleanup)</span>
+            </label>
+            <div class="text-11px text-text-3 pl-5">将安全删除业务工程上的本地与远程标签，释放标签名供重发</div>
+          </div>
+        </div>
+        <template #footer>
+          <div class="flex justify-end gap-2.5">
+            <NButton quaternary @click="deprecateModal.open = false">取消</NButton>
+            <NButton type="error" :loading="deprecateModal.submitting" @click="submitDeprecate">确认标为废弃</NButton>
+          </div>
+        </template>
+      </NModal>
     </template>
     <div v-else-if="projectsStore.loading" class="p-10 text-center text-text-3">
       <NSpin size="small" />

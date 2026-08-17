@@ -51,8 +51,16 @@ usePolling(refresh, computed(() => appStore.pollInterval).value || 30_000)
 
 <template>
   <div class="page">
-    <PageHeader title="总览" :description="`今天是 ${today}`" />
-
+    <PageHeader title="总览" :description="`今天是 ${today}`" icon="i-carbon-dashboard">
+      <NButton type="primary" @click="showAddProject = true">
+        <template #icon><i aria-hidden="true" class="i-carbon-add" /></template>
+        新建项目
+      </NButton>
+      <NButton quaternary @click="refresh">
+        <template #icon><i aria-hidden="true" class="i-carbon-renew" /></template>
+        刷新
+      </NButton>
+    </PageHeader>
     <!-- 统计 -->
     <div v-if="projectsStore.overviewLoading && !overview" class="grid grid-cols-3 gap-4">
       <div v-for="i in 3" :key="i" class="skeleton h-24" />

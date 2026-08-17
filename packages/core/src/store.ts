@@ -223,6 +223,18 @@ export class DataStore {
     atomicWrite(dataPath, JSON.stringify(record, null, 2))
   }
 
+  /** 标记发布记录为已废弃（存入 Git 审计仓库） */
+  async deprecateRecord(releaseId: string, reason: string): Promise<ReleaseRecord> {
+    const existing = await this.readRecord(releaseId)
+    if (!existing) throw new Error(`发布记录不存在: ${releaseId}`)
+    existing.deprecated = true
+    existing.deprecateReason = reason.trim() || '人为标为废弃'
+    existing.deprecatedAt = new Date().toISOString()
+    await this.updateRecord(existing)
+    await this.commitRecords(`audit(release): deprecate ${existing.version}: ${existing.deprecateReason}`)
+    return existing
+  }
+
   /** scope 发布历史（倒序），n 默认 20、上限 100 */
   async listRecords(scopeId: string, n = 20): Promise<ReleaseRecord[]> {
     const items = await this.listRecordFiles(scopeId)

@@ -6,7 +6,7 @@
 import { spawn } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
-import type { CommitInfo, DiffStat } from '@bxverse/shared'
+import type { CommitInfo, DiffStat, BranchAlignmentItem, BranchAlignmentResult } from '@bxverse/shared'
 import { classifyCommit } from './changelog'
 
 export type GitResult =
@@ -496,4 +496,56 @@ export async function gitPull(repoDir: string): Promise<{ output: string }> {
   const r = await git(['pull', '--ff-only'], { cwd: repoDir, timeoutMs: 180_000 })
   if (!r.ok) throw new GitError(r.code, r.stderr)
   return { output: (r.stdout + r.stderr).trim() }
+}
+
+/** 切换分支 (安全 checkout) */
+export async function checkoutBranch(repoDir: string, branch: string): Promise<void> {
+  const target = branch.trim()
+  if (!target) throw new GitError('BAD_BRANCH', '分支名不能为空')
+  ensureOk(await git(['checkout', target], { cwd: repoDir }))
+}
+
+/** 安全删除 Tag（本地与可选远程） */
+export async function deleteTag(repoDir: string, tag: string, opts: { remote?: boolean } = {}): Promise<void> {
+  const targetTag = tag.trim()
+  if (!targetTag) throw new GitError('BAD_TAG', '标签名不能为空')
+  // 1. 删除本地标签
+  await git(['tag', '-d', targetTag], { cwd: repoDir })
+  // 2. 若配置删除远程标签且存在 remote
+  if (opts.remote) {
+    const hasRem = await hasRemote(repoDir, 'origin')
+    if (hasRem) {
+      await git(['push', 'origin', '--delete', targetTag], { cwd: repoDir, timeoutMs: 30_000 })
+    }
+  }
+}
+
+/** 多工程分支协同巡检：检测各仓库是否停留在期望的主发布分支 */
+export async function inspectBranchAlignment(
+  repos: { repoId: string; repoName: string; path: string }[],
+  targetDefaultBranch = 'master',
+): Promise<BranchAlignmentResult> {
+  const items: BranchAlignmentItem[] = []
+  let isAllAligned = true
+  for (const r of repos) {
+    let branch = 'HEAD'
+    let headSh = ''
+    try {
+      branch = await currentBranch(r.path)
+      headSh = await head(r.path)
+    } catch {
+      // ignore
+    }
+    const isAligned = branch === targetDefaultBranch || branch === 'main' || branch === 'master'
+    if (!isAligned) isAllAligned = false
+    items.push({
+      repoId: r.repoId,
+      repoName: r.repoName,
+      branch,
+      head: headSh.slice(0, 7),
+      isAligned,
+      defaultBranch: targetDefaultBranch,
+    })
+  }
+  return { isAllAligned, defaultBranch: targetDefaultBranch, items }
 }

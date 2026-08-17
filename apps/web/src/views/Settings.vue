@@ -21,8 +21,12 @@ const form = reactive({
   aiBaseUrl: '',
   aiModel: '',
   aiApiKey: '',
+  aiRoutes: {
+    commit: '',
+    polish: '',
+    explain: '',
+  },
 })
-
 /** 检测周期：UI 以「秒」呈现，配置/存储为毫秒 */
 const pollSeconds = computed({
   get: () => Math.round(form.pollInterval / 1000),
@@ -324,11 +328,12 @@ watchEffect(() => {
   form.theme = c.theme
   form.themeStyle = c.themeStyle ?? 'indigo'
   form.pwaEnabled = c.pwa.enabled
-  form.pollInterval = c.pollInterval
-  form.aiEnabled = c.ai.enabled
-  form.aiBaseUrl = c.ai.baseUrl
-  form.aiModel = c.ai.model
   form.aiApiKey = c.ai.apiKey
+  form.aiRoutes = {
+    commit: c.ai.routes?.commit ?? '',
+    polish: c.ai.routes?.polish ?? '',
+    explain: c.ai.routes?.explain ?? '',
+  }
   dataDir.value = c.dataDir
 })
 
@@ -349,8 +354,7 @@ async function save() {
       themeStyle: form.themeStyle,
       pwa: { enabled: form.pwaEnabled },
       pollInterval: form.pollInterval,
-      // AI 供应商与凭据走独立接口即时生效，这里仅同步总开关
-      ai: { enabled: form.aiEnabled, baseUrl: form.aiBaseUrl, model: form.aiModel, apiKey: '' },
+      ai: { enabled: form.aiEnabled, baseUrl: form.aiBaseUrl, model: form.aiModel, apiKey: '', routes: form.aiRoutes },
     })
     message.success('设置已保存')
   } catch (e) {
@@ -563,6 +567,63 @@ function rotateToken() {
                 <NButton v-if="!p.enabled" size="tiny" quaternary type="primary" @click="setActive(p)">设为当前</NButton>
                 <NButton size="tiny" quaternary @click="openEdit(p)">编辑</NButton>
                 <NButton size="tiny" quaternary type="error" @click="removeProvider(p)">删除</NButton>
+              </div>
+            </div>
+          </div>
+
+          <!-- 场景特化 AI 模型路由分工 (R23 / 建议 2) -->
+          <div v-if="providers.length > 0" class="mt-4 pt-3.5 border-t border-border space-y-3">
+            <div class="flex items-center justify-between">
+              <div>
+                <div class="text-xs font-semibold text-text-1 flex items-center gap-1.5">
+                  <i aria-hidden="true" class="i-carbon-split text-brand-500" />
+                  <span>场景特化 AI 模型路由分工（可选）</span>
+                </div>
+                <div class="text-11px text-text-3 mt-0.5">按任务类型绑定特定模型（Commit 适合极速免费、日志适合文采优美、Diff 需深度推理）</div>
+              </div>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+              <!-- 1. Commit 生成 -->
+              <div class="p-2.5 rounded-lg bg-surface-alt border border-border space-y-1.5">
+                <div class="text-xs font-medium text-text-1 flex items-center gap-1">
+                  <i aria-hidden="true" class="i-carbon-flash text-warning" /> Commit 提交生成
+                </div>
+                <NSelect
+                  v-model:value="form.aiRoutes.commit"
+                  size="small"
+                  placeholder="跟随默认供应商"
+                  clearable
+                  :options="[{ label: '跟随默认供应商', value: '' }, ...providers.map(p => ({ label: `${p.name} (${p.model})`, value: p.id }))]"
+                />
+              </div>
+
+              <!-- 2. 对外日志润色 -->
+              <div class="p-2.5 rounded-lg bg-surface-alt border border-border space-y-1.5">
+                <div class="text-xs font-medium text-text-1 flex items-center gap-1">
+                  <i aria-hidden="true" class="i-carbon-sparkle text-brand-500" /> 对外日志润色
+                </div>
+                <NSelect
+                  v-model:value="form.aiRoutes.polish"
+                  size="small"
+                  placeholder="跟随默认供应商"
+                  clearable
+                  :options="[{ label: '跟随默认供应商', value: '' }, ...providers.map(p => ({ label: `${p.name} (${p.model})`, value: p.id }))]"
+                />
+              </div>
+
+              <!-- 3. Diff 架构解读 -->
+              <div class="p-2.5 rounded-lg bg-surface-alt border border-border space-y-1.5">
+                <div class="text-xs font-medium text-text-1 flex items-center gap-1">
+                  <i aria-hidden="true" class="i-carbon-bot text-brand-500" /> Diff 架构解读
+                </div>
+                <NSelect
+                  v-model:value="form.aiRoutes.explain"
+                  size="small"
+                  placeholder="跟随默认供应商"
+                  clearable
+                  :options="[{ label: '跟随默认供应商', value: '' }, ...providers.map(p => ({ label: `${p.name} (${p.model})`, value: p.id }))]"
+                />
               </div>
             </div>
           </div>

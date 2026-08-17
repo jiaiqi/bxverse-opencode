@@ -104,6 +104,12 @@ export interface AppConfig {
     /** 扩展：AI 多供应商（R21）。baseUrl/model/apiKey 为兼容旧字段——读取时自动迁移为默认 provider。 */
     providers?: AiProvider[]
     activeProviderId?: string
+    /** 扩展：R23 场景特化模型路由（commit 极速/polish 润色/explain 深度推理分流） */
+    routes?: {
+      commit?: string
+      polish?: string
+      explain?: string
+    }
   }
   /** 扩展：R19 发布备份策略（默认 { enabled: true, source: 'both', onFailure: 'warn' }） */
   backup?: BackupConfig
@@ -195,8 +201,11 @@ export interface ReleaseRecord {
   builtBy: string
   /** 扩展：R19 本次发布备份引用（源码 bundle/快照/产物） */
   backups?: RepoBackupRef[]
+  /** 扩展：R24 发布废弃标记与原因 */
+  deprecated?: boolean
+  deprecateReason?: string
+  deprecatedAt?: string
 }
-
 // ==================== 发布计划 / 任务 ====================
 export interface PlannedRepo {
   repoId: string
@@ -435,4 +444,20 @@ export interface AiTestResult {
   reply: string
   detail?: string
   providerName?: string
+}
+
+// 扩展：R25 多工程分支协同巡检与批量对齐
+export interface BranchAlignmentItem {
+  repoId: string
+  repoName: string
+  branch: string
+  head: string
+  isAligned: boolean
+  defaultBranch: string
+}
+
+export interface BranchAlignmentResult {
+  isAllAligned: boolean
+  defaultBranch: string
+  items: BranchAlignmentItem[]
 }

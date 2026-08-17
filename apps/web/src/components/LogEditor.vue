@@ -62,14 +62,14 @@ async function onPolish() {
   }
   polishing.value = true
   try {
-    const { content } = await api.aiPolish(base)
+    const { content, provider } = await api.aiPolish(base)
     if (content && content !== base) {
       // 先落盘未提交的输入再整体替换，避免竞态丢字
       clearTimeout(debounceTimer)
       debounceTimer = undefined
       pendingInput = null
       emit('update:content', content)
-      message.success('已生成 AI 润色草稿（仍须人工核对后确认）')
+      message.success(`已由「${provider ?? 'AI'}」生成润色草稿（仍须人工核对后确认）`)
     } else {
       message.info('润色结果与原文一致，未做替换')
     }

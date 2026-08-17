@@ -2,7 +2,7 @@
 // 发布历史查询 + 双轨日志编辑（PATCH /api/releases/:id/log，state 流转）
 
 import type { AppConfig, RepoVersionItem } from '@bxverse/shared'
-import { store } from '@bxverse/core'
+import { git, store } from '@bxverse/core'
 import type { Ctx } from '../http/router'
 import { apiError, readJsonBody, sendJson } from '../http/json'
 
@@ -91,5 +91,36 @@ export function register(router: import('../http/router').Router, services: Hist
     await services.dataStore.updateRecord(record)
     await services.dataStore.commitRecords(`chore: manual log edit (${ctx.params.id}, ${track}:${action})`)
     sendJson(ctx.res, 200, record)
+  })
+
+  // POST /api/releases/:id/deprecate —— 标为废弃与纠偏撤销 Tag (R24)
+  router.post('/api/releases/:id/deprecate', async (ctx: Ctx) => {
+    const body = (await readJsonBody(ctx.req)) as { reason?: string; cleanupTags?: boolean }
+    const reason = String(body.reason ?? '').trim()
+    const cleanupTags = body.cleanupTags === true
+    const cfg = await services.loadCfg()
+
+    // 1. 废弃记录更新
+    const updated = await services.dataStore.deprecateRecord(ctx.params.id, reason)
+
+    // 2. 若勾选撤销标签，遍历关联工程安全清理
+    if (cleanupTags && updated.kind === 'project' && updated.repos) {
+      const project = cfg.projects.find(p => p.id === updated.scopeId)
+      if (project) {
+        for (const rRef of updated.repos) {
+          const repoDef = project.repos.find(r => r.id === rRef.repoId)
+          if (repoDef) {
+            // 删除构建标签与里程碑标签
+            try {
+              if (updated.tags.build) await git.deleteTag(repoDef.path, updated.tags.build, { remote: true })
+              if (updated.tags.milestone) await git.deleteTag(repoDef.path, updated.tags.milestone, { remote: true })
+            } catch {
+              // 忽略个别非关键删除异常
+            }
+          }
+        }
+      }
+    }
+    sendJson(ctx.res, 200, updated)
   })
 }

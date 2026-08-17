@@ -331,9 +331,11 @@ onMounted(loadStatus)
       <div v-else-if="diffLoading" class="py-12 text-center"><NSpin size="small" /></div>
       <div v-else-if="selectedDiff" class="space-y-3">
         <div v-if="explainResult" class="rounded-md border border-brand-soft bg-brand-soft/30 px-3 py-2.5 space-y-2">
-          <div class="text-xs text-text-3 flex items-center gap-1.5">
-            <i aria-hidden="true" class="i-carbon-sparkle text-brand-500" />
-            AI 解读（仅供参考）
+          <div class="text-xs text-text-3 flex items-center justify-between">
+            <span class="flex items-center gap-1.5">
+              <i aria-hidden="true" class="i-carbon-sparkle text-brand-500" />
+              AI 解读（由「{{ explainResult.provider ?? 'AI' }}」生成，仅供参考）
+            </span>
           </div>
           <div class="text-13px text-text-1"><span class="font-medium">意图：</span>{{ explainResult.intent }}</div>
           <div v-if="explainResult.keyChanges.length">

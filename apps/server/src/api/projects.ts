@@ -1,9 +1,9 @@
 // apps/server/src/api/projects.ts
 // 项目 CRUD（GET/POST /api/projects、PATCH/DELETE /api/projects/:id）
 
-import type { AppConfig, ProjectDef } from '@bxverse/shared'
+import type { AppConfig, ProjectDef, BranchAlignmentResult } from '@bxverse/shared'
 import { COMMIT_TYPES, DEFAULT_EXTERNAL_EXCLUDE } from '@bxverse/shared'
-import { store } from '@bxverse/core'
+import { git, store } from '@bxverse/core'
 import fs from 'node:fs'
 import path from 'node:path'
 import type { Ctx } from '../http/router'
@@ -110,5 +110,55 @@ export function register(router: import('../http/router').Router, services: Proj
       }
     }
     sendJson(ctx.res, 200, { ok: true, purged })
+  })
+
+  // ---------- 多工程分支协同巡检 (R25) ----------
+  router.get('/api/projects/:id/branch-alignment', async (ctx: Ctx) => {
+    const cfg = await services.loadCfg()
+    const project = cfg.projects.find(p => p.id === ctx.params.id)
+    if (!project) throw apiError(404, 'NOT_FOUND', `项目不存在: ${ctx.params.id}`)
+    const targetBranch = ctx.query.get('target') || 'master'
+    const repoInputs = project.repos.map(r => ({
+      repoId: r.id,
+      repoName: r.name,
+      path: r.path,
+    }))
+    const result: BranchAlignmentResult = await git.inspectBranchAlignment(repoInputs, targetBranch)
+    sendJson(ctx.res, 200, result)
+  })
+
+  // ---------- 批量切分支 ----------
+  router.post('/api/projects/:id/batch-checkout', async (ctx: Ctx) => {
+    const cfg = await services.loadCfg()
+    const project = cfg.projects.find(p => p.id === ctx.params.id)
+    if (!project) throw apiError(404, 'NOT_FOUND', `项目不存在: ${ctx.params.id}`)
+    const body = (await readJsonBody(ctx.req)) as { branch?: string }
+    const branch = String(body.branch ?? 'master').trim()
+    const errors: { repoId: string; repoName: string; error: string }[] = []
+    for (const r of project.repos) {
+      try {
+        await git.checkoutBranch(r.path, branch)
+      } catch (e) {
+        errors.push({ repoId: r.id, repoName: r.name, error: (e as Error).message })
+      }
+    }
+    sendJson(ctx.res, 200, { ok: errors.length === 0, branch, errors })
+  })
+
+  // ---------- 批量安全拉取 (--ff-only) ----------
+  router.post('/api/projects/:id/batch-pull', async (ctx: Ctx) => {
+    const cfg = await services.loadCfg()
+    const project = cfg.projects.find(p => p.id === ctx.params.id)
+    if (!project) throw apiError(404, 'NOT_FOUND', `项目不存在: ${ctx.params.id}`)
+    const results: { repoId: string; repoName: string; ok: boolean; output: string }[] = []
+    for (const r of project.repos) {
+      try {
+        const res = await git.gitPull(r.path)
+        results.push({ repoId: r.id, repoName: r.name, ok: true, output: res.output })
+      } catch (e) {
+        results.push({ repoId: r.id, repoName: r.name, ok: false, output: (e as Error).message })
+      }
+    }
+    sendJson(ctx.res, 200, { ok: results.every(x => x.ok), results })
   })
 }

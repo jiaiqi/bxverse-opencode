@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // ReleaseWizard.vue —— 发布向导六步（M4）
 
-import type { RepoStatus } from '@bxverse/shared'
+import type { RepoStatus, BranchAlignmentResult } from '@bxverse/shared'
 import { useProjectsStore } from '../stores/projects'
 import { usePublishStore } from '../stores/publish'
 import PageHeader from '../components/PageHeader.vue'
@@ -127,6 +127,39 @@ const excludedCount = (repoId: string): number => (store.excludedCommits[repoId]
 function commitIncluded(repoId: string, fullHash: string): boolean {
   return !(store.excludedCommits[repoId] ?? []).includes(fullHash)
 }
+// ---------- 分支协同巡检 (R25 / 建议 1) ----------
+const branchAlignment = ref<BranchAlignmentResult | null>(null)
+
+async function checkBranchAlignment() {
+  if (!projectId.value) return
+  try {
+    branchAlignment.value = await api.branchAlignment(projectId.value, 'master')
+  } catch {
+    // 忽略
+  }
+}
+
+async function doBatchCheckout(branch = 'master') {
+  try {
+    await api.batchCheckout(projectId.value, branch)
+    message.success(`已批量将所有工程切至「${branch}」分支`)
+    await Promise.all([detect(), checkBranchAlignment()])
+    store.setSelected(changedRepoIds.value)
+  } catch (e) {
+    message.error((e as Error).message)
+  }
+}
+
+async function doBatchPull() {
+  try {
+    const res = await api.batchPull(projectId.value)
+    message.success(res.ok ? '全矩阵工程批量快进拉取成功！' : '部分仓库拉取存在警告')
+    await Promise.all([detect(), checkBranchAlignment()])
+    store.setSelected(changedRepoIds.value)
+  } catch (e) {
+    message.error((e as Error).message)
+  }
+}
 
 watch(projectId, async (id) => {
   if (!projectsStore.byId(id)) await projectsStore.load()
@@ -134,7 +167,7 @@ watch(projectId, async (id) => {
   // 步骤状态同步 URL（刷新恢复）
   const q = Number(route.query.step)
   if (q >= 1 && q <= 6) store.step = q
-  await detect()
+  await Promise.all([detect(), checkBranchAlignment()])
   // 默认勾选全部变动仓库
   store.setSelected(changedRepoIds.value)
   // 刷新/重进时检测全局进行中任务 → 提供接管查看进度
@@ -371,6 +404,29 @@ const resultReleaseId = computed(() => store.result?.releaseId ?? '')
             正在检测各仓库变更…
           </div>
           <template v-else>
+            <!-- 分支协同巡检警示条 (R25 / 建议 1) -->
+            <div
+              v-if="branchAlignment && !branchAlignment.isAllAligned"
+              class="mb-3.5 p-3.5 rounded-lg border border-warning/40 bg-warning/10 flex items-center justify-between gap-3 text-xs"
+            >
+              <div class="flex items-center gap-2">
+                <i aria-hidden="true" class="i-carbon-warning-filled text-warning shrink-0 text-base" />
+                <span class="text-text-1">
+                  发版前分支巡检预警：检测到
+                  <strong class="text-warning">{{ branchAlignment.items.filter(x => !x.isAligned).map(x => `${x.repoName} (${x.branch})`).join('、') }}</strong>
+                  未在主发布分支 ({{ branchAlignment.defaultBranch }})
+                </span>
+              </div>
+              <div class="flex items-center gap-2 shrink-0">
+                <NButton size="tiny" type="warning" @click="doBatchCheckout(branchAlignment.defaultBranch)">
+                  ⚡ 一键切至主分支
+                </NButton>
+                <NButton size="tiny" quaternary @click="doBatchPull">
+                  ↓ 批量快进拉取
+                </NButton>
+              </div>
+            </div>
+
             <div class="space-y-3">
               <div v-for="repo in project.repos" :key="repo.id" class="wz-row rounded-md border bg-surface"
                 :class="failedRepos.has(repo.id)

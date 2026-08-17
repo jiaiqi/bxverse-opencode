@@ -4,6 +4,7 @@
 import type {
   AiTestResult,
   AppConfig,
+  BranchAlignmentResult,
   BumpType,
   CloneRequest,
   CommitType,
@@ -83,6 +84,16 @@ export const api = {
   editLog: (recordId: string, body: { track: 'internal' | 'external'; action: 'edit' | 'confirm' | 'reset'; content?: string }) =>
     http.patch<ReleaseRecord>(`/releases/${recordId}/log`, body),
   releaseVersions: (recordId: string) => http.get<RepoVersionItem[]>(`/releases/${recordId}/versions`),
+  deprecateRelease: (recordId: string, body: { reason?: string; cleanupTags?: boolean }) =>
+    http.post<ReleaseRecord>(`/releases/${recordId}/deprecate`, body),
+
+  // 多工程分支协同巡检与对齐 (R25)
+  branchAlignment: (projectId: string, target = 'master') =>
+    http.get<BranchAlignmentResult>(`/projects/${projectId}/branch-alignment?target=${encodeURIComponent(target)}`),
+  batchCheckout: (projectId: string, branch: string) =>
+    http.post<{ ok: boolean; branch: string; errors: { repoId: string; repoName: string; error: string }[] }>(`/projects/${projectId}/batch-checkout`, { branch }),
+  batchPull: (projectId: string) =>
+    http.post<{ ok: boolean; results: { repoId: string; repoName: string; ok: boolean; output: string }[] }>(`/projects/${projectId}/batch-pull`, {}),
 
   // 发布
   publish: (body: PublishRequest) => http.post<PublishPlan | { taskId: string; queued: boolean }>('/publish', body),

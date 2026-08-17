@@ -25,15 +25,19 @@ const emit = defineEmits<{ open: [id: string]; release: [id: string] }>()
         <span class="font-semibold text-text-1 truncate">{{ project.name }}</span>
         <span class="version-badge shrink-0"><span class="tick"></span>{{ project.version }}</span>
       </div>
-      <button
-        v-if="project.changedRepoCount > 0"
-        class="opacity-0 group-hover:opacity-100 transition-opacity duration-150 w-7 h-7 flex items-center justify-center rounded-md text-brand-500 hover:bg-brand-soft"
-        aria-label="发起发布"
-        title="发起发布"
-        @click.stop="emit('release', project.id)"
-      >
-        <i aria-hidden="true" class="i-carbon-rocket text-16px" />
-      </button>
+      <div class="flex items-center gap-1 shrink-0">
+        <NButton
+          size="tiny"
+          type="primary"
+          secondary
+          aria-label="发布向导"
+          title="进入该项目发布向导"
+          @click.stop="emit('release', project.id)"
+        >
+          <template #icon><i aria-hidden="true" class="i-carbon-rocket" /></template>
+          发布
+        </NButton>
+      </div>
     </div>
     <div class="flex items-center gap-4 mt-4 text-sm">
       <div class="flex items-center gap-1.5 text-text-2">

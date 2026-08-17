@@ -39,15 +39,21 @@ export async function ensureLegacyMigration(cfg: AppConfig, services: AiServices
   await services.saveCfg(cfg)
 }
 
-/** 解析当前生效供应商 */
-function activeProvider(cfg: AppConfig): AiProvider | null {
+/** 解析当前生效供应商（支持根据场景路由特化指定，如 commit / polish / explain） */
+function providerForTask(cfg: AppConfig, task?: 'commit' | 'polish' | 'explain'): AiProvider | null {
   const providers = cfg.ai.providers ?? []
+  if (task && cfg.ai.routes?.[task]) {
+    const targetId = cfg.ai.routes[task]
+    const hit = providers.find(p => p.id === targetId && p.enabled)
+    if (hit) return hit
+  }
   if (cfg.ai.activeProviderId) {
     const hit = providers.find(p => p.id === cfg.ai.activeProviderId && p.enabled)
     if (hit) return hit
   }
   return providers.find(p => p.enabled) ?? null
 }
+
 
 async function apiKeyOf(providerId: string): Promise<string> {
   const cred = await store.loadCredentials()
@@ -224,8 +230,8 @@ export function register(router: import('../http/router').Router, services: AiSe
     const cfg = await services.loadCfg()
     await ensureLegacyMigration(cfg, services)
     if (!cfg.ai.enabled) throw apiError(400, 'AI_DISABLED', 'AI 润色未启用（请在设置页开启）')
-    const provider = activeProvider(cfg)
-    if (!provider) throw apiError(400, 'AI_CONFIG', '未配置生效的 AI 供应商（请在设置页添加并设为当前）')
+    const provider = providerForTask(cfg, 'polish')
+    if (!provider) throw apiError(400, 'AI_CONFIG', '未配置生效的 AI 供应商（请在设置页添加）')
     const key = await apiKeyOf(provider.id)
     if (!key) throw apiError(400, 'AI_CONFIG', `「${provider.name}」未设置 API Key`)
 
@@ -245,8 +251,8 @@ export function register(router: import('../http/router').Router, services: AiSe
     const cfg = await services.loadCfg()
     await ensureLegacyMigration(cfg, services)
     if (!cfg.ai.enabled) throw apiError(400, 'AI_DISABLED', 'AI 润色未启用（请在设置页开启）')
-    const provider = activeProvider(cfg)
-    if (!provider) throw apiError(400, 'AI_CONFIG', '未配置生效的 AI 供应商')
+    const provider = providerForTask(cfg, 'commit')
+    if (!provider) throw apiError(400, 'AI_CONFIG', '未配置生效的 Commit AI 供应商')
     const key = await apiKeyOf(provider.id)
     if (!key) throw apiError(400, 'AI_CONFIG', `「${provider.name}」未设置 API Key`)
     try {
@@ -265,8 +271,8 @@ export function register(router: import('../http/router').Router, services: AiSe
     const cfg = await services.loadCfg()
     await ensureLegacyMigration(cfg, services)
     if (!cfg.ai.enabled) throw apiError(400, 'AI_DISABLED', 'AI 润色未启用')
-    const provider = activeProvider(cfg)
-    if (!provider) throw apiError(400, 'AI_CONFIG', '未配置生效的 AI 供应商')
+    const provider = providerForTask(cfg, 'explain')
+    if (!provider) throw apiError(400, 'AI_CONFIG', '未配置生效的 Diff 解读 AI 供应商')
     const key = await apiKeyOf(provider.id)
     if (!key) throw apiError(400, 'AI_CONFIG', `「${provider.name}」未设置 API Key`)
     try {
