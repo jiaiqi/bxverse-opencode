@@ -21,6 +21,14 @@ const form = reactive({
   aiModel: '',
   aiApiKey: '',
 })
+
+/** 检测周期：UI 以「秒」呈现，配置/存储为毫秒 */
+const pollSeconds = computed({
+  get: () => Math.round(form.pollInterval / 1000),
+  set: (v: number | null) => {
+    form.pollInterval = Math.max(5, Math.min(3600, Math.round(v ?? 30))) * 1000
+  },
+})
 const saving = ref(false)
 const syncing = ref(false)
 const syncResult = ref('')
@@ -153,9 +161,11 @@ function rotateToken() {
         <div class="flex items-center justify-between">
           <div>
             <div class="text-sm font-medium text-text-1">主题</div>
-            <div class="text-xs text-text-3 mt-0.5">system 时跟随操作系统（WenXi 风格固定为深色）</div>
+            <div class="text-xs text-text-3 mt-0.5" :class="{ 'opacity-70': form.themeStyle === 'wenxi' }">
+              {{ form.themeStyle === 'wenxi' ? 'WenXi 风格固定为深色，主题切换暂不可用（切回 Indigo 后恢复）' : 'system 时跟随操作系统' }}
+            </div>
           </div>
-          <NRadioGroup v-model:value="form.theme">
+          <NRadioGroup v-model:value="form.theme" :disabled="form.themeStyle === 'wenxi'">
             <NRadioButton value="light"><i aria-hidden="true" class="i-carbon-sun mr-1" /> 亮</NRadioButton>
             <NRadioButton value="dark"><i aria-hidden="true" class="i-carbon-moon mr-1" /> 暗</NRadioButton>
             <NRadioButton value="system"><i aria-hidden="true" class="i-carbon-screen mr-1" /> 系统</NRadioButton>
@@ -171,9 +181,12 @@ function rotateToken() {
         <div class="flex items-center justify-between">
           <div>
             <div class="text-sm font-medium text-text-1">变动检测周期</div>
-            <div class="text-xs text-text-3 mt-0.5">仓库变更自动检测间隔（毫秒）</div>
+            <div class="text-xs text-text-3 mt-0.5">仓库变更自动检测间隔（秒，如 30 = 半分钟）</div>
           </div>
-          <NInputNumber v-model:value="form.pollInterval" :min="5000" :max="3600000" :step="5000" class="w-40" :input-props="{ 'aria-label': '变动检测周期' }" />
+          <div class="flex items-center gap-2">
+            <NInputNumber v-model:value="pollSeconds" :min="5" :max="3600" :step="5" class="w-40" :input-props="{ 'aria-label': '变动检测周期（秒）' }" />
+            <span class="text-xs text-text-3">秒</span>
+          </div>
         </div>
       </div>
     </section>

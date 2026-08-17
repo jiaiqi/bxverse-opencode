@@ -35,6 +35,13 @@ const commands = computed<Command[]>(() => {
       keywords: `project ${p.name}`,
       run: () => router.push(`/project/${p.id}`),
     })
+    list.push({
+      group: '发布',
+      title: `发布项目：${p.name}`,
+      icon: 'i-carbon-rocket',
+      keywords: `release publish ${p.name}`,
+      run: () => router.push(`/project/${p.id}/release`),
+    })
     for (const r of p.repos) {
       list.push({
         group: '仓库',

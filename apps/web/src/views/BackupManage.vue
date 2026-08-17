@@ -279,6 +279,10 @@ const compareRows = computed(() =>
           <template #icon><i aria-hidden="true" class="i-carbon-git-compare" /></template>
           源码对比
         </NButton>
+        <NButton quaternary size="small" @click="selected = []">
+          <template #icon><i aria-hidden="true" class="i-carbon-close-outline" /></template>
+          清空选择
+        </NButton>
       </template>
     </PageHeader>
 
