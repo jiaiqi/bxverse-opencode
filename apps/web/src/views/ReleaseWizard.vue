@@ -31,14 +31,20 @@ const statuses = ref<Map<string, RepoStatus | null>>(new Map())
 const failedRepos = ref<Map<string, string>>(new Map())
 const detecting = ref(true)
 
+// 并发上限：仓库多时避免一次性拉起 N 个 git 进程（均 fresh=true）
+const DETECT_CONCURRENCY = 4
+
 async function detect() {
   if (!project.value) return
   detecting.value = true
   statuses.value = new Map()
   failedRepos.value = new Map()
   commitsShowAllRepos.value = new Set()
-  await Promise.all(
-    project.value.repos.map(async (repo) => {
+  const repos = [...project.value.repos]
+  let idx = 0
+  const worker = async () => {
+    while (idx < repos.length) {
+      const repo = repos[idx++]
       try {
         const st = await projectsStore.repoStatus(projectId.value, repo.id, true)
         statuses.value.set(repo.id, st)
@@ -46,8 +52,9 @@ async function detect() {
         statuses.value.set(repo.id, null)
         failedRepos.value.set(repo.id, (e as Error).message || '检测失败')
       }
-    }),
-  )
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(DETECT_CONCURRENCY, repos.length) }, () => worker()))
   statuses.value = new Map(statuses.value)
   failedRepos.value = new Map(failedRepos.value)
   detecting.value = false
