@@ -11,6 +11,7 @@ import MarkdownView from '../components/MarkdownView.vue'
 import FileTree from '../components/FileTree.vue'
 import FileViewer from '../components/FileViewer.vue'
 import DirPicker from '../components/DirPicker.vue'
+import GitTab from '../components/GitTab.vue'
 import { useDialog, useMessage } from 'naive-ui'
 
 const route = useRoute()
@@ -23,9 +24,9 @@ const pid = computed(() => String(route.params.pid))
 const rid = computed(() => String(route.params.rid))
 const { repo } = computed(() => projectsStore.repoById(pid.value, rid.value)).value
 
-const VALID_TABS = ['files', 'logs', 'settings'] as const
-const tab = ref<'files' | 'logs' | 'settings'>(
-  VALID_TABS.includes(route.query.tab as (typeof VALID_TABS)[number]) ? (route.query.tab as 'files' | 'logs' | 'settings') : 'files',
+const VALID_TABS = ['files', 'git', 'logs', 'settings'] as const
+const tab = ref<'files' | 'git' | 'logs' | 'settings'>(
+  VALID_TABS.includes(route.query.tab as (typeof VALID_TABS)[number]) ? (route.query.tab as 'files' | 'git' | 'logs' | 'settings') : 'files',
 )
 
 // Tab 状态同步 URL（刷新/分享保持状态）
@@ -263,6 +264,12 @@ watch(tab, (t) => {
               <div class="flex-1 min-w-0">
                 <FileViewer :pid="pid" :rid="rid" :path="selectedFile" />
               </div>
+            </div>
+          </NTabPane>
+
+          <NTabPane name="git" tab="Git">
+            <div class="p-4">
+              <GitTab :project-id="pid" :repo-id="rid" />
             </div>
           </NTabPane>
 

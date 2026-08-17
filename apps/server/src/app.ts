@@ -24,6 +24,7 @@ import { register as registerOverview } from './api/overview'
 import { register as registerVersions } from './api/versions'
 import { register as registerBackups } from './api/backups'
 import { register as registerAi } from './api/ai'
+import { register as registerGit } from './api/git'
 
 export interface App {
   server: http.Server
@@ -113,7 +114,8 @@ export function createApp(opts: { token?: string } = {}): App {
   registerOverview(router, registerOverviewServices)
   registerVersions(router, { loadCfg, poll })
   registerBackups(router, { loadCfg, getDataStore: () => dataStore as store.DataStore })
-  registerAi(router, { loadCfg })
+  registerAi(router, { loadCfg, saveCfg })
+  registerGit(router, { loadCfg })
 
   const server = http.createServer(async (req, res) => {
     const url = new URL(req.url ?? '/', 'http://127.0.0.1')

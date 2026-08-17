@@ -101,10 +101,28 @@ export interface AppConfig {
     baseUrl: string
     model: string
     apiKey: string
+    /** 扩展：AI 多供应商（R21）。baseUrl/model/apiKey 为兼容旧字段——读取时自动迁移为默认 provider。 */
+    providers?: AiProvider[]
+    activeProviderId?: string
   }
   /** 扩展：R19 发布备份策略（默认 { enabled: true, source: 'both', onFailure: 'warn' }） */
   backup?: BackupConfig
   projects: ProjectDef[]
+}
+
+/** 扩展：R21 AI 供应商（当前仅 OpenAI 兼容；kind 预留扩展位） */
+export interface AiProvider {
+  /** 永久标识（创建后不变） */
+  id: string
+  /** 显示名（可改） */
+  name: string
+  /** 预留扩展位：当前仅 'openai-compatible' */
+  kind: 'openai-compatible'
+  /** chat/completions 前缀（如 https://api.deepseek.com/v1） */
+  baseUrl: string
+  /** 默认模型 */
+  model: string
+  enabled: boolean
 }
 
 // ==================== 发布记录 ====================
@@ -343,4 +361,47 @@ export interface CompareResult {
   right?: string
   files: FileCompareItem[]
   totals: { added: number; removed: number; modified: number; same: number }
+}
+
+// 扩展：R22 仓库内 Git 面板（status / diff / 暂存 / 提交 / 推送 / 拉取 / AI 提交与变更解读）
+/** git status --porcelain 单行（X 索引区状态，Y 工作区状态，路径） */
+export interface GitFileStatus {
+  indexStatus: string
+  workStatus: string
+  /** 相对仓库根的路径 */
+  path: string
+  staged: boolean
+  untracked: boolean
+}
+
+export interface GitStatus {
+  branch: string
+  hasRemote: boolean
+  remoteUrl: string
+  head: string
+  ahead: number
+  behind: number
+  files: GitFileStatus[]
+  summary: { staged: number; unstaged: number; untracked: number }
+}
+
+export interface GitFileDiff {
+  path: string
+  range: 'staged' | 'unstaged' | 'untracked'
+  patch: string
+  truncated: boolean
+}
+
+export interface AiCommitMessageSuggestion {
+  subject: string
+  body: string
+  type: CommitType
+  provider?: string
+}
+
+export interface AiExplainDiffResult {
+  intent: string
+  keyChanges: string[]
+  risks: string[]
+  provider?: string
 }

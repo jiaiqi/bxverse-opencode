@@ -38,11 +38,21 @@ const appStore = useAppStore()
 const showDiff = ref(false)
 const locked = computed(() => props.state === 'confirmed')
 
-// ---------- AI 润色（M5-02）：仅对外日志；设置页启用且配置完整时可点 ----------
+// ---------- AI 润色（多供应商 R21）：仅对外日志；启用且有生效供应商 + 已设密钥时可点 ----------
 const polishing = ref(false)
-const aiReady = computed(() =>
-  !!appStore.config?.ai.enabled && !!appStore.config.ai.baseUrl && !!appStore.config.ai.model,
-)
+const aiProviders = ref<{ id: string; enabled: boolean; hasKey: boolean }[]>([])
+onMounted(async () => {
+  try {
+    aiProviders.value = await api.aiProviders()
+  } catch {
+    // 供应商列表拉取失败不阻塞编辑器
+  }
+})
+const aiReady = computed(() => {
+  const c = appStore.config
+  if (!c?.ai.enabled) return false
+  return aiProviders.value.some(p => p.enabled && p.hasKey)
+})
 
 async function onPolish() {
   const base = pendingInput ?? props.content

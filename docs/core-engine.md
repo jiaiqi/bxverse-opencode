@@ -11,6 +11,7 @@
 |---|---|---|
 | v0.1 | 2026-08-13 | 初稿 |
 | v0.2 | 2026-08-13 | §1 对齐实际 index.ts 导出面（files/backup/compare 三模块 + diffLines/JournalStore 公开导出）；文件清单补 `files.ts`、`backup/`（5 文件）、`compare/index.ts`；新增 §7 文件树与文件读取（safeAbs 符号链接加固）与 §8 备份与一致性对比（R19）；§6.3 补提交级排除 `excludeCommits` 语义；§5.1 补 `updateRecord`；§11 对应关系表补 R19 行（原 §7~§9 顺延为 §9~§11） |
+| v0.3 | 2026-08-17 | §1 `ai.ts` 升级多供应商（`chatCompletion` 基础封装 + `polishLog/testConnection`，阶段二预留 `commitMessage/explainDiff`）；`git.ts` 预留阶段二写操作扩展（commit/stash/push/pull/tag 删除）；§5.4 项目级发布记录 `repos` 全量快照语义（成功=发布版本 / 同步基版=项目版本 / 失败=仓库当前版本）；§5.x `syncUnchangedVersionFile` 改为写入本次发布版本 |
 
 ---
 
@@ -39,7 +40,7 @@ export { JournalStore } from './journal'
 | 文件 | 角色 | 导出 |
 |---|---|---|
 | `index.ts` | 汇总导出八模块 + diff/journal 辅助导出 | — |
-| `git.ts` | git 子进程封装与解析 | 14 个函数（§2） |
+| `git.ts` | git 子进程封装与解析 | 14 个函数（§2）；阶段二扩展：`worktreeStatus/diff/commitFiles/stash/stashPop/pushBranch/pushTags/pullFF/deleteTag`（同上 spawn 数组模式，零依赖） |
 | `version.ts` | 版本号计算 | 5 个函数（§3） |
 | `changelog.ts` | 提交分类/统计/双轨日志渲染 | 5 个函数（§4） |
 | `store.ts` | 数据目录、app.json、credentials、发布记录、备份元数据、数据仓库 | `APP_DIR`/`DEFAULT_APP_CONFIG`/`versionSafe`/`tokenMatches` + 配置与凭据函数 + `DataStore` 类（§5）；re-export `resolveHome` |
@@ -54,7 +55,7 @@ export { JournalStore } from './journal'
 | `journal.ts` | journal 落盘/扫描/恢复 | `JournalStore` 类 + `Journal/JournalStep` 类型（经 index.ts 公开导出，§6.5） |
 | `preflight.ts` | 预检阻塞项（引擎内部使用） | `runPreflight`（§6.4，私有） |
 | `home.ts` | BX_HOME 解析、目录确保（store 内部使用） | `resolveHome/ensureDirs/atomicWrite`（私有） |
-| `ai.ts` | 可选 AI 日志润色（未启用时短路） | `polishLog`（私有，v1 短路返回原文） |
+| `ai.ts` | 可选 AI 能力（多供应商，OpenAI 兼容）：日志润色、测试连接、阶段二提交信息/变更解读 | `chatCompletion(provider, key, system, user, opts)`（私有）→ `polishLog` / `testConnection` / `commitMessage` / `explainDiff`；未启用/缺凭据短路 |
 | `diff.ts` | autoDraft 与 content 的行级 LCS diff | `diffLines`/`DiffLine`（经 index.ts 公开导出，供 API 层与前端 DiffView 消费） |
 
 私有类型（不跨进程，无需进 shared）：
@@ -423,7 +424,7 @@ for section of EXTERNAL_SECTIONS:
 
 ### 4.3 autoDraft 生成规则
 
-- `PublishPlan.externalDraft / internalDraft` = `renderExternal / renderInternal` 在 plan 时刻的输出（**不含 AI**；AI 润色是向导中前端触发的可选动作，`ai.polishLog` 在 v1 短路返回原文）。
+- `PublishPlan.externalDraft / internalDraft` = `renderExternal / renderInternal` 在 plan 时刻的输出（**不含 AI**；AI 润色是向导中前端触发的可选动作，`ai.polishLog` 按生效供应商调用，未启用/缺凭据时由调用方呈现错误，不静默回原文）。
 - 落盘时 `ReleaseLog.autoDraft` = 同一 render 调用输出（留底对比基准）。
 - `ReleaseLog.content` 初始值 = `PublishRequest.externalContent ?? autoDraft`；`state` 推断：`content === autoDraft ? 'auto' : 'edited'`（确认动作发生在发布前向导与发布后 PATCH，见 api.md §7.3）。
 

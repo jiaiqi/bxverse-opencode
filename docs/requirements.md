@@ -88,3 +88,4 @@
 | 2026-08-13 | R18 补充：版本清单与发布绑定——每次发布完成页可导出当次清单；发布历史每条记录可导出**当时快照**（`GET /api/releases/:id/versions`，发布落盘时快照各仓库版本与中文名） |
 | 2026-08-13 | 新增 R19：版本一致性对比与发布备份——发布时自动备份源码（git bundle + archive 快照，遵循 .gitignore）与产物（按仓库指定 artifactDir 打包 + manifest）；三层次一致性对比（源码 git diff / 产物清单对比 / manifest 校验）；大文件本地 `backups/`、元数据入数据仓库；恢复功能远期低优先级 |
 | 2026-08-17 | 需求补充（R18 导出 + 发布默认值）：导出版本清单可选「**仅日期**」版本号格式（`V` + 8 位时间戳，如 `V26081728`；默认仍为完整 `vX.Y.Z.YYMMDDHH`）；导出**默认文件名** `version.json`；发布向导**默认离线发布、跳过构建命令、不备份源码与产物**（可手动开启） |
+| 2026-08-17 | 需求补充（AI 多供应商 + Git 助手，设计见 `docs/frontend.md` §4.19 / `docs/api.md` §3.10 / `docs/data-model.md` §3.1）：① AI 支持**多供应商**（OpenAI 兼容：DeepSeek 官方 / OpenAI / Ollama 本地 / Kimi coding plan / 小米 MiMo API / MiniMax coding plan / 自定义 baseUrl），可切换当前生效供应商；凭据 **write-only**（存 `credentials.json`，不回显、不落 app.json）② 向导日志「AI 润色」升级多供应商 ③ 后续（阶段二）：仓库 Git 操作面板（状态/diff/提交/stash/推送/拉取/标签）+ **AI 生成提交信息**（conventional 草稿）与 **AI 变更解读**（中文摘要）+ 预检失败 AI 分析——AI 只产草稿，写操作永远用户确认 |

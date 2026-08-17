@@ -390,7 +390,7 @@ NConfigProvider(theme + themeOverrides)
 | PWA | `pwa.enabled` | NSwitch | 开启后按 §10 动态注册 SW + 注入 manifest |
 | 服务 | `host` / `port` | NInput / NInputNumber | 端口范围 1–65535；host 非回环地址时保存前红色警示「非本机监听存在安全风险」 |
 | 轮询 | `pollInterval` | NInputNumber（ms，≥10000） | 说明：仓库变动自动检测周期 |
-| AI | `ai.enabled` / `ai.baseUrl` / `ai.model` / `ai.apiKey` | NSwitch + NInput(password) | apiKey 仅本机存储，不出本机 |
+| AI 供应商 | `ai.enabled` / `ai.providers[]` / `ai.activeProviderId` | 供应商卡片列表 + 「添加供应商」弹窗（预设/自定义）+ 测试连接 + 设为当前 + 删除 | key **write-only**（`PUT credential` 写入，保存后显示「已设置密钥」，永不回显）；热更新即时生效 |
 | 数据仓库 | `dataDir` 只读展示 | — | 「立即同步」→ POST /api/system/sync，loading 态 + 结果 toast |
 | 安全 | 轮换访问令牌 | 按钮 | POST /api/auth/rotate → 更新 sessionStorage token → toast「已轮换」 |
 
@@ -553,7 +553,7 @@ props: { before: string; after: string; labelBefore?: string; labelAfter?: strin
 
 详见 §9 完整规格。
 
-- **AI 润色按钮（M5-02）**：对外日志（`track==='external'`）在设置页 AI 已启用且 Base URL/模型已配置时显示「AI 润色」（`i-carbon-sparkle`，secondary 主色按钮）。点击后 `api.aiPolish(current)`（含未落盘输入），成功则整体替换为润色草稿并 `update:content`（状态机仍走 auto→edited→confirmed，**仅生成草稿，仍须人工确认**）；失败 message.error 呈现服务端错误，绝不静默回退原文。
+- **AI 润色按钮（多供应商）**：对外日志（`track==='external'`）在设置页 AI 已启用、存在**生效供应商**且其 `hasKey` 时显示「AI 润色」（`i-carbon-sparkle`，secondary 主色按钮）。点击后 `api.aiPolish(current)`（含未落盘输入），成功则整体替换为润色草稿并 `update:content`（状态机仍走 auto→edited→confirmed，**仅生成草稿，仍须人工确认**）；失败 message.error 呈现服务端错误（含供应商名，如「DeepSeek 官方 响应异常：…」），绝不静默回退原文。
 
 ### 4.15 ReleaseConsole
 
@@ -590,6 +590,25 @@ props: {
 - localStorage 记住「写入项目仓库」上次选择：key `bxverse-export-{projectId}-{filename}`（repoId/dir/filename，仓库已不存在则回退第一个仓库）。
 - 触发按钮外层 `<div @click.stop>` 拦截点击冒泡——组件常嵌在可点击行（发布历史行）内，防止误触发行点击。
 
+### 4.18 Settings：AI 供应商管理（多供应商）
+
+> 设计目标与 deepseek-harness `Settings → Models` 对齐：多供应商并存、可切换生效、凭据 write-only、热更新。
+
+- **布局**（替换原单表单 AI 区）：顶部「启用 AI」开关（`ai.enabled`）→ 当前生效供应商行（名称 + 模型）→ 供应商卡片列表（名称 + `[OpenAI 兼容]` 徽标 + 模型 + `已设置密钥/未设置密钥` 状态）→「+ 添加供应商」按钮。
+- **卡片操作**：「设为当前」（PATCH `enabled:true`，自动互斥其他）、「测试」（`POST /api/ai/test`，成功/失败提示含上游错误摘要）、「编辑」（弹窗改 name/baseUrl/model；key 输入框**留空=保持不变**，重新输入=覆盖）、「删除」（强确认弹窗，提示删除后引用该供应商的 AI 功能不可用）。
+- **添加供应商弹窗**：预设选项卡——**DeepSeek 官方**（`https://api.deepseek.com/v1`，`deepseek-chat`）/ **OpenAI**（`https://api.openai.com/v1`，`gpt-4o-mini`）/ **Ollama 本地**（`http://127.0.0.1:11434/v1`，`qwen2.5:7b`）/ **Kimi coding plan**（`https://api.moonshot.cn/v1`，模型名以平台控制台为准，如 `kimi-k2.6`）/ **小米 MiMo API**（`https://api.xiaomimimo.com/v1`，按量付费；Token Plan 订阅用户在控制台获取专属地址，模型如 `mimo-v2.5-pro`）/ **MiniMax coding plan**（国内 `https://api.minimaxi.com/v1`、国际 `https://api.minimax.io/v1`，模型如 `MiniMax-M3`）/ **自定义**（手填 baseUrl）。选择预设自动填充（可改）→ 模型 → API Key（`type=password` 必填）→「保存并测试」。
+- **write-only 凭据**：key 经 `PUT /api/ai/providers/:id/credential` 写入 `credentials.json.aiKeys`；保存后卡片显示「已设置密钥」，编辑弹窗 key 框为空 + 占位「已设置（留空保持不变）」——**永不回显**。
+- **热更新**：所有操作直接调 API（不经「保存全部设置」），立即生效、无需重启。
+- **旧配置迁移**：老版本单表单（`ai.baseUrl/model/apiKey`）首次进入自动迁移为默认 provider（id `legacy`），key 迁入 credentials，无感。
+
+### 4.19 GitTab / 仓库内 Git 面板与 AI 助手（R22 已实现）
+
+位于 `apps/web/src/components/GitTab.vue`（由 `RepoDetail.vue` 的 `git` TabPane 承载）：
+- **双栏布局**：
+  - **左侧状态区（7 栏）**：头部显示分支名（`i-carbon-branch`）、HEAD 短 hash、ahead/behind 读数（如 `↑1 ↓0`）、顶部操作按钮（拉取 `--ff-only`、推送、提交）；状态统计栏（已暂存 / 未暂存 / 未追踪）；变动文件列表区分徽章（`chip-success` 已暂存、`chip-warning` 未暂存、`chip-info` 未追踪/新增）；每行提供暂存（`+`）与撤销暂存（`-`）按钮，支持一键全部暂存与全部撤销。
+  - **右侧 Diff 与解读区（5 栏）**：展示选中文件的 patch 差异（等宽字体、滚动预览、截断保护提示）；右上角提供「AI 解读」按钮（`i-carbon-sparkle`），点击触发 `api.aiExplainDiff`，以卡片形式呈现变更意图、关键变更列表与潜在风险预警。
+- **提交弹窗（Conventional Commits）**：点击提交打开弹窗，支持一键「AI 生成」（`api.aiCommitMessage`），将暂存区差异发送至生效 AI 供应商，推断生成符合规范的标题（`feat(scope): ...`）与分点说明（body），用户可二次编辑或直接提交。
+- **边界与安全**：所有 Git 写操作（暂存/提交/推送/拉取）必须由用户在 UI 显式点击确认，服务端绝不自动执行；单行标题严格防换行注入。
 ### 4.18 DirPicker / DirPickerNode
 
 目录选择器（R18 写入版本清单 / R19 仓库设置选产物目录共用）：
@@ -603,7 +622,7 @@ emits: { 'update:modelValue': [path: string] }
 - **键盘**：行 `role="button" tabindex="0"`；`Enter`/`Space` 选中、`→` 展开、`←` 折叠（DirPickerNode 内 `onKeydown`）；focus-visible 焦点环；`rid` 变化时整体重置（root/缓存/展开态清空，选中回仓库根）。
 - 选中态：`picker-row-active`（brand 软底 + 左侧 2px brand 竖条）；节点按 depth 缩进；加载中行 NSpin。
 
-### 4.19 其他小组件
+### 4.20 其他小组件
 
 - **ThemeToggle**：icon 按钮，循环 light→dark→system，tooltip 显示目标模式。
 - **StatCard**：props `{ label, value, icon?, accent? }`；`stat-value` + `stat-label`。
@@ -1028,3 +1047,5 @@ const routes = [
 |---|---|
 | 2026-08-13 | 首版：设计系统、页面规格、组件清单、状态管理、路由、向导状态机、日志编辑器、PWA、无障碍 |
 | 2026-08-13 | 补 R18/R19 落地：BackupManage 备份管理页（§3.6）、RuntimeStatus / VersionExportDropdown / DirPicker 组件（§4.16–4.18）、composables 与 format.ts（§5.5）、提交级排除与 URL 同步 / beforeunload 守卫（§8）、WIG 合规约定（§12） |
+| 2026-08-17 | 新增 §4.18 Settings AI 供应商管理（多供应商：预设 DeepSeek/OpenAI/Ollama/Kimi coding plan/小米 MiMo/MiniMax coding plan/自定义，write-only 凭据，热更新，旧配置迁移）与 §4.19 AI Git 助手（阶段二设计预留：Git 面板 + AI 提交信息/变更解读/预检失败分析）；§3.4 Settings 表单表与 §4.14 LogEditor AI 润色描述同步为多供应商语义；章节编号顺延（原 §4.18 DirPicker 编号保留，其他小组件→§4.20） |
+| 2026-08-17 | §4.19 GitTab 落地：双栏布局、状态摘要统计、单文件与全部暂存/撤销、Conventional Commits 提交弹窗（AI 生成标题/说明）、单文件 Diff 侧栏 + AI 变更解读，RepoDetail 接入 `git` TabPane |

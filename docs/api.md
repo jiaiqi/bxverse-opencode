@@ -104,7 +104,22 @@
 | POST | `/api/sync` | 数据仓库 pull/push/commit/status | — | `apps/server/src/api/sync.ts` |
 | POST | `/api/auth/rotate` | 轮换 token（可选） | — | `apps/server/src/http/auth.ts` |
 | GET | `/api/publish/current` | 当前任务查询（可选，续跑 UI） | — | `apps/server/src/api/publish.ts` |
-| POST | `/api/ai/polish` | AI 日志润色（M5-02，未启用/缺配置 400） | `{ok, content}` | `apps/server/src/api/ai.ts` |
+| POST | `/api/ai/polish` | AI 日志润色（多供应商；未启用/无生效供应商 400） | `{ok, content}` | `apps/server/src/api/ai.ts` |
+| GET | `/api/ai/providers` | AI 供应商列表（key 脱敏：`hasKey` 布尔） | `AiProvider[]` | `apps/server/src/api/ai.ts` |
+| POST | `/api/ai/providers` | 新增供应商（body 不含 key；key 走 credential 接口） | `AiProvider` | 同上 |
+| PATCH | `/api/ai/providers/:id` | 修改 name/baseUrl/model/enabled/设为当前 | `AiProvider` | 同上 |
+| DELETE | `/api/ai/providers/:id` | 删除供应商（删除当前生效时自动回退） | `{ok}` | 同上 |
+| PUT | `/api/ai/providers/:id/credential` | 设置/更新 API key（write-only，不回显） | `{ok, hasKey: true}` | 同上 |
+| POST | `/api/ai/test` | 测试连接 `{providerId}` → 最小 chat 请求 | `{ok, detail?}` | 同上 |
+| POST | `/api/ai/commit-message` | 阶段二：AI 生成提交信息（conventional 草稿） | `{message}` | 同上 |
+| POST | `/api/ai/explain-diff` | 阶段二：AI 变更解读（中文摘要） | `{summary}` | 同上 |
+| GET | `/api/repos/:pid/:rid/git/status` | 阶段二：工作区状态（dirty 文件+增删改） | — | `apps/server/src/api/git.ts`（阶段二新增） |
+| GET | `/api/repos/:pid/:rid/git/diff` | 阶段二：diff（工作区 vs HEAD / 两提交间） | — | 同上 |
+| POST | `/api/repos/:pid/:rid/git/commit` | 阶段二：提交（files + message） | — | 同上 |
+| POST | `/api/repos/:pid/:rid/git/stash` / `stash-pop` | 阶段二：暂存/恢复 | — | 同上 |
+| POST | `/api/repos/:pid/:rid/git/push` | 阶段二：push 分支 / `--tags` | — | 同上 |
+| POST | `/api/repos/:pid/:rid/git/pull` | 阶段二：pull（--ff-only） | — | 同上 |
+| DELETE | `/api/repos/:pid/:rid/git/tags/:tag` | 阶段二：删除标签 | — | 同上 |
 | GET | `/api/repos/:pid/:rid/backups` | 仓库历次发布备份列表（R19） | `RepoBackupRef[]` | `apps/server/src/api/backups.ts` |
 | GET | `/api/backups/:releaseId/:repoId` | 备份元数据（R19） | `RepoBackupRef` | `apps/server/src/api/backups.ts` |
 | GET | `/api/backups/download/:releaseId/:repoId/:kind` | 备份文件流式下载（R19） | — | `apps/server/src/api/backups.ts` |
@@ -144,7 +159,7 @@
 ```
 
 - `config` 各字段与 `AppConfig` 一致，**唯 `projects` 为概要数组**（`id/name/version/repoCount`），完整定义走 `GET /api/projects`。
-- `ai.apiKey` 按原值返回（仅供同源页面回显编辑；GET 无 CORS 头，不会泄露到跨源上下文）。
+- `ai.apiKey` **永不返回明文**（write-only）：响应中恒为空串；供应商 key 状态以 `ai.providers[i].hasKey` 布尔呈现（`hasKey` 由 server 依据 `credentials.json.aiKeys` 计算，脱敏）。
 - `dataDir` 由 `BX_HOME` 或 `~\.bxverse` 派生，只读。
 
 ### 3.2 POST /api/config
@@ -651,6 +666,48 @@ state 状态机（`auto → edited → confirmed`）：
 
 ---
 
+## 7.5 AI 供应商管理与能力（多供应商，OpenAI 兼容）
+
+> 设计目标：多供应商并存、可切换当前生效；凭据 write-only（与 deepseek-harness 一致）；热更新（改配置下次请求生效，无需重启）。
+
+### 7.5.1 数据与凭据
+
+- 供应商定义存 `AppConfig.ai.providers[]`（`AiProvider{ id, name, kind, baseUrl, model, enabled }`），`kind` 当前仅 `'openai-compatible'`（预留扩展位）。
+- `activeProviderId` 指定当前生效供应商；同一时刻仅允许一个 `enabled=true`（设为当前/新增时自动互斥）。
+- API key 存 `credentials.json.aiKeys[providerId]`（0600）；**所有响应脱敏**——`GET /api/config` 与 `GET /api/ai/providers` 只返回 `hasKey: boolean`，永不回显明文。
+- 迁移：旧单表单配置（`ai.baseUrl/model/apiKey`）首次读取时自动生成默认 provider（id `legacy`），key 迁入 credentials 后清空 app.json。
+
+### 7.5.2 端点
+
+| 方法/路径 | 请求体 | 响应/说明 |
+|---|---|---|
+| `GET /api/ai/providers` | — | `AiProvider[]`（每项含 `hasKey` 布尔，不含 key） |
+| `POST /api/ai/providers` | `{ name, baseUrl, model, enabled? }` | `201` 完整 provider（含新 `id`）；设置 key 走 credential 端点 |
+| `PATCH /api/ai/providers/:id` | `{ name?, baseUrl?, model?, enabled? }`（`enabled:true` 即设为当前） | 更新后 provider |
+| `DELETE /api/ai/providers/:id` | — | `{ok}`；删除当前生效 → 回退为无生效供应商（`enabled=false`） |
+| `PUT /api/ai/providers/:id/credential` | `{ apiKey }` | `{ok, hasKey: true}`；**write-only**，响应不含 key |
+| `POST /api/ai/test` | `{ providerId }` | `{ok, detail?}`；向该供应商发最小 chat 请求验证 key/模型 |
+| `POST /api/ai/polish` | `{ text }` | 现有接口升级：读 active provider + credentials key 润色；`{ok, content}` |
+
+校验与错误：provider 不存在 404 `NOT_FOUND`；未启用 / 无生效供应商 / 无 key 400 `AI_CONFIG`；上游失败 502（`error` 含上游状态与截断响应体）。
+
+### 7.5.3 阶段二：AI Git 助手与仓库内 Git 面板（R22 已实现）
+
+| 方法/路径 | 请求体 | 响应与说明 |
+|---|---|---|
+| `POST /api/ai/commit-message` | `{ fileSummary: string, diff: string }` | `{ ok, subject, body, type, provider }`：分析已暂存 diff → Conventional Commits 建议 |
+| `POST /api/ai/explain-diff` | `{ filePath: string, diff: string }` | `{ ok, intent, keyChanges: string[], risks: string[], provider }`：单文件 diff 解读 |
+| `GET /api/repos/:pid/:rid/git/status` | — | `GitStatus`：分支、HEAD、ahead/behind、文件清单（`indexStatus`/`workStatus`/`staged`/`untracked`）与 summary |
+| `GET /api/repos/:pid/:rid/git/diff?path=&range=` | — | `GitFileDiff`：单文件 diff（`range` 为 `staged`/`unstaged`/`untracked`），截断保护 |
+| `POST /api/repos/:pid/:rid/git/stage` | `{ all?: boolean, paths?: string[] }` | `{ ok: true }`：单文件或一键全部暂存 |
+| `POST /api/repos/:pid/:rid/git/unstage` | `{ all?: boolean, paths?: string[] }` | `{ ok: true }`：单文件或一键全部撤销暂存 |
+| `POST /api/repos/:pid/:rid/git/commit` | `{ subject: string, body?: string, allowEmpty?: boolean }` | `{ ok: true, hash: string }`：提交（严格校验单行标题，防注入） |
+| `POST /api/repos/:pid/:rid/git/push` | — | `{ ok: true, output: string }`：push 分支到 origin |
+| `POST /api/repos/:pid/:rid/git/pull` | — | `{ ok: true, output: string }`：pull（`--ff-only` 安全快进） |
+> Git 写操作全部**用户显式发起**：服务端不自动 commit/stash/push/tag 删除；AI 输出仅为草稿/建议。
+
+---
+
 ## 8. 发布
 
 ### 8.1 POST /api/publish
@@ -984,5 +1041,7 @@ data: {"type":"done","message":"发布完成","data":{"releaseId":"rel_p_3f1_v1.
 | 2026-08-13 | §4.3 补 `items?: RepoVersionItem[]`（传入则直接写入该内容——发布历史快照导出用；缺省实时采集当前版本）；§7.2 示例 `repos` 补 `displayName` |
 | 2026-08-13 | 新增 §10.3 `GET /api/health`（免 token，响应 `{ok:true, version}`，实现于 `apps/server/src/app.ts`；§1.3/§3.1「唯一免 token 端点」表述同步修正） |
 | 2026-08-13 | §2 端点总览补齐：`/api/health`、`/api/projects/:id/versions`、`/api/projects/:id/versions/export`、`/api/releases/:id/versions`、`/api/repos/:pid/:rid/backups`、`/api/backups/*`（元数据/下载/删除/compare/verify）、`/api/repos/:pid/:rid/diff`；实现文件栏按实际源码路径填写 |
+| 2026-08-17 | 新增 §7.5 AI 供应商管理与能力：providers CRUD / credential（write-only）/ test / polish 升级多供应商；§7.5.3 阶段二 AI Git 助手与 `/api/repos/:pid/:rid/git/*` 路由（设计预留）；§3.1 `ai.apiKey` 语义改为永不回显（`hasKey` 布尔）；§3.2 `POST /api/config` 兼容旧 `ai.apiKey`（迁移到 credentials 后置空） |
+| 2026-08-17 | §7.5.3 阶段二落地：实现 `/api/repos/:pid/:rid/git/*`（status/diff/stage/unstage/commit/push/pull）与 `/api/ai/commit-message`、`/api/ai/explain-diff` 路由，更新请求/响应参数契约 |
 
 

@@ -65,6 +65,8 @@ export async function saveAppConfig(cfg: AppConfig): Promise<void> {
 export interface Credentials {
   token: string
   dataRemote?: string | null
+  /** 扩展：R21 AI 供应商 API key（write-only，API 与 UI 永不回显明文） */
+  aiKeys?: Record<string, string>
 }
 
 export function generateToken(): string {
@@ -78,7 +80,7 @@ export async function loadCredentials(): Promise<Credentials> {
     return cred
   }
   const cred = JSON.parse(fs.readFileSync(CRED_JSON, 'utf8')) as Credentials
-  return { token: cred.token ?? '', dataRemote: cred.dataRemote ?? null }
+  return { token: cred.token ?? '', dataRemote: cred.dataRemote ?? null, aiKeys: cred.aiKeys ?? {} }
 }
 
 export async function saveCredentials(cred: Credentials): Promise<void> {

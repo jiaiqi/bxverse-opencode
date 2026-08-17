@@ -327,3 +327,173 @@ export async function clone(url: string, targetDir: string, opts: { shallow?: bo
   args.push(url, targetDir)
   ensureOk(await git(args, { timeoutMs: 120_000 }))
 }
+
+// ========================================================================
+// R22 仓库内 Git 面板辅助（status / diff / 暂存 / 提交 / 推送 / 拉取）
+// 严格：仅操作由调用方传入的仓库目录（resolveRepoDir 校验根）
+// 提交信息允许由 UI 传入（subject + body），但绝不进入 git commit --amend / --reset / --force / pull --rebase 的危险分支
+// ========================================================================
+
+/** 校验路径在仓库根内（防 ../ 穿越；返回归一后的绝对路径） */
+export function resolveRepoPath(repoDir: string, relativeOrAbs: string): string {
+  const repoNorm = path.resolve(repoDir)
+  const target = path.resolve(repoNorm, relativeOrAbs)
+  // 必须落在 repoDir 之内
+  if (target !== repoNorm && !target.startsWith(repoNorm + path.sep) && !target.startsWith(repoNorm + '/')) {
+    throw new GitError('PATH_OUT_OF_REPO', `路径越界：${relativeOrAbs}`)
+  }
+  return target
+}
+
+/** git status --porcelain=v1 -z 解析（避免文件名含特殊字符） */
+export function parsePorcelain(output: string): { index: string; work: string; path: string }[] {
+  const out: { index: string; work: string; path: string }[] = []
+  // 按 \0 分块；renames/copies 后续如需扩展（'R '/'C ' 后接 origin -> path）这里忽略
+  const chunks = output.split('\0').filter(c => c.length > 0 && c !== '\n')
+  for (const c of chunks) {
+    if (c.length < 3) continue
+    const index = c[0]
+    const work = c[1]
+    const p = c.slice(3)
+    out.push({ index, work, path: p })
+  }
+  return out
+}
+
+/** ahead/behind 解析 `1\t2`（去 origin 前缀） */
+function parseAheadBehind(s: string): { ahead: number; behind: number } {
+  const t = s.trim()
+  if (!t) return { ahead: 0, behind: 0 }
+  const [a, b] = t.split('\t').map(x => parseInt(x, 10) || 0)
+  return { ahead: a ?? 0, behind: b ?? 0 }
+}
+
+/** 单仓库 Git 状态（branch / ahead-behind / 全部变化文件） */
+export type GitStatusFileEntry = {
+  indexStatus: string
+  workStatus: string
+  path: string
+  staged: boolean
+  untracked: boolean
+}
+
+export type GitStatusResult = {
+  branch: string
+  head: string
+  hasRemote: boolean
+  remoteUrl: string
+  ahead: number
+  behind: number
+  files: GitStatusFileEntry[]
+}
+
+export async function gitStatus(repoDir: string): Promise<GitStatusResult> {
+  const branchRes = await git(['rev-parse', '--abbrev-ref', 'HEAD'], { cwd: repoDir })
+  // detached HEAD 返回 'HEAD'，不视为分支
+  const branch = branchRes.ok ? branchRes.stdout.trim() : 'HEAD'
+  const headRes = await git(['rev-parse', '--short', 'HEAD'], { cwd: repoDir })
+  const head = headRes.ok ? headRes.stdout.trim() : ''
+  const remoteUrl = await (async () => {
+    const r = await git(['remote', 'get-url', 'origin'], { cwd: repoDir })
+    return r.ok ? r.stdout.trim() : ''
+  })()
+  const hasRemote = !!remoteUrl
+  let ahead = 0, behind = 0
+  if (hasRemote) {
+    const br = branch && branch !== 'HEAD' ? branch : 'HEAD'
+    const ab = await git(['rev-list', '--left-right', '--count', `origin/${br}...HEAD`], { cwd: repoDir })
+    if (ab.ok) ({ ahead, behind } = parseAheadBehind(ab.stdout))
+  }
+  const st = await git(['status', '--porcelain=v1', '-z', '--untracked-files=normal'], { cwd: repoDir })
+  if (!st.ok) throw new GitError(st.code, st.stderr)
+  const files: GitStatusFileEntry[] = parsePorcelain(st.stdout).map(r => {
+    const untracked = r.index === '?' && r.work === '?'
+    const staged = !untracked && r.index !== ' ' && r.index !== '?'
+    return { indexStatus: r.index, workStatus: r.work, path: r.path, staged, untracked }
+  })
+  return { branch, head, hasRemote, remoteUrl, ahead, behind, files }
+}
+
+export async function gitFileDiff(repoDir: string, filePath: string, range: 'staged' | 'unstaged' | 'untracked', opts: { maxBytes?: number } = {}): Promise<{ patch: string; truncated: boolean }> {
+  const maxBytes = opts.maxBytes ?? 200_000
+  if (range === 'untracked') {
+    // 未追踪文件：cat 全文（限制大小，无则空）
+    const abs = resolveRepoPath(repoDir, filePath)
+    if (!fs.existsSync(abs)) return { patch: '', truncated: false }
+    const stat = fs.statSync(abs)
+    if (stat.size > maxBytes) {
+      const buf = Buffer.alloc(maxBytes)
+      const fd = fs.openSync(abs, 'r')
+      try { fs.readSync(fd, buf, 0, maxBytes, 0) } finally { fs.closeSync(fd) }
+      return { patch: buf.toString('utf8') + '\n... (truncated)', truncated: true }
+    }
+    return { patch: fs.readFileSync(abs, 'utf8'), truncated: false }
+  }
+  const args = ['diff', '--no-color', '--no-ext-diff']
+  if (range === 'staged') args.push('--cached')
+  args.push('--', filePath)
+  const r = await git(args, { cwd: repoDir })
+  if (!r.ok) throw new GitError(r.code, r.stderr)
+  let out = r.stdout
+  let truncated = false
+  if (out.length > maxBytes) {
+    out = out.slice(0, maxBytes) + '\n... (truncated)'
+    truncated = true
+  }
+  return { patch: out, truncated }
+}
+
+/** 暂存指定路径（all 暂存所有） */
+export async function gitAdd(repoDir: string, paths: string[] | 'all'): Promise<void> {
+  const args = ['add']
+  if (paths === 'all') {
+    args.push('-A')
+  } else {
+    for (const p of paths) resolveRepoPath(repoDir, p) // 校验
+    args.push('--', ...paths)
+  }
+  ensureOk(await git(args, { cwd: repoDir }))
+}
+
+/** 撤销暂存 */
+export async function gitReset(repoDir: string, paths: string[] | 'all'): Promise<void> {
+  const args = ['reset', 'HEAD', '--']
+  if (paths === 'all') {
+    args.pop() // reset HEAD 不带 -- 即可重置全部索引
+    args.pop()
+  } else {
+    for (const p of paths) resolveRepoPath(repoDir, p)
+    args.push(...paths)
+  }
+  ensureOk(await git(args, { cwd: repoDir }))
+}
+
+/** 提交（subject + body；--no-verify 跳过 hook；--allow-empty 允许空提交） */
+export async function gitCommit(repoDir: string, opts: { subject: string; body?: string; allowEmpty?: boolean }): Promise<{ hash: string }> {
+  const subject = opts.subject.trim()
+  if (!subject) throw new GitError('EMPTY_SUBJECT', '提交标题不能为空')
+  // subject 单行校验（block newline subject，避免钓鱼）
+  if (/[\r\n]/.test(subject)) throw new GitError('BAD_SUBJECT', '提交标题不能包含换行')
+  const args = ['commit', '-m', subject]
+  if (opts.body && opts.body.trim()) {
+    args.push('-m', opts.body.replace(/\r\n/g, '\n'))
+  }
+  if (opts.allowEmpty) args.push('--allow-empty')
+  ensureOk(await git(args, { cwd: repoDir }))
+  const h = await git(['rev-parse', '--short', 'HEAD'], { cwd: repoDir })
+  return { hash: h.ok ? h.stdout.trim() : '' }
+}
+
+/** push 到 origin（无远端给出可读错误） */
+export async function gitPush(repoDir: string): Promise<{ output: string }> {
+  const r = await git(['push', 'origin'], { cwd: repoDir, timeoutMs: 120_000 })
+  if (!r.ok) throw new GitError(r.code, r.stderr)
+  return { output: (r.stdout + r.stderr).trim() }
+}
+
+/** pull --ff-only（拒绝非快进，由人手动 rebase/merge） */
+export async function gitPull(repoDir: string): Promise<{ output: string }> {
+  const r = await git(['pull', '--ff-only'], { cwd: repoDir, timeoutMs: 180_000 })
+  if (!r.ok) throw new GitError(r.code, r.stderr)
+  return { output: (r.stdout + r.stderr).trim() }
+}

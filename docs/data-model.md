@@ -35,7 +35,7 @@ home = process.env.BX_HOME || path.join(os.homedir(), '.bxverse')   // APP_DATA_
 
 1. **原子写**：任何 JSON/Markdown 文件的完整重写都遵循「同目录（或 `tmp/`）写临时文件 `{name}.tmp-{pid}-{rand}` → `fs.renameSync` 覆盖目标」两步；`rename` 在同一磁盘卷上原子，崩溃时目标文件要么是旧内容要么是新内容，绝无半截文件。
 2. **记录不可变**：发布记录（`releases/` 下）一经落盘不可改写、不可删除（工具内不提供删除 API）；修改仅能通过「再次发布」产生新记录。数据仓库 git 历史是第二道保险。
-3. **凭据分离**：token、远程凭据、AI `apiKey` 等秘密永不写入 `data/` 与 `app.json`（`AppConfig.ai.apiKey` 例外，见 §3.1），数据仓库 `.gitignore` 兜底。
+3. **凭据分离**：token、远程凭据、AI 供应商 API key 等秘密永不写入 `data/` 与 `app.json`。AI 供应商 key 存 `credentials.json` 的 `aiKeys`（0600，write-only 不回显）；旧 `AppConfig.ai.apiKey` 仅作为迁移载体，读取后自动迁入 `aiKeys` 并清空（见 §3.1）。数据仓库 `.gitignore` 兜底。
 4. **字段一字不差**：所有 JSON 文件中的领域字段序列化即 `types.ts` 中同名类型的 JSON 形态（camelCase，可选字段缺省时不输出）。
 
 ---
@@ -83,7 +83,7 @@ AppConfig ─── 1:N ─── ProjectDef ─── 1:N ─── RepoDef
 | `pwa` | `{ enabled: boolean }` | PWA 开关：`enabled=true` 时 web 动态注册 service worker（`vite-plugin-pwa` 产物），否则不注册 | `{ enabled: false }` |
 | `dataDir` | `string` | 数据仓库绝对路径（`releases/` 所在 git 仓库根） | `{home}/data` |
 | `pollInterval` | `number` | 轮询检测周期（毫秒） | `30000` |
-| `ai` | `{ enabled, baseUrl, model, apiKey }` | 可选 AI 润色：`enabled=false` 时整条链路短路；`apiKey` 仅存本机 app.json，不进数据仓库、不出本机 | `{ enabled: false, baseUrl: 'https://api.openai.com/v1', model: 'gpt-4o-mini', apiKey: '' }` |
+| `ai` | `{ enabled, baseUrl, model, apiKey, providers?, activeProviderId? }` | 可选 AI 润色（多供应商）：`enabled=false` 整条链路短路；`providers` 为供应商列表（`AiProvider{ id, name, kind, baseUrl, model, enabled }`，kind 当前仅 `'openai-compatible'`，预留扩展）；`activeProviderId` 当前生效供应商；`baseUrl/model/apiKey` 为**兼容旧字段**——读取时若 `providers` 空且旧字段非空自动迁移为默认 provider（id `legacy`），`apiKey` 迁入 `credentials.json.aiKeys` 后置空，**app.json 永不存明文 key** | `{ enabled: false, baseUrl: 'https://api.openai.com/v1', model: 'gpt-4o-mini', apiKey: '', providers: [], activeProviderId: '' }` |
 | `projects` | `ProjectDef[]` | **全部项目定义内嵌于此**。项目/仓库 CRUD、`lastPublishCommit` 更新都改写本字段并整体原子写回 app.json | `[]`（首启后可引导创建「默认项目」并接入 R11 的 6 个工程） |
 
 写入时机：首次启动（生成默认）、`PUT /api/config`、项目/仓库 CRUD、每次发布完成后更新 `RepoDef.lastPublishCommit`。发布任务运行中配置写入返回 409。
@@ -199,7 +199,7 @@ JSON 示例（`RepoVersionItem[]`）：
 ```
 ~/.bxverse/                         ← home（BX_HOME 或 用户主目录/.bxverse）
 ├── app.json                        AppConfig 完整序列化（含 projects 内嵌）
-├── credentials.json                会话 token + 可选远程凭据（0600，不进 git）
+├── credentials.json                会话 token + 可选远程凭据 + AI 供应商 key（0600，不进 git）
 ├── data/                           数据仓库根 = AppConfig.dataDir（git 仓库）
 │   ├── .git/
 │   ├── .gitignore                  *.tmp-*（临时文件兜底）
@@ -232,7 +232,7 @@ JSON 示例（`RepoVersionItem[]`）：
 | 路径 | 用途 | 格式 | 写入时机 | 写入方式 |
 |---|---|---|---|---|
 | `app.json` | 应用配置 | `AppConfig` JSON（UTF-8，2 空格缩进） | 首启生成默认；`PUT /api/config`；项目/仓库 CRUD；发布完成后更新 `lastPublishCommit` | 原子写（tmp + rename） |
-| `credentials.json` | 会话 token、可选 git 远程凭据 | `{ token: string, remoteCredentials?: {...} }`（core 私有 schema） | 首启生成 token；`POST /api/auth/rotate` 轮换 | 原子写；POSIX 0600 / Windows ACL 收紧 |
+| `credentials.json` | 会话 token、可选 git 远程凭据、AI 供应商 key | `{ token: string, remoteCredentials?: {...}, aiKeys?: Record<providerId, string> }`（core 私有 schema；`aiKeys` 为 AI 供应商 API key，**write-only**——API 与 UI 永不回显明文） | 首启生成 token；`POST /api/auth/rotate` 轮换；`PUT /api/ai/providers/:id/credential` 写 key | 原子写；POSIX 0600 / Windows ACL 收紧 |
 | `data/`（整个目录） | 发布记录仓库 | git 仓库 | 首启 `git init` + 首次 commit；每次发布一条 commit；`POST /api/system/sync` 触发 pull/push | git 命令 |
 | `data/backups/{releaseId}-{repoId}.json` | 备份元数据（审计） | `RepoBackupRef`（路径/哈希/大小/commit/tag/时间） | 发布备份完成后 | 原子写，随发布记录一并 commit |
 | `backups/…` | 备份大文件 | bundle / tar.gz / manifest | 发布流程 tag 后（源码）与 build 后（产物） | 流式写入 + rename；失败清理半成品 |
@@ -759,3 +759,4 @@ export interface RepoBackupRef {
 | 2026-08-13 | 新增 §3.6 `RepoVersionItem` 类型定义（app/name/version 语义 + 实时采集 / 发布快照两种数据源） |
 | 2026-08-13 | §3.4/§3.5 `RepoReleaseRef` 补 `displayName` 快照语义（发布落盘时定格，旧记录缺省回退 `repoName`）；§5.2 `data.json` 示例同步 |
 | 2026-08-13 | 新增 §8.4 提交级排除（`PublishRequest.excludeCommits`：引擎过滤后重算 `changed`；全部排除且 dirty=0 → `syncedOnly`；warnings 记录排除数）；§3.5 `PublishRequest` 行同步 |
+| 2026-08-17 | §3.1 `AppConfig.ai` 扩展多供应商：新增可选 `providers[]`（`AiProvider{ id, name, kind, baseUrl, model, enabled }`，kind 当前仅 `openai-compatible` 预留扩展）与 `activeProviderId`；旧 `baseUrl/model/apiKey` 为兼容迁移载体（读取时自动迁移为默认 provider，key 迁入 `credentials.json.aiKeys` 后清空）；§4 凭据布局同步 `aiKeys`（write-only 不回显）；项目级发布记录 `repos` 全量快照语义（成功=发布版本 / 同步基版=项目版本 / 失败=仓库当前版本） |

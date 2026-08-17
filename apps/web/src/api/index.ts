@@ -5,8 +5,11 @@ import type {
   AppConfig,
   BumpType,
   CloneRequest,
+  CommitType,
   CompareResult,
   FileContent,
+  GitFileDiff,
+  GitStatus,
   OverviewData,
   ProjectDef,
   PublishPlan,
@@ -64,7 +67,7 @@ export const api = {
   deleteRepo: (pid: string, rid: string, purge = false) =>
     http.del<{ ok: boolean; purged: boolean }>(`/projects/${pid}/repos/${rid}?purge=${purge}`),
   repoStatus: (pid: string, rid: string, fresh = false) =>
-    http.get<RepoStatus>(`/repos/${pid}/${rid}/status${fresh ? '?fresh=true' : ''}`),
+    http.get<RepoStatus>(`/repos/${pid}/${rid}/git/status${fresh ? '?fresh=true' : ''}`),
 
   // 文件
   tree: (pid: string, rid: string, path: string) =>
@@ -90,9 +93,33 @@ export const api = {
   sync: (action: string, extra: Record<string, unknown> = {}) => http.post<Record<string, unknown>>('/sync', { action, ...extra }),
   rotateToken: () => http.post<{ token: string }>('/auth/rotate'),
 
-  // AI 日志润色（M5-02）
-  aiPolish: (text: string) => http.post<{ ok: boolean; content: string }>('/ai/polish', { text }),
+  // AI 日志润色（M5-02/R21 多供应商）
+  aiPolish: (text: string) => http.post<{ ok: boolean; content: string; provider?: string }>('/ai/polish', { text }),
+  aiProviders: () => http.get<Array<{ id: string; name: string; kind: string; baseUrl: string; model: string; enabled: boolean; hasKey: boolean }>>('/ai/providers'),
+  aiAddProvider: (body: { name: string; baseUrl: string; model: string; enabled?: boolean }) =>
+    http.post<{ id: string; name: string; baseUrl: string; model: string; enabled: boolean; hasKey: boolean }>('/ai/providers', body),
+  aiUpdateProvider: (id: string, body: { name?: string; baseUrl?: string; model?: string; enabled?: boolean }) =>
+    http.patch<{ id: string; name: string; baseUrl: string; model: string; enabled: boolean; hasKey: boolean }>(`/ai/providers/${id}`, body),
+  aiDeleteProvider: (id: string) => http.del<{ ok: boolean }>(`/ai/providers/${id}`),
+  aiSetCredential: (id: string, apiKey: string) => http.put<{ ok: boolean; hasKey: boolean }>(`/ai/providers/${id}/credential`, { apiKey }),
+  aiTestProvider: (providerId: string) => http.post<{ ok: boolean; detail: string }>('/ai/test', { providerId }),
+  aiCommitMessage: (body: { fileSummary: string; diff: string }) =>
+    http.post<{ ok: boolean; subject: string; body: string; type: CommitType; provider?: string }>('/ai/commit-message', body),
+  aiExplainDiff: (body: { filePath: string; diff: string }) =>
+    http.post<{ ok: boolean; intent: string; keyChanges: string[]; risks: string[]; provider?: string }>('/ai/explain-diff', body),
 
+  // Git 面板（R22）
+  gitStatus: (pid: string, rid: string) => http.get<GitStatus>(`/repos/${pid}/${rid}/git/status`),
+  gitDiff: (pid: string, rid: string, filePath: string, range: 'staged' | 'unstaged' | 'untracked') =>
+    http.get<GitFileDiff>(`/repos/${pid}/${rid}/git/diff?path=${encodeURIComponent(filePath)}&range=${range}`),
+  gitStage: (pid: string, rid: string, body: { all?: boolean; paths?: string[] }) =>
+    http.post<{ ok: boolean }>(`/repos/${pid}/${rid}/git/stage`, body),
+  gitUnstage: (pid: string, rid: string, body: { all?: boolean; paths?: string[] }) =>
+    http.post<{ ok: boolean }>(`/repos/${pid}/${rid}/git/unstage`, body),
+  gitCommit: (pid: string, rid: string, body: { subject: string; body?: string; allowEmpty?: boolean }) =>
+    http.post<{ ok: boolean; hash: string }>(`/repos/${pid}/${rid}/git/commit`, body),
+  gitPush: (pid: string, rid: string) => http.post<{ ok: boolean; output: string }>(`/repos/${pid}/${rid}/git/push`, {}),
+  gitPull: (pid: string, rid: string) => http.post<{ ok: boolean; output: string }>(`/repos/${pid}/${rid}/git/pull`, {}),
   // 备份与一致性对比（R19）
   repoBackups: (pid: string, rid: string, n = 20) =>
     http.get<{ items: RepoBackupRef[] }>(`/repos/${pid}/${rid}/backups?n=${n}`),
@@ -107,7 +134,7 @@ export const api = {
   verifyBackup: (releaseId: string, repoId: string) =>
     http.post<CompareResult>('/backups/verify', { releaseId, repoId }),
   repoDiff: (pid: string, rid: string, from: string | null, to: string) =>
-    http.get<CompareResult>(`/repos/${pid}/${rid}/diff?to=${encodeURIComponent(to)}${from ? `&from=${encodeURIComponent(from)}` : ''}`),
+    http.get<CompareResult>(`/repos/${pid}/${rid}/git/diff?to=${encodeURIComponent(to)}${from ? `&from=${encodeURIComponent(from)}` : ''}`),
 
   // SSE
   subscribePublish: (taskId: string, onEvent: (e: PublishEventLike) => void, onError: (e: Error) => void) =>

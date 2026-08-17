@@ -1,6 +1,7 @@
 <script setup lang="ts">
-// Settings.vue —— 设置页（外观/PWA/轮询/AI/数据仓库/安全）
+// Settings.vue —— 设置页（外观/PWA/轮询/AI 供应商/数据仓库/安全）
 
+import { AI_PRESET_PROVIDERS } from '@bxverse/shared'
 import { useAppStore } from '../stores/app'
 import PageHeader from '../components/PageHeader.vue'
 import { api } from '../api'
@@ -12,7 +13,7 @@ const dialog = useDialog()
 const message = useMessage()
 
 const form = reactive({
-  theme: 'system' as 'light' | 'dark' | 'system',
+  theme: 'light' as 'light' | 'dark' | 'system',
   themeStyle: 'indigo' as 'indigo' | 'wenxi',
   pwaEnabled: true,
   pollInterval: 30_000,
@@ -34,6 +35,162 @@ const syncing = ref(false)
 const syncResult = ref('')
 const dataDir = ref('')
 
+// ---------- AI 供应商管理（R21 多供应商，write-only 凭据） ----------
+interface ProviderView {
+  id: string
+  name: string
+  kind: string
+  baseUrl: string
+  model: string
+  enabled: boolean
+  hasKey: boolean
+}
+const providers = ref<ProviderView[]>([])
+const providersLoading = ref(false)
+
+const providerModal = reactive({
+  open: false,
+  editing: null as ProviderView | null,
+  preset: 'custom',
+  name: '',
+  baseUrl: '',
+  model: '',
+  apiKey: '',
+  saving: false,
+  testing: false,
+  testDetail: '',
+})
+
+const activeProvider = computed(() => providers.value.find(p => p.enabled) ?? null)
+
+async function loadProviders() {
+  providersLoading.value = true
+  try {
+    providers.value = await api.aiProviders()
+  } catch (e) {
+    message.error((e as Error).message)
+  } finally {
+    providersLoading.value = false
+  }
+}
+
+function openAdd() {
+  providerModal.editing = null
+  providerModal.preset = 'custom'
+  providerModal.name = ''
+  providerModal.baseUrl = ''
+  providerModal.model = ''
+  providerModal.apiKey = ''
+  providerModal.testDetail = ''
+  providerModal.open = true
+}
+
+function applyPreset(key: string) {
+  const preset = AI_PRESET_PROVIDERS.find(p => p.key === key)
+  if (!preset) return
+  providerModal.preset = key
+  providerModal.name = preset.name
+  providerModal.baseUrl = preset.baseUrl
+  providerModal.model = preset.placeholderModel
+}
+
+function openEdit(p: ProviderView) {
+  providerModal.editing = p
+  providerModal.preset = 'custom'
+  providerModal.name = p.name
+  providerModal.baseUrl = p.baseUrl
+  providerModal.model = p.model
+  providerModal.apiKey = ''
+  providerModal.testDetail = ''
+  providerModal.open = true
+}
+
+async function saveProvider() {
+  const m = providerModal
+  if (!m.name.trim()) { message.warning('请填写供应商名称'); return }
+  if (!/^https?:\/\//.test(m.baseUrl.trim())) { message.warning('Base URL 必须为 http(s) 地址'); return }
+  if (!m.model.trim()) { message.warning('请填写模型'); return }
+  m.saving = true
+  try {
+    if (m.editing) {
+      await api.aiUpdateProvider(m.editing.id, {
+        name: m.name.trim(),
+        baseUrl: m.baseUrl.trim(),
+        model: m.model.trim(),
+      })
+      if (m.apiKey.trim()) await api.aiSetCredential(m.editing.id, m.apiKey.trim())
+    } else {
+      const created = await api.aiAddProvider({
+        name: m.name.trim(),
+        baseUrl: m.baseUrl.trim(),
+        model: m.model.trim(),
+        enabled: true,
+      })
+      if (m.apiKey.trim()) await api.aiSetCredential(created.id, m.apiKey.trim())
+    }
+    message.success('供应商已保存')
+    m.open = false
+    await loadProviders()
+  } catch (e) {
+    message.error((e as Error).message)
+  } finally {
+    m.saving = false
+  }
+}
+
+async function setActive(p: ProviderView) {
+  try {
+    await api.aiUpdateProvider(p.id, { enabled: true })
+    await loadProviders()
+    message.success(`已切换：${p.name}`)
+  } catch (e) {
+    message.error((e as Error).message)
+  }
+}
+
+async function testProvider(p: ProviderView) {
+  providerModal.testing = true
+  providerModal.testDetail = ''
+  try {
+    const r = await api.aiTestProvider(p.id)
+    providerModal.testDetail = `连接正常：${r.detail}`
+  } catch (e) {
+    providerModal.testDetail = (e as Error).message
+  } finally {
+    providerModal.testing = false
+  }
+}
+
+function removeProvider(p: ProviderView) {
+  dialog.warning({
+    title: '删除供应商',
+    content: `确定删除「${p.name}」？删除后引用该供应商的 AI 功能不可用，凭据一并清除。`,
+    positiveText: '删除',
+    negativeText: '取消',
+    onPositiveClick: async () => {
+      try {
+        await api.aiDeleteProvider(p.id)
+        message.success('已删除')
+        await loadProviders()
+      } catch (e) {
+        message.error((e as Error).message)
+      }
+    },
+  })
+}
+
+/** 启用/停用 AI 润色（即时生效） */
+async function toggleAi(v: boolean) {
+  form.aiEnabled = v
+  try {
+    await api.saveConfig({ ai: { enabled: v, baseUrl: form.aiBaseUrl, model: form.aiModel, apiKey: '' } })
+    message.success(v ? 'AI 润色已启用' : 'AI 润色已停用')
+  } catch (e) {
+    form.aiEnabled = !v
+    message.error((e as Error).message)
+  }
+}
+
 watchEffect(() => {
   const c = appStore.config
   if (!c) return
@@ -47,6 +204,8 @@ watchEffect(() => {
   form.aiApiKey = c.ai.apiKey
   dataDir.value = c.dataDir
 })
+
+onMounted(loadProviders)
 
 /** 主题风格即时预览：点击即切换并保存，无需等「保存全部设置」 */
 async function pickStyle(style: 'indigo' | 'wenxi') {
@@ -63,7 +222,8 @@ async function save() {
       themeStyle: form.themeStyle,
       pwa: { enabled: form.pwaEnabled },
       pollInterval: form.pollInterval,
-      ai: { enabled: form.aiEnabled, baseUrl: form.aiBaseUrl, model: form.aiModel, apiKey: form.aiApiKey },
+      // AI 供应商与凭据走独立接口即时生效，这里仅同步总开关
+      ai: { enabled: form.aiEnabled, baseUrl: form.aiBaseUrl, model: form.aiModel, apiKey: '' },
     })
     message.success('设置已保存')
   } catch (e) {
@@ -199,26 +359,112 @@ function rotateToken() {
             <div class="text-sm font-medium text-text-1">启用 AI 润色</div>
             <div class="text-xs text-text-3 mt-0.5">对外日志草稿可一键改写为用户友好文案（仅生成草稿，仍须人工确认）</div>
           </div>
-          <NSwitch v-model:value="form.aiEnabled" />
+          <NSwitch :value="form.aiEnabled" @update:value="toggleAi" />
         </div>
-        <template v-if="form.aiEnabled">
-          <div class="grid grid-cols-2 gap-4">
-            <div>
-              <label class="field-label">Base URL（OpenAI 兼容）</label>
-              <NInput v-model:value="form.aiBaseUrl" placeholder="http://127.0.0.1:11434/v1" :input-props="{ 'aria-label': 'Base URL（OpenAI 兼容）' }" />
+
+        <div>
+          <div class="flex items-center justify-between mb-2">
+            <div class="text-sm font-medium text-text-1">
+              AI 供应商
+              <span v-if="activeProvider" class="text-xs text-text-3 font-normal ml-2">当前：{{ activeProvider.name }}（{{ activeProvider.model }}）</span>
             </div>
-            <div>
-              <label class="field-label">模型</label>
-              <NInput v-model:value="form.aiModel" placeholder="qwen2.5:7b" :input-props="{ 'aria-label': '模型' }" />
+            <NButton size="small" type="primary" secondary @click="openAdd">
+              <template #icon><i aria-hidden="true" class="i-carbon-add" /></template>
+              添加供应商
+            </NButton>
+          </div>
+
+          <div v-if="providersLoading" class="py-6 text-center text-text-3"><NSpin size="small" /></div>
+          <div v-else-if="providers.length === 0" class="py-6 text-center text-xs text-text-3">
+            尚未添加 AI 供应商——添加后可在向导「对外日志」中使用 AI 润色。
+          </div>
+          <div v-else class="space-y-2">
+            <div
+              v-for="p in providers"
+              :key="p.id"
+              class="flex items-center gap-3 px-4 py-3 rounded-lg border"
+              :class="p.enabled ? 'border-brand-500 bg-brand-soft' : 'border-border bg-surface'"
+            >
+              <span class="chip chip-info code-text shrink-0">OpenAI 兼容</span>
+              <div class="min-w-0 flex-1">
+                <div class="flex items-center gap-2 flex-wrap">
+                  <span class="text-sm font-semibold text-text-1">{{ p.name }}</span>
+                  <span class="code-text text-xs text-text-3">{{ p.model }}</span>
+                  <span v-if="p.enabled" class="chip chip-brand">当前</span>
+                </div>
+                <div class="code-text text-xs text-text-3 truncate mt-0.5">{{ p.baseUrl }}</div>
+              </div>
+              <span class="text-xs shrink-0" :class="p.hasKey ? 'text-success' : 'text-text-3'">
+                {{ p.hasKey ? '已设置密钥' : '未设置密钥' }}
+              </span>
+              <div class="flex items-center gap-1 shrink-0">
+                <NButton v-if="!p.enabled" size="tiny" quaternary @click="setActive(p)">设为当前</NButton>
+                <NButton size="tiny" quaternary @click="openEdit(p)">编辑</NButton>
+                <NButton size="tiny" quaternary :loading="providerModal.testing && providerModal.editing?.id === p.id" @click="testProvider(p)">测试</NButton>
+                <NButton size="tiny" quaternary type="error" @click="removeProvider(p)">删除</NButton>
+              </div>
             </div>
           </div>
-          <div>
-            <label class="field-label">API Key（仅存本机）</label>
-            <NInput v-model:value="form.aiApiKey" type="password" show-password-on="click" placeholder="sk-…" :input-props="{ 'aria-label': 'API Key（仅存本机）' }" />
-          </div>
-        </template>
+        </div>
       </div>
     </section>
+
+    <!-- AI 供应商添加/编辑弹窗 -->
+    <NModal v-model:show="providerModal.open" preset="card" :title="providerModal.editing ? '编辑供应商' : '添加供应商'" class="w-130 max-w-95vw">
+      <div class="space-y-4">
+        <div v-if="!providerModal.editing">
+          <div class="text-xs text-text-3 mb-1.5">预设（可修改）</div>
+          <div class="flex flex-wrap gap-2">
+            <button
+              v-for="preset in AI_PRESET_PROVIDERS"
+              :key="preset.key"
+              class="px-2.5 py-1 rounded-full text-xs border transition-colors duration-150"
+              :class="providerModal.preset === preset.key ? 'border-brand-500 bg-brand-soft text-brand-600' : 'border-border text-text-2 hover:border-border-strong'"
+              @click="applyPreset(preset.key)"
+            >
+              {{ preset.name }}
+            </button>
+          </div>
+        </div>
+        <div class="field">
+          <label for="ai-name">名称</label>
+          <NInput id="ai-name" v-model:value="providerModal.name" placeholder="如：DeepSeek 官方" />
+        </div>
+        <div class="field">
+          <label for="ai-base">Base URL（OpenAI 兼容）</label>
+          <NInput id="ai-base" v-model:value="providerModal.baseUrl" placeholder="https://api.deepseek.com/v1" :input-props="{ autocomplete: 'off', spellcheck: 'false' }" />
+          <span class="hint">chat/completions 前缀；小米 MiMo Token Plan 订阅用户请在控制台获取专属地址</span>
+        </div>
+        <div class="field">
+          <label for="ai-model">模型</label>
+          <NInput id="ai-model" v-model:value="providerModal.model" placeholder="deepseek-chat" :input-props="{ autocomplete: 'off', spellcheck: 'false' }" />
+          <span v-if="AI_PRESET_PROVIDERS.find(x => x.key === providerModal.preset)?.hint" class="hint">
+            {{ AI_PRESET_PROVIDERS.find(x => x.key === providerModal.preset)?.hint }}
+          </span>
+        </div>
+        <div class="field">
+          <label for="ai-key">API Key（仅存本机，write-only）</label>
+          <NInput
+            id="ai-key"
+            v-model:value="providerModal.apiKey"
+            type="password"
+            show-password-on="click"
+            :placeholder="providerModal.editing ? '已设置（留空保持不变）' : 'sk-…'"
+            :input-props="{ autocomplete: 'off' }"
+          />
+          <span class="hint">保存后不显示明文，重新输入可覆盖</span>
+        </div>
+      </div>
+      <template #footer>
+        <div class="flex justify-end gap-2.5 items-center">
+          <span v-if="providerModal.testDetail" class="text-xs mr-auto" :class="providerModal.testDetail.startsWith('连接正常') ? 'text-success' : 'text-error'">
+            {{ providerModal.testDetail }}
+          </span>
+          <NButton quaternary @click="providerModal.open = false">取消</NButton>
+          <NButton :loading="providerModal.saving" type="primary" @click="saveProvider">保存</NButton>
+        </div>
+      </template>
+    </NModal>
 
     <section>
       <h2 class="section-title"><i aria-hidden="true" class="i-carbon-renew text-brand-500" /> 数据仓库同步</h2>
