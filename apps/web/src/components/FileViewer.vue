@@ -67,6 +67,10 @@ async function copyContent() {
 const downloading = ref(false)
 async function downloadFile() {
   if (!content.value || meta.value?.binary) return
+  // 服务端对超大文件截断：下载的也是截断内容——必须显式提示，避免用户拿到「缺一半」的文件
+  if (meta.value?.truncated) {
+    message.warning(`文件过大已被服务端截断（仅前 ${meta.value.lines} 行），下载内容可能不完整`)
+  }
   downloading.value = true
   try {
     const name = props.path.split('/').pop() ?? 'file.txt'
@@ -100,6 +104,7 @@ const fmtSize = (n: number): string => (n < 1024 ? `${n} B` : n < 1024 * 1024 ? 
       <button
         class="w-7 h-7 flex items-center justify-center rounded-md text-text-3 hover:bg-surface-hover hover:text-text-1 transition-colors duration-150"
         aria-label="下载文件（另存为）"
+        :title="meta?.truncated ? '文件已截断，下载内容可能不完整' : '下载文件（另存为）'"
         :disabled="!content || meta?.binary"
         @click="downloadFile"
       >

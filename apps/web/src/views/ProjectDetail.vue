@@ -33,6 +33,8 @@ const statuses = ref<Map<string, RepoStatus | null>>(new Map())
 const statusLoading = ref<Set<string>>(new Set())
 const releases = ref<ReleaseRecord[]>([])
 const releasesLoading = ref(false)
+/** 发布历史默认只取最近 5 条，可展开加载全部（最多 100 条，服务端上限） */
+const releaseExpanded = ref(false)
 
 async function loadStatuses() {
   if (!project.value) return
@@ -57,10 +59,15 @@ async function loadStatuses() {
 async function loadReleases() {
   releasesLoading.value = true
   try {
-    releases.value = await projectsStore.projectReleases(projectId.value, 5)
+    releases.value = await projectsStore.projectReleases(projectId.value, releaseExpanded.value ? 100 : 5)
   } finally {
     releasesLoading.value = false
   }
+}
+
+function expandReleases() {
+  releaseExpanded.value = true
+  void loadReleases()
 }
 
 async function refreshRepo(rid: string) {
@@ -110,6 +117,7 @@ function openDetail(r: ReleaseRecord) {
 
 watch(projectId, async (id) => {
   statuses.value = new Map()
+  releaseExpanded.value = false
   if (!projectsStore.byId(id)) await projectsStore.load()
   await Promise.all([loadStatuses(), loadReleases()])
 }, { immediate: true })
@@ -233,6 +241,10 @@ usePolling(async () => {
               </div>
             </div>
           </div>
+          <div v-if="!releasesLoading && releases.length > 0" class="border-t border-border">
+            <button v-if="!releaseExpanded" class="link w-full py-2.5 text-center" @click="expandReleases">查看全部发布历史（最多 100 条）</button>
+            <button v-else class="link w-full py-2.5 text-center" @click="releaseExpanded = false; loadReleases()">收起（回到最近 5 条）</button>
+          </div>
         </div>
       </section>
 
@@ -244,10 +256,10 @@ usePolling(async () => {
         <NDrawerContent v-if="detailRelease" :title="detailRelease.version" closable>
           <NTabs type="segment" animated>
             <NTabPane name="external" tab="对外">
-              <MarkdownView :content="detailRelease.logs.external.content" />
+              <MarkdownView :content="detailRelease.logs.external.content" :max-lines="800" />
             </NTabPane>
             <NTabPane name="internal" tab="对内">
-              <MarkdownView :content="detailRelease.logs.internal.content" />
+              <MarkdownView :content="detailRelease.logs.internal.content" :max-lines="800" />
             </NTabPane>
           </NTabs>
         </NDrawerContent>

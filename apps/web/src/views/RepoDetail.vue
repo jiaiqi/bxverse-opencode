@@ -321,7 +321,7 @@ watch(tab, (t) => {
                     spellcheck="false"
                     aria-label="编辑发布日志"
                   />
-                  <MarkdownView v-else-if="selectedRelease" :content="selectedRelease.logs[logTrack].content" />
+                  <MarkdownView v-else-if="selectedRelease" :content="selectedRelease.logs[logTrack].content" :max-lines="800" />
                 </div>
               </div>
             </div>
