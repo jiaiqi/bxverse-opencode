@@ -9,6 +9,7 @@ import { useUiStore } from './stores/ui'
 import { useProjectsStore } from './stores/projects'
 import AppLayout from './layouts/AppLayout.vue'
 import CommandPalette from './components/CommandPalette.vue'
+import { applyPwa } from './pwa/register'
 
 const appStore = useAppStore()
 const uiStore = useUiStore()
@@ -27,6 +28,8 @@ const booting = ref(true)
 onMounted(async () => {
   try {
     await appStore.boot()
+    // PWA 运行时开关（M5-01）：启动即按配置注册/注销 SW
+    void applyPwa(appStore.config?.pwa.enabled ?? true)
     await Promise.allSettled([projectsStore.load(), projectsStore.loadOverview()])
   } catch (e) {
     bootError.value = (e as Error).message
@@ -34,6 +37,14 @@ onMounted(async () => {
     booting.value = false
   }
 })
+
+// 设置页修改 PWA 开关后即时生效（配置变更 → 注册/注销）
+watch(
+  () => appStore.pwaEnabled,
+  (v) => {
+    void applyPwa(v)
+  },
+)
 
 // 系统主题变化 → 重新解析（仅 system 模式生效）
 watch(() => osTheme.value, () => {
