@@ -608,3 +608,50 @@ html.dark .hljs-regexp {
 .fade-slide-leave-to {
   opacity: 0;
 }
+
+/* ==================== 次世代全景驾驶舱原子样式 ==================== */
+.glass-panel {
+  background: rgba(14, 18, 25, 0.82);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.instrument-grid {
+  background-size: 24px 24px;
+  background-image: 
+    linear-gradient(to right, rgba(255, 255, 255, 0.025) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.025) 1px, transparent 1px);
+}
+
+.pulse-dot {
+  animation: bx-pulse-glow 2s infinite cubic-bezier(0.4, 0, 0.6, 1);
+}
+@keyframes bx-pulse-glow {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.35; transform: scale(0.85); }
+}
+
+.code-diff-add {
+  background: rgba(0, 245, 155, 0.12);
+  color: #00F59B;
+  border-left: 2px solid #00F59B;
+}
+.code-diff-del {
+  background: rgba(255, 77, 106, 0.12);
+  color: #FF4D6A;
+  border-left: 2px solid #FF4D6A;
+}
+
+.shadow-glow-emerald {
+  box-shadow: 0 0 24px -2px rgba(0, 245, 155, 0.4);
+}
+.shadow-glow-cyan {
+  box-shadow: 0 0 24px -2px rgba(0, 212, 255, 0.4);
+}
+.shadow-glow-purple {
+  box-shadow: 0 0 24px -2px rgba(168, 85, 247, 0.4);
+}
+.shadow-panel {
+  box-shadow: 0 12px 40px 0 rgba(0, 0, 0, 0.6);
+}

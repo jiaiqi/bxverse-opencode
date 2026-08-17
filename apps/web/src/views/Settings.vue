@@ -3,7 +3,6 @@
 
 import { AI_PRESET_PROVIDERS } from '@bxverse/shared'
 import { useAppStore } from '../stores/app'
-import PageHeader from '../components/PageHeader.vue'
 import { api } from '../api'
 import { setToken } from '../api/http'
 import { useDialog, useMessage } from 'naive-ui'
@@ -397,13 +396,32 @@ function rotateToken() {
 </script>
 
 <template>
-  <div class="page max-w-3xl">
-    <PageHeader title="设置" icon="i-carbon-settings" />
+  <div class="page max-w-6xl space-y-6">
+    <!-- 顶部仪表头部 -->
+    <div class="glass-panel p-5 rounded-2xl flex items-center justify-between gap-4 flex-wrap">
+      <div class="flex items-center gap-3 min-w-0">
+        <div class="w-10 h-10 rounded-xl bg-brand-soft border border-brand-200 flex items-center justify-center text-brand-500 shrink-0">
+          <i aria-hidden="true" class="i-carbon-settings text-20px" />
+        </div>
+        <div class="min-w-0">
+          <h1 class="text-base font-bold text-text-1 m-0 font-sans">系统控制中心</h1>
+          <p class="text-xs text-text-3 mt-0.5 m-0 font-mono">外观 / 数据仓库 / PWA / 轮询 / AI 多生态模型路由 / 性能</p>
+        </div>
+      </div>
+      <div class="flex items-center gap-2">
+        <span class="chip chip-info font-mono text-11px">{{ appStore.config?.host ?? '127.0.0.1' }}:{{ appStore.config?.port ?? 8899 }}</span>
+        <span class="chip font-mono text-11px">数据目录：{{ dataDir || '加载中' }}</span>
+      </div>
+    </div>
 
-    <section>
-      <h2 class="section-title"><i aria-hidden="true" class="i-carbon-paint-brush text-brand-500" /> 外观与体验</h2>
-      <div class="card card-pad mt-4 space-y-5">
-        <!-- R20 主题风格：indigo 标准套件 / wenxi 深色玻璃拟态套件（点击即时预览） -->
+    <!-- 1. 外观与体验 -->
+    <section class="glass-panel p-5 rounded-2xl">
+      <h2 class="section-title m-0 flex items-center gap-2">
+        <i aria-hidden="true" class="i-carbon-paint-brush text-brand-500" />
+        <span>外观与体验</span>
+        <span class="text-xs text-text-3 font-normal ml-2">主题风格 / 主题 / PWA / 轮询</span>
+      </h2>
+      <div class="mt-4 space-y-5">
         <div>
           <div class="text-sm font-medium text-text-1">主题风格</div>
           <div class="text-xs text-text-3 mt-0.5">indigo 为默认靛蓝套件（亮/暗/跟随系统）；WenXi 为深色玻璃拟态套件（翠绿强调，仅深色）</div>
@@ -482,9 +500,9 @@ function rotateToken() {
       </div>
     </section>
 
-    <section>
-      <h2 class="section-title"><i aria-hidden="true" class="i-carbon-sparkle text-brand-500" /> AI 日志润色与智能助手（可选）</h2>
-      <div class="card card-pad mt-4 space-y-4">
+    <section class="glass-panel p-5 rounded-2xl">
+      <h2 class="section-title m-0 flex items-center gap-2"><i aria-hidden="true" class="i-carbon-sparkle text-brand-500" /><span>AI 多生态模型路由</span><span class="text-xs text-text-3 font-normal ml-2">已配置供应商 / 测速 / 场景特化分工</span></h2>
+      <div class="mt-4 space-y-4">
         <div class="flex items-center justify-between">
           <div>
             <div class="text-sm font-medium text-text-1">启用 AI 能力</div>
@@ -868,9 +886,9 @@ function rotateToken() {
       </template>
     </NModal>
 
-    <section>
-      <h2 class="section-title"><i aria-hidden="true" class="i-carbon-renew text-brand-500" /> 数据仓库同步</h2>
-      <div class="card card-pad mt-4 space-y-3">
+    <section class="glass-panel p-5 rounded-2xl">
+      <h2 class="section-title m-0 flex items-center gap-2"><i aria-hidden="true" class="i-carbon-renew text-brand-500" /><span>数据仓库同步</span></h2>
+      <div class="mt-4 space-y-3">
         <div class="code-text text-13px text-text-2 bg-surface-alt border border-border rounded-md px-3 py-2">{{ dataDir || '—' }}</div>
         <div class="flex items-center gap-2.5">
           <NButton size="small" :loading="syncing" @click="sync('pull')">
@@ -885,10 +903,9 @@ function rotateToken() {
         </div>
       </div>
     </section>
-
-    <section>
-      <h2 class="section-title"><i aria-hidden="true" class="i-carbon-locked text-brand-500" /> 安全</h2>
-      <div class="card card-pad mt-4 flex items-center justify-between">
+    <section class="glass-panel p-5 rounded-2xl">
+      <h2 class="section-title m-0 flex items-center gap-2"><i aria-hidden="true" class="i-carbon-locked text-brand-500" /><span>安全</span></h2>
+      <div class="mt-4 flex items-center justify-between">
         <div>
           <div class="text-sm font-medium text-text-1">访问令牌</div>
           <div class="text-xs text-text-3 mt-0.5">轮换后旧令牌立即失效</div>

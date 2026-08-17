@@ -5,8 +5,6 @@ import type { ReleaseRecord, RepoStatus } from '@bxverse/shared'
 import { useProjectsStore } from '../stores/projects'
 import { api } from '../api'
 import { formatDate } from '../utils/format'
-import PageHeader from '../components/PageHeader.vue'
-import StatusBadge from '../components/StatusBadge.vue'
 import MarkdownView from '../components/MarkdownView.vue'
 import FileTree from '../components/FileTree.vue'
 import FileViewer from '../components/FileViewer.vue'
@@ -24,9 +22,9 @@ const pid = computed(() => String(route.params.pid))
 const rid = computed(() => String(route.params.rid))
 const { repo } = computed(() => projectsStore.repoById(pid.value, rid.value)).value
 
-const VALID_TABS = ['files', 'git', 'logs', 'settings'] as const
-const tab = ref<'files' | 'git' | 'logs' | 'settings'>(
-  VALID_TABS.includes(route.query.tab as (typeof VALID_TABS)[number]) ? (route.query.tab as 'files' | 'git' | 'logs' | 'settings') : 'files',
+const VALID_TABS = ['git', 'files', 'logs', 'settings'] as const
+const tab = ref<'git' | 'files' | 'logs' | 'settings'>(
+  VALID_TABS.includes(route.query.tab as (typeof VALID_TABS)[number]) ? (route.query.tab as 'git' | 'files' | 'logs' | 'settings') : 'git',
 )
 
 // Tab 状态同步 URL（刷新/分享保持状态）
@@ -205,12 +203,6 @@ function confirmRemove() {
   })
 }
 
-async function copyRemote() {
-  if (!repo?.remote) return
-  await navigator.clipboard.writeText(repo.remote)
-  message.success('已复制')
-}
-
 watch([pid, rid], async () => {
   if (!projectsStore.byId(pid.value)) await projectsStore.load()
   selectedFile.value = ''
@@ -225,162 +217,174 @@ watch(tab, (t) => {
 </script>
 
 <template>
-  <div class="page">
+  <div class="page max-w-6xl space-y-4">
     <template v-if="repo">
-      <PageHeader
-        :title="repo.name"
-        :back-to="`/project/${pid}`"
-        icon="i-carbon-git-branch"
-      >
-        <template #badges>
-          <span v-if="status" class="chip">
-            <i aria-hidden="true" class="i-carbon-git-branch" /> {{ status.branch }}
-          </span>
-          <StatusBadge v-if="status?.changed" type="changed" :count="status.commits.length" />
-          <StatusBadge v-if="status && status.dirty > 0" type="dirty" :count="status.dirty" />
-          <StatusBadge v-if="status && !status.hasRemote" type="local" />
-        </template>
-        <span v-if="repo.remote" class="chip code-text max-w-60 truncate" :title="repo.remote">
-          {{ repo.remote }}
+      <!-- 仓库工作台顶栏 (Glass Panel Repo Header) -->
+      <div class="glass-panel p-4 rounded-2xl flex items-center justify-between gap-3 flex-wrap">
+        <div class="flex items-center gap-3 min-w-0">
           <button
-            type="button"
-            class="shrink-0 inline-flex items-center justify-center text-text-3 transition-colors duration-140 hover:text-brand-500 focus-ring rounded"
-            aria-label="复制远程地址"
-            title="复制远程地址"
-            @click="copyRemote"
+            class="p-1.5 rounded-lg bg-surface-alt hover:bg-surface-hover text-text-2 hover:text-text-1 border border-border flex items-center gap-1 text-xs font-mono transition-colors cursor-pointer"
+            @click="router.push(`/project/${pid}`)"
           >
-            <i aria-hidden="true" class="i-carbon-copy" />
+            <i aria-hidden="true" class="i-carbon-arrow-left text-12px" />
+            <span>返回项目</span>
           </button>
-        </span>
-      </PageHeader>
+          <div class="h-4 w-px bg-border shrink-0" />
+          <div class="min-w-0">
+            <div class="flex items-center gap-2 flex-wrap">
+              <span class="font-bold text-sm text-text-1 truncate">{{ repo.displayName || repo.name }}</span>
+              <span v-if="repo.displayName" class="text-xs text-text-3 font-mono">({{ repo.name }})</span>
+              <span v-if="status" class="chip code-text text-11px">
+                <i aria-hidden="true" class="i-carbon-git-branch text-brand-500" /> {{ status.branch }}
+              </span>
+              <StatusBadge v-if="status?.changed" type="changed" :count="status.commits.length" />
+              <StatusBadge v-if="status && status.dirty > 0" type="dirty" :count="status.dirty" />
+            </div>
+            <div class="text-[11px] font-mono text-text-3 truncate mt-0.5" :title="repo.path">{{ repo.path }}</div>
+          </div>
+        </div>
 
-      <div class="card overflow-hidden">
-        <NTabs v-model:value="tab" type="line" animated :pane-style="{ padding: '0' }">
-          <NTabPane name="files" tab="文件">
-            <div class="flex h-140">
-              <div class="w-72 shrink-0 border-r border-border overflow-y-auto">
-                <FileTree :pid="pid" :rid="rid" @select="p => selectedFile = p" />
-              </div>
-              <div class="flex-1 min-w-0">
-                <FileViewer :pid="pid" :rid="rid" :path="selectedFile" />
+        <!-- 4 大子 Tab 切换器 -->
+        <div class="flex items-center gap-1 p-1 rounded-xl bg-surface-alt border border-border shrink-0">
+          <button
+            v-for="st in [
+              { id: 'git', label: 'Git 提交流与 Diff', icon: 'i-carbon-git-commit' },
+              { id: 'files', label: '文件树与查看器', icon: 'i-carbon-folder' },
+              { id: 'logs', label: '版本日志历史', icon: 'i-carbon-file-text' },
+              { id: 'settings', label: '仓库独立设置', icon: 'i-carbon-settings' }
+            ]"
+            :key="st.id"
+            class="px-3 py-1.5 rounded-lg text-xs font-mono font-medium flex items-center gap-1.5 transition-all cursor-pointer border-0"
+            :class="tab === st.id ? 'bg-surface text-brand-600 font-bold border border-border shadow-xs' : 'text-text-3 hover:text-text-1 bg-transparent'"
+            @click="tab = st.id as any"
+          >
+            <i aria-hidden="true" class="text-13px" :class="st.icon" />
+            <span>{{ st.label }}</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- 4 大子 Tab 视口内容 -->
+      <div class="glass-panel rounded-2xl overflow-hidden min-h-[500px]">
+        <!-- 1. Git 提交流与 Diff -->
+        <div v-show="tab === 'git'" class="p-4">
+          <GitTab :project-id="pid" :repo-id="rid" />
+        </div>
+
+        <!-- 2. 文件树与代码查看器 -->
+        <div v-show="tab === 'files'" class="flex h-140">
+          <div class="w-72 shrink-0 border-r border-border overflow-y-auto">
+            <FileTree :pid="pid" :rid="rid" @select="p => selectedFile = p" />
+          </div>
+          <div class="flex-1 min-w-0">
+            <FileViewer :pid="pid" :rid="rid" :path="selectedFile" />
+          </div>
+        </div>
+
+        <!-- 3. 版本更新日志 -->
+        <div v-show="tab === 'logs'" class="flex h-140">
+          <div class="w-80 shrink-0 border-r border-border overflow-y-auto">
+            <div v-if="releasesLoading" class="p-6 text-center text-text-3"><NSpin size="small" /></div>
+            <div v-else-if="releases.length === 0" class="p-4">
+              <div class="text-sm text-text-3 text-center py-8 font-mono">暂无发布记录</div>
+            </div>
+            <div v-else class="py-2">
+              <div
+                v-for="r in releases"
+                :key="r.id"
+                class="px-4 py-2.5 cursor-pointer transition-colors duration-100 border-l-2"
+                :class="selectedRelease?.id === r.id ? 'bg-brand-soft border-brand-500' : 'border-transparent hover:bg-surface-hover'"
+                role="button"
+                tabindex="0"
+                :aria-label="`查看 ${r.version} 发布记录`"
+                @click="selectedRelease = r"
+                @keydown.enter="selectedRelease = r"
+                @keydown.space.prevent="selectedRelease = r"
+              >
+                <div class="code-text text-sm text-text-1 font-bold" translate="no">{{ r.version }}</div>
+                <div class="text-xs text-text-3 mt-0.5 font-mono">{{ formatDate(r.date) }} · {{ r.stats.commits }} 提交</div>
               </div>
             </div>
-          </NTabPane>
-
-          <NTabPane name="git" tab="Git">
-            <div class="p-4">
-              <GitTab :project-id="pid" :repo-id="rid" />
+          </div>
+          <div class="flex-1 min-w-0 flex flex-col">
+            <div v-if="selectedRelease" class="px-5 py-3 border-b border-border flex items-center gap-2.5 shrink-0">
+              <NRadioGroup v-model:value="logTrack" size="small">
+                <NRadioButton value="external">对外</NRadioButton>
+                <NRadioButton value="internal">对内</NRadioButton>
+              </NRadioGroup>
+              <StatusBadge type="log" :log-state="selectedRelease.logs[logTrack].state" />
+              <span class="flex-1" />
+              <template v-if="editing">
+                <NButton size="tiny" secondary type="primary" :loading="editSaving" @click="saveEdit">保存</NButton>
+                <NButton size="tiny" quaternary :disabled="editSaving" @click="confirmEdit">确认</NButton>
+                <NButton size="tiny" quaternary :disabled="editSaving" @click="resetEdit">恢复自动草稿</NButton>
+                <NButton size="tiny" quaternary @click="cancelEdit">取消</NButton>
+              </template>
+              <NButton v-else size="tiny" quaternary @click="startEdit">
+                <template #icon><i aria-hidden="true" class="i-carbon-edit" /></template>
+                编辑日志
+              </NButton>
+              <span class="text-xs text-text-3 font-mono">{{ selectedRelease.stats.commits }} 提交 · +{{ selectedRelease.stats.insertions }} / -{{ selectedRelease.stats.deletions }}</span>
             </div>
-          </NTabPane>
-
-          <NTabPane name="logs" tab="版本日志">
-            <div class="flex h-140">
-              <div class="w-80 shrink-0 border-r border-border overflow-y-auto">
-                <div v-if="releasesLoading" class="p-6 text-center text-text-3"><NSpin size="small" /></div>
-                <div v-else-if="releases.length === 0" class="p-4">
-                  <div class="text-sm text-text-3 text-center py-8">暂无发布记录</div>
-                </div>
-                <div v-else class="py-2">
-                  <div
-                    v-for="r in releases"
-                    :key="r.id"
-                    class="px-4 py-2.5 cursor-pointer transition-colors duration-100 border-l-2"
-                    :class="selectedRelease?.id === r.id ? 'bg-brand-soft border-brand-500' : 'border-transparent hover:bg-surface-hover'"
-                    role="button"
-                    tabindex="0"
-                    :aria-label="`查看 ${r.version} 发布记录`"
-                    @click="selectedRelease = r"
-                    @keydown.enter="selectedRelease = r"
-                    @keydown.space.prevent="selectedRelease = r"
-                  >
-                    <div class="code-text text-sm text-text-1" translate="no">{{ r.version }}</div>
-                    <div class="text-xs text-text-3 mt-0.5">{{ formatDate(r.date) }} · {{ r.stats.commits }} 提交</div>
-                  </div>
-                </div>
-              </div>
-              <div class="flex-1 min-w-0 flex flex-col">
-                <div v-if="selectedRelease" class="px-5 py-3 border-b border-border flex items-center gap-2.5 shrink-0">
-                  <NRadioGroup v-model:value="logTrack" size="small">
-                    <NRadioButton value="external">对外</NRadioButton>
-                    <NRadioButton value="internal">对内</NRadioButton>
-                  </NRadioGroup>
-                  <StatusBadge type="log" :log-state="selectedRelease.logs[logTrack].state" />
-                  <span class="flex-1" />
-                  <template v-if="editing">
-                    <NButton size="tiny" secondary type="primary" :loading="editSaving" @click="saveEdit">保存</NButton>
-                    <NButton size="tiny" quaternary :disabled="editSaving" @click="confirmEdit">确认</NButton>
-                    <NButton size="tiny" quaternary :disabled="editSaving" @click="resetEdit">恢复自动草稿</NButton>
-                    <NButton size="tiny" quaternary @click="cancelEdit">取消</NButton>
-                  </template>
-                  <NButton v-else size="tiny" quaternary @click="startEdit">
-                    <template #icon><i aria-hidden="true" class="i-carbon-edit" /></template>
-                    编辑日志
-                  </NButton>
-                  <span class="text-xs text-text-3">{{ selectedRelease.stats.commits }} 提交 · +{{ selectedRelease.stats.insertions }} / -{{ selectedRelease.stats.deletions }}</span>
-                </div>
-                <div class="flex-1 overflow-y-auto p-5">
-                  <textarea
-                    v-if="editing"
-                    v-model="editText"
-                    class="h-full w-full bg-transparent resize-none outline-none font-mono text-13px leading-6 text-text-1"
-                    placeholder="在此编辑日志内容…"
-                    autocomplete="off"
-                    spellcheck="false"
-                    aria-label="编辑发布日志"
-                  />
-                  <MarkdownView v-else-if="selectedRelease" :content="selectedRelease.logs[logTrack].content" :max-lines="800" />
-                </div>
-              </div>
+            <div class="flex-1 overflow-y-auto p-5">
+              <textarea
+                v-if="editing"
+                v-model="editText"
+                class="h-full w-full bg-transparent resize-none outline-none font-mono text-13px leading-6 text-text-1"
+                placeholder="在此编辑日志内容…"
+                autocomplete="off"
+                spellcheck="false"
+                aria-label="编辑发布日志"
+              />
+              <MarkdownView v-else-if="selectedRelease" :content="selectedRelease.logs[logTrack].content" :max-lines="800" />
             </div>
-          </NTabPane>
+          </div>
+        </div>
 
-          <NTabPane name="settings" tab="设置">
-            <div class="p-5 max-w-xl space-y-5">
-              <div>
-                <div class="text-sm font-medium text-text-1 mb-1">本地路径</div>
-                <div class="code-text text-13px text-text-2 bg-surface-alt border border-border rounded-md px-3 py-2">{{ repo.path }}</div>
-              </div>
-              <NForm label-placement="left" label-width="110">
-                <NFormItem label="英文名">
-                  <NInput v-model:value="settingsForm.name" placeholder="如：l-pc-front（app 标识）" />
-                </NFormItem>
-                <NFormItem label="中文名">
-                  <NInput v-model:value="settingsForm.displayName" placeholder="如：PC 前端（可选，版本清单导出用）" />
-                </NFormItem>
-                <NFormItem label="构建命令">
-                  <NInput v-model:value="settingsForm.buildCommand" placeholder="如：pnpm build（发版前执行，可留空）" />
-                </NFormItem>
-                <NFormItem label="产物目录">
-                  <NInput v-model:value="settingsForm.outputDir" placeholder="public" />
-                </NFormItem>
-                <NFormItem label="备份产物目录">
-                  <div class="flex items-center gap-2 w-full">
-                    <NInput
-                      v-model:value="settingsForm.artifactDir"
-                      placeholder="如：dist（发布时归档备份，可留空）"
-                    />
-                    <NButton secondary size="small" @click="dirPickerOpen = true">
-                      <template #icon><i aria-hidden="true" class="i-carbon-folder-open" /></template>
-                      选择
-                    </NButton>
-                  </div>
-                  <span class="text-xs text-text-3">发布时自动归档该目录（tar.gz + 哈希清单），未配置则跳过产物备份</span>
-                </NFormItem>
-                <NFormItem label="写入版本文件">
-                  <NSwitch v-model:value="settingsForm.writeVersionFile" />
-                  <span class="ml-2 text-xs text-text-3">关闭后不写 version.json / version-history.json（零侵入）</span>
-                </NFormItem>
-              </NForm>
-              <div class="flex items-center justify-between">
-                <NButton type="primary" :loading="saving" @click="saveSettings">保存设置</NButton>
-                <NButton quaternary type="error" @click="confirmRemove">
-                  <template #icon><i aria-hidden="true" class="i-carbon-trash-can" /></template>
-                  移除仓库
+        <!-- 4. 仓库独立设置 -->
+        <div v-show="tab === 'settings'" class="p-6 max-w-xl space-y-5">
+          <div>
+            <div class="text-sm font-medium text-text-1 mb-1 font-sans">本地绝对路径</div>
+            <div class="code-text text-13px text-text-2 bg-surface-alt border border-border rounded-md px-3 py-2">{{ repo.path }}</div>
+          </div>
+          <NForm label-placement="left" label-width="110">
+            <NFormItem label="英文名">
+              <NInput v-model:value="settingsForm.name" placeholder="如：l-pc-front（app 标识）" />
+            </NFormItem>
+            <NFormItem label="中文名">
+              <NInput v-model:value="settingsForm.displayName" placeholder="如：PC 前端（可选，版本清单导出用）" />
+            </NFormItem>
+            <NFormItem label="构建命令">
+              <NInput v-model:value="settingsForm.buildCommand" placeholder="如：pnpm build（发版前执行，可留空）" />
+            </NFormItem>
+            <NFormItem label="产物目录">
+              <NInput v-model:value="settingsForm.outputDir" placeholder="public" />
+            </NFormItem>
+            <NFormItem label="备份产物目录">
+              <div class="flex items-center gap-2 w-full">
+                <NInput
+                  v-model:value="settingsForm.artifactDir"
+                  placeholder="如：dist（发布时归档备份，可留空）"
+                />
+                <NButton secondary size="small" @click="dirPickerOpen = true">
+                  <template #icon><i aria-hidden="true" class="i-carbon-folder-open" /></template>
+                  选择
                 </NButton>
               </div>
-            </div>
-          </NTabPane>
-        </NTabs>
+            </NFormItem>
+            <NFormItem label="写入版本文件">
+              <NSwitch v-model:value="settingsForm.writeVersionFile" />
+              <span class="ml-2 text-xs text-text-3">关闭后不写 version.json / version-history.json（零侵入）</span>
+            </NFormItem>
+          </NForm>
+          <div class="flex items-center justify-between pt-3 border-t border-border">
+            <NButton type="primary" :loading="saving" @click="saveSettings">保存设置</NButton>
+            <NButton quaternary type="error" @click="confirmRemove">
+              <template #icon><i aria-hidden="true" class="i-carbon-trash-can" /></template>
+              移除仓库
+            </NButton>
+          </div>
+        </div>
       </div>
     </template>
 
@@ -409,9 +413,8 @@ watch(tab, (t) => {
         @update:model-value="v => settingsForm.artifactDir = v"
       />
       <template #footer>
-        <div class="flex justify-end gap-2">
-          <NButton size="small" @click="dirPickerOpen = false">取消</NButton>
-          <NButton size="small" type="primary" @click="dirPickerOpen = false">确定</NButton>
+        <div class="flex justify-end">
+          <NButton type="primary" size="small" @click="dirPickerOpen = false">确定</NButton>
         </div>
       </template>
     </NModal>

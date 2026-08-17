@@ -189,14 +189,6 @@ async function checkRunningTask() {
   }
 }
 
-async function takeOver() {
-  if (!takeoverTask.value) return
-  store.taskId = takeoverTask.value
-  store.phase = 'running'
-  store.step = 5
-  // 接管后隐藏横幅（避免与步骤 5 控制台并存）
-  takeoverTask.value = ''
-}
 
 // 站内路由切换守卫：步骤 2-5 有未保存日志编辑或发布进行中时离开需确认
 // （window.beforeunload 只覆盖刷新/关页，站内导航需在此拦截）
@@ -374,30 +366,52 @@ const resultReleaseId = computed(() => store.result?.releaseId ?? '')
     />
 
     <template v-if="project">
-      <!-- 刷新/重进时：该项目有发布任务进行中 → 提供接管查看进度 -->
-      <NAlert
-        v-if="takeoverTask && takeoverProjectId === projectId && store.step !== 5 && store.phase !== 'running'"
-        type="warning"
-        :show-icon="true"
-        class="mb-4"
-      >
-        <div class="flex items-center justify-between gap-3 flex-wrap">
-          <span class="flex-1 min-w-56">检测到该项目的发布任务正在进行中（{{ takeoverTask }}），可查看实时进度。</span>
-          <NButton size="tiny" type="primary" secondary @click="takeOver">查看进度</NButton>
+      <!-- 6 步发版微流水线时间轴卡片 (Glass Panel Timeline) -->
+      <div class="glass-panel p-5 rounded-2xl space-y-4 mb-4">
+        <div class="flex items-center justify-between gap-4 flex-wrap">
+          <div>
+            <h2 class="text-base font-bold text-text-1 flex items-center gap-2 m-0">
+              <span>统一发版流水线</span>
+              <span class="text-xs font-mono px-2 py-0.5 rounded bg-brand-soft text-brand-500 border border-brand-200">
+                {{ project.version }} → {{ store.plan?.projectVersion ?? '推演中' }}
+              </span>
+            </h2>
+            <p class="text-xs text-text-3 mt-1 m-0">跨工程批量推演语义版本、审核双轨日志、打包归档与 Git 里程碑打 Tag</p>
+          </div>
         </div>
-      </NAlert>
 
-      <NSteps :current="store.step" :status="store.phase === 'error' && store.step === 5 ? 'error' : 'process'">
-        <NStep title="检测变更" />
-        <NStep title="版本号" />
-        <NStep title="日志" />
-        <NStep title="预览" />
-        <NStep title="执行" />
-        <NStep title="完成" />
-      </NSteps>
+        <!-- 6 步时间轴 -->
+        <div class="grid grid-cols-6 gap-2 pt-2">
+          <div
+            v-for="(st, idx) in [
+              { title: '检测变更', desc: 'Preflight' },
+              { title: '版本推演', desc: 'SemVer' },
+              { title: '双轨日志', desc: 'Changelog' },
+              { title: '预检预演', desc: 'Dry-Run' },
+              { title: '执行发版', desc: 'SSE Terminal' },
+              { title: '完成归档', desc: 'Done' }
+            ]"
+            :key="idx"
+            class="flex flex-col items-center text-center cursor-pointer"
+            @click="idx + 1 < store.step && (store.step = idx + 1)"
+          >
+            <div
+              class="w-7 h-7 rounded-full flex items-center justify-center text-xs font-mono font-bold mb-1.5 transition-all"
+              :class="[
+                store.step > idx + 1 ? 'bg-brand-500 text-black shadow-glow-emerald' :
+                store.step === idx + 1 ? 'bg-info text-black animate-pulse font-extrabold shadow-glow-cyan' :
+                'bg-surface-alt text-text-3 border border-border'
+              ]"
+            >
+              {{ idx + 1 }}
+            </div>
+            <span class="text-xs font-medium" :class="store.step === idx + 1 ? 'text-text-1 font-bold' : 'text-text-2'">{{ st.title }}</span>
+            <span class="text-[10px] text-text-3 font-mono">{{ st.desc }}</span>
+          </div>
+        </div>
+      </div>
 
-      <div class="card card-pad mt-6">
-        <!-- 步骤 1 -->
+      <div class="glass-panel p-6 rounded-2xl mt-4">
         <div v-show="store.step === 1">
           <div v-if="detecting" class="flex items-center gap-3 py-8 justify-center text-text-3">
             <NSpin size="small" />

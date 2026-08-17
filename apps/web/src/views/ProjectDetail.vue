@@ -6,9 +6,7 @@ import { useProjectsStore } from '../stores/projects'
 import { useAppStore } from '../stores/app'
 import { usePolling } from '../composables/usePolling'
 import { api } from '../api'
-import PageHeader from '../components/PageHeader.vue'
 import RepoCard from '../components/RepoCard.vue'
-import StatusBadge from '../components/StatusBadge.vue'
 import MarkdownView from '../components/MarkdownView.vue'
 import EmptyState from '../components/EmptyState.vue'
 import AddRepoDialog from '../components/AddRepoDialog.vue'
@@ -199,55 +197,63 @@ usePolling(async () => {
 </script>
 
 <template>
-  <div class="page">
+  <div class="page max-w-6xl space-y-6">
     <template v-if="project">
-      <PageHeader
-        :title="project.name"
-        :description="project.description || undefined"
-        back-to="/"
-        icon="i-carbon-catalog"
-      >
-        <template #badges>
-          <StatusBadge type="version" :label="project.version" />
-          <StatusBadge type="scheme" :label="project.repoVersionScheme === 'hybrid' ? '混合版本' : '时间戳版本'" />
-          <StatusBadge type="log" :log-state="'auto'" />
-        </template>
-        <NButton type="primary" @click="router.push(`/project/${project.id}/release`)">
-          <template #icon><i aria-hidden="true" class="i-carbon-rocket" /></template>
-          发布新版本
-        </NButton>
-        <NButton @click="showAddRepo = true">
-          <template #icon><i aria-hidden="true" class="i-carbon-add" /></template>
-          接入仓库
-        </NButton>
-        <NButton @click="router.push(`/project/${project.id}/backups`)">
-          <template #icon><i aria-hidden="true" class="i-carbon-document-protected" /></template>
-          备份与对比
-        </NButton>
-        <VersionExportDropdown
-          :project-id="projectId"
-          filename="version.json"
-          :load-items="() => api.projectVersions(projectId)"
-        />
-        <NButton quaternary @click="showEdit = true">
-          <template #icon><i aria-hidden="true" class="i-carbon-edit" /></template>
-          编辑
-        </NButton>
-        <NButton quaternary type="error" @click="confirmDelete">
-          <template #icon><i aria-hidden="true" class="i-carbon-trash-can" /></template>
-          删除
-        </NButton>
-      </PageHeader>
-      <!-- 分支协同巡检警示条 (R25 / 建议 1) -->
+      <!-- 1. 项目头部卡片 (Glass Panel Command Header) -->
+      <div class="glass-panel p-5 rounded-2xl space-y-4">
+        <div class="flex items-start justify-between gap-4 flex-wrap">
+          <div class="flex items-start gap-3.5 min-w-0">
+            <div class="w-10 h-10 rounded-xl bg-brand-soft text-brand-500 flex items-center justify-center font-bold text-lg border border-brand-200 shrink-0">
+              {{ project.name.slice(0, 1) }}
+            </div>
+            <div class="min-w-0">
+              <div class="flex items-center gap-2.5 flex-wrap">
+                <h1 class="text-lg font-bold text-text-1 truncate m-0">{{ project.name }}</h1>
+                <span class="font-mono text-xs font-bold px-2 py-0.5 rounded bg-surface-alt border border-border text-info">
+                  {{ project.version }}
+                </span>
+                <span class="text-xs font-mono text-text-3">方案: {{ project.repoVersionScheme || 'hybrid' }}</span>
+                <span class="text-xs font-mono text-text-3">推演: {{ project.bump || 'auto' }}</span>
+              </div>
+              <p class="text-xs text-text-3 mt-1 m-0 leading-relaxed">{{ project.description || '暂无业务描述' }}</p>
+            </div>
+          </div>
+
+          <!-- 核心操作栏 -->
+          <div class="flex items-center gap-2 flex-wrap shrink-0">
+            <NButton type="primary" @click="router.push(`/project/${project.id}/release`)">
+              <template #icon><i aria-hidden="true" class="i-carbon-rocket" /></template>
+              统一发版
+            </NButton>
+            <NButton type="info" secondary @click="showAddRepo = true">
+              <template #icon><i aria-hidden="true" class="i-carbon-branch" /></template>
+              接入新仓库
+            </NButton>
+            <VersionExportDropdown
+              :project-id="projectId"
+              :filename="`${project.name}-versions.json`"
+              :load-items="() => api.projectVersions(projectId)"
+            />
+            <NButton quaternary @click="showEdit = true" title="编辑项目配置">
+              <template #icon><i aria-hidden="true" class="i-carbon-settings" /></template>
+            </NButton>
+            <NButton quaternary type="error" @click="confirmDelete" title="删除项目">
+              <template #icon><i aria-hidden="true" class="i-carbon-trash-can" /></template>
+            </NButton>
+          </div>
+        </div>
+      </div>
+
+      <!-- 2. 分支协同巡检警示条 (R25 / 建议 1) -->
       <div
         v-if="branchAlignment && !branchAlignment.isAllAligned"
-        class="mb-4 p-3.5 rounded-lg border border-warning/40 bg-warning/10 flex items-center justify-between gap-3 text-xs"
+        class="p-3.5 rounded-xl border border-warning/40 bg-warning/10 flex items-center justify-between gap-3 text-xs font-mono animate-fadeIn"
       >
-        <div class="flex items-center gap-2">
+        <div class="flex items-center gap-2.5">
           <i aria-hidden="true" class="i-carbon-warning-filled text-warning shrink-0 text-base" />
           <span class="text-text-1">
-            分支协同预警：检测到
-            <strong class="text-warning">{{ branchAlignment.items.filter(x => !x.isAligned).map(x => `${x.repoName} (${x.branch})`).join('、') }}</strong>
+            分支协同巡检预警：检测到
+            <strong class="text-warning font-semibold">{{ branchAlignment.items.filter(x => !x.isAligned).map(x => `${x.repoName} (${x.branch})`).join('、') }}</strong>
             未停留在主发布分支 ({{ branchAlignment.defaultBranch }})
           </span>
         </div>
@@ -261,20 +267,29 @@ usePolling(async () => {
         </div>
       </div>
 
-      <!-- 仓库 -->
-      <section>
-        <h2 class="section-title">
-          <i aria-hidden="true" class="i-carbon-git-branch text-brand-500" /> 代码仓库
-          <span class="chip">{{ project.repos.length }}</span>
-        </h2>
-        <div v-if="project.repos.length === 0" class="card mt-4">
+      <!-- 3. 关联 Git 仓库管理网格 (Repo Matrix) -->
+      <section class="space-y-3">
+        <div class="flex items-center justify-between">
+          <h2 class="section-title text-sm font-bold text-text-1 flex items-center gap-2">
+            <i aria-hidden="true" class="i-carbon-branch text-info" />
+            <span>关联 Git 仓库列表 ({{ project.repos.length }})</span>
+          </h2>
+          <button
+            class="text-xs font-mono text-info hover:underline flex items-center gap-1 bg-transparent border-0 cursor-pointer"
+            @click="showAddRepo = true"
+          >
+            <i aria-hidden="true" class="i-carbon-add text-12px" /> 接入新工程
+          </button>
+        </div>
+
+        <div v-if="project.repos.length === 0" class="card">
           <EmptyState
             title="还没有接入仓库"
-            description="支持两种方式：选择本地 git 仓库路径，或输入 git 地址克隆。"
+            description="支持两种方式：选择本地已有 git 仓库绝对路径，或输入 git 远程地址克隆。"
             @action="showAddRepo = true"
           />
         </div>
-        <div v-else class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+        <div v-else class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           <RepoCard
             v-for="repo in sortedRepos"
             :key="repo.id"
@@ -287,63 +302,66 @@ usePolling(async () => {
         </div>
       </section>
 
-      <!-- 发布历史 -->
-      <section>
-        <h2 class="section-title">
-          <i aria-hidden="true" class="i-carbon-version text-brand-500" /> 发布历史
-        </h2>
-        <div class="card mt-4">
-          <div v-if="releasesLoading" class="p-5 text-center text-text-3"><NSpin size="small" /></div>
-          <div v-else-if="releases.length === 0" class="p-5">
-            <EmptyState
-              title="暂无发布记录"
-              description="首次发布后，这里将展示统一版本与聚合改动点。"
-            />
-          </div>
-          <div v-else class="divide-y divide-border">
-            <div
-              v-for="r in releases"
-              :key="r.id"
-              class="release-row px-5 py-3.5 cursor-pointer hover:bg-surface-hover transition-colors duration-150"
-              role="button"
-              tabindex="0"
-              :aria-label="`查看 ${r.version} 发布详情`"
-              @click="openDetail(r)"
-              @keydown.enter="openDetail(r)"
-              @keydown.space.prevent="openDetail(r)"
-            >
-              <div class="flex items-center gap-3 flex-wrap">
-                <span class="version-badge" :class="r.deprecated ? 'opacity-50 line-through' : ''" translate="no">
-                  <span class="tick" />{{ r.version }}
-                </span>
-                <StatusBadge type="bump" :bump="r.bump" />
-                <StatusBadge type="pushed" :pushed="r.pushed" />
-                <span v-if="r.deprecated" class="chip chip-error text-xs" :title="'废弃原因: ' + r.deprecateReason">
-                  ⚠️ 已废弃 ({{ r.deprecateReason || '人为撤销' }})
-                </span>
-                <span class="flex-1" />
-                <VersionExportDropdown
-                  :project-id="projectId"
-                  :filename="`${r.version}-version.json`"
-                  :load-items="() => api.releaseVersions(r.id)"
-                  label="版本清单"
-                  size="tiny"
-                  quaternary
-                />
-                <NButton v-if="!r.deprecated" size="tiny" quaternary type="warning" @click.stop="openDeprecate(r)">
-                  标为废弃
-                </NButton>
-                <span class="text-xs text-text-3">{{ formatDate(r.date) }}</span>
-                <i aria-hidden="true" class="i-carbon-chevron-right text-text-3" />
-              </div>
-              <div class="mt-1.5 text-xs text-text-3">
-                {{ (r.repos ?? []).map(x => x.repoName).join('、') || r.scopeName }}
-              </div>
-            </div>
-          </div>
-          <div v-if="!releasesLoading && releases.length > 0" class="border-t border-border">
-            <button v-if="!releaseExpanded" class="link w-full py-2.5 text-center" @click="expandReleases">查看全部发布历史（最多 100 条）</button>
-            <button v-else class="link w-full py-2.5 text-center" @click="releaseExpanded = false; loadReleases()">收起（回到最近 5 条）</button>
+      <!-- 4. 历次发布审计记录表格 (Release History Table) -->
+      <section class="glass-panel rounded-2xl p-5 space-y-3">
+        <div class="flex items-center justify-between">
+          <h2 class="section-title text-sm font-bold text-text-1 flex items-center gap-2">
+            <i aria-hidden="true" class="i-carbon-history text-[#A855F7]" />
+            <span>历次发布审计记录 (Release Audit Trail)</span>
+          </h2>
+          <span class="text-xs font-mono text-text-3">历史数据由本地 Git 数据仓库自动审计存盘</span>
+        </div>
+
+        <div v-if="releasesLoading" class="p-5 text-center text-text-3"><NSpin size="small" /></div>
+        <div v-else-if="releases.length === 0" class="p-5">
+          <EmptyState
+            title="暂无发布记录"
+            description="首次发布后，这里将展示统一版本与聚合改动点审计。"
+          />
+        </div>
+        <div v-else class="overflow-x-auto">
+          <table class="w-full text-left border-collapse text-xs font-mono">
+            <thead>
+              <tr class="text-text-3 border-b border-border text-[11px]">
+                <th class="py-2.5 px-3 font-medium">发布版本</th>
+                <th class="py-2.5 px-3 font-medium">发布时间</th>
+                <th class="py-2.5 px-3 font-medium">关联工程</th>
+                <th class="py-2.5 px-3 font-medium">状态 / 审计</th>
+                <th class="py-2.5 px-3 font-medium">归档备份</th>
+                <th class="py-2.5 px-3 font-medium text-right">操作与纠偏</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-border">
+              <tr v-for="r in releases" :key="r.id" class="hover:bg-surface-hover/50 transition-colors" :class="{ 'opacity-60': r.deprecated }">
+                <td class="py-2.5 px-3 font-bold" :class="r.deprecated ? 'line-through text-text-3' : 'text-info'">
+                  {{ r.version }}
+                </td>
+                <td class="py-2.5 px-3 text-text-3">{{ formatDate(r.date) }}</td>
+                <td class="py-2.5 px-3 text-text-2 truncate max-w-48">
+                  {{ (r.repos ?? []).map(x => x.repoName).join('、') || r.scopeName }}
+                </td>
+                <td class="py-2.5 px-3">
+                  <span v-if="r.deprecated" class="chip chip-error text-[10px]" :title="'废弃原因: ' + r.deprecateReason">
+                    ⚠️ 已废弃 ({{ r.deprecateReason || '人为撤销' }})
+                  </span>
+                  <span v-else class="chip chip-brand text-[10px]">
+                    ● 双轨已确认
+                  </span>
+                </td>
+                <td class="py-2.5 px-3 text-text-3">
+                  <span v-if="r.backups?.length" class="text-brand-500">Bundle+Manifest</span>
+                  <span v-else>快照已归档</span>
+                </td>
+                <td class="py-2.5 px-3 text-right space-x-2">
+                  <button class="text-brand-500 hover:underline bg-transparent border-0 cursor-pointer p-0" @click="openDetail(r)">查看日志</button>
+                  <button v-if="!r.deprecated" class="text-warning hover:underline bg-transparent border-0 cursor-pointer p-0" @click="openDeprecate(r)">标为废弃</button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+          <div v-if="releases.length >= 5" class="pt-3 border-t border-border flex justify-center">
+            <button v-if="!releaseExpanded" class="link text-xs" @click="expandReleases">展开查看全部历史（最多 100 条）</button>
+            <button v-else class="link text-xs" @click="releaseExpanded = false; loadReleases()">收起</button>
           </div>
         </div>
       </section>
@@ -355,10 +373,10 @@ usePolling(async () => {
       <NDrawer v-model:show="showDetail" :width="560">
         <NDrawerContent v-if="detailRelease" :title="detailRelease.version" closable>
           <NTabs type="segment" animated>
-            <NTabPane name="external" tab="对外">
+            <NTabPane name="external" tab="对外日志">
               <MarkdownView :content="detailRelease.logs.external.content" :max-lines="800" />
             </NTabPane>
-            <NTabPane name="internal" tab="对内">
+            <NTabPane name="internal" tab="对内全量">
               <MarkdownView :content="detailRelease.logs.internal.content" :max-lines="800" />
             </NTabPane>
           </NTabs>

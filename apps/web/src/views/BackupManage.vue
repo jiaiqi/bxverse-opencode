@@ -5,7 +5,7 @@
 import type { CompareResult, RepoBackupRef } from '@bxverse/shared'
 import { useProjectsStore } from '../stores/projects'
 import { api } from '../api'
-import PageHeader from '../components/PageHeader.vue'
+
 import EmptyState from '../components/EmptyState.vue'
 import { formatDateTime } from '../utils/format'
 import { useDialog, useMessage } from 'naive-ui'
@@ -260,48 +260,53 @@ const compareRows = computed(() =>
 </script>
 
 <template>
-  <div class="page">
-    <PageHeader
-      :title="`备份与对比 · ${project?.name ?? ''}`"
-      description="每次发布自动备份源码与产物（元数据入数据仓库审计，大文件存本地 backups 目录）"
-      :back-to="`/project/${pid}`"
-      icon="i-carbon-document-protected"
-    >
-      <template v-if="canCompare">
-        <span class="text-xs text-text-2 self-center">
-          已选：{{ orderedSelected[0].version }} ↔ {{ orderedSelected[1].version }}
-        </span>
-        <NButton type="primary" @click="runCompare('artifact')">
-          <template #icon><i aria-hidden="true" class="i-carbon-compare" /></template>
-          产物对比
-        </NButton>
-        <NButton @click="runCompare('source')">
-          <template #icon><i aria-hidden="true" class="i-carbon-git-compare" /></template>
-          源码对比
-        </NButton>
-        <NButton quaternary size="small" @click="selected = []">
-          <template #icon><i aria-hidden="true" class="i-carbon-close-outline" /></template>
-          清空选择
-        </NButton>
-      </template>
-    </PageHeader>
+  <div class="page max-w-6xl space-y-6">
+    <div class="glass-panel p-5 rounded-2xl flex items-center justify-between gap-4 flex-wrap">
+      <div class="flex items-center gap-3">
+        <button
+          class="p-1.5 rounded-lg bg-surface-alt hover:bg-surface-hover text-text-2 hover:text-text-1 border border-border flex items-center gap-1 text-xs font-mono transition-colors cursor-pointer"
+          @click="router.push(`/project/${pid}`)"
+        >
+          <i aria-hidden="true" class="i-carbon-arrow-left text-12px" />
+          <span>返回项目</span>
+        </button>
+        <div class="h-4 w-px bg-border shrink-0" />
+        <div>
+          <h1 class="text-base font-bold text-text-1 flex items-center gap-2 m-0 font-sans">
+            <i aria-hidden="true" class="i-carbon-security text-brand-500" />
+            <span>备份归档与三层一致性对比引擎</span>
+          </h1>
+          <p class="text-xs text-text-3 mt-0.5 m-0 font-mono">每次发布自动归档源码 Bundle 与产物快照，支持任意两次发版三层差异比对与 SHA-256 校验</p>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-2 font-mono text-xs">
+        <template v-if="canCompare">
+          <span class="text-xs text-text-2 self-center">
+            已选: {{ orderedSelected[0].version }} ↔ {{ orderedSelected[1].version }}
+          </span>
+          <NButton type="primary" size="small" @click="runCompare('artifact')">
+            <template #icon><i aria-hidden="true" class="i-carbon-compare" /></template>
+            产物对比
+          </NButton>
+          <NButton size="small" secondary @click="runCompare('source')">
+            <template #icon><i aria-hidden="true" class="i-carbon-git-compare" /></template>
+            源码对比
+          </NButton>
+          <NButton quaternary size="small" @click="selected = []">清空</NButton>
+        </template>
+      </div>
+    </div>
 
     <div v-if="loading" class="p-10 text-center text-text-3">
       <NSpin size="small" />
     </div>
     <template v-else-if="project">
-      <NAlert type="info" :show-icon="true" class="mb-5">
-        <div class="text-xs leading-5">
-          源码快照遵循仓库 .gitignore（仅含已跟踪文件）；产物目录在各仓库「设置」中配置（未配置则发布时跳过产物备份）。
-          勾选同一仓库的两次发布即可进行产物/源码对比，并导出校验报告。
-        </div>
-      </NAlert>
-
       <div v-if="project.repos.length === 0" class="card">
         <EmptyState title="暂无仓库" description="接入仓库并发布后，这里将展示每次发布的备份。" />
       </div>
       <div v-else class="space-y-5">
-        <section v-for="repo in project.repos" :key="repo.id" class="card card-pad">
+        <section v-for="repo in project.repos" :key="repo.id" class="glass-panel p-5 rounded-2xl">
           <div class="flex items-center gap-2 mb-3">
             <i aria-hidden="true" class="i-carbon-git-branch text-brand-500" />
             <span class="font-medium text-sm">{{ repo.displayName || repo.name }}</span>
