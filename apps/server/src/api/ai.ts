@@ -7,7 +7,7 @@
 // 旧单表单配置（ai.baseUrl/model/apiKey）在首次解析时惰性迁移为默认 provider（id 'legacy'）。
 
 import type { AiProvider, AppConfig } from '@bxverse/shared'
-import { explainDiff, generateCommitMessage, polishLog, testConnection, store } from '@bxverse/core'
+import { explainDiff, fetchModels, generateCommitMessage, normalizeBaseUrl, polishLog, testConnection, store } from '@bxverse/core'
 import type { Ctx } from '../http/router'
 import { apiError, readJsonBody, sendJson } from '../http/json'
 
@@ -77,21 +77,24 @@ export function register(router: import('../http/router').Router, services: AiSe
   // ---------- 新增 ----------
   router.post('/api/ai/providers', async (ctx: Ctx) => {
     const cfg = await services.loadCfg()
-    await ensureLegacyMigration(cfg, services)
     const body = (await readJsonBody(ctx.req)) as Record<string, unknown>
     const name = String(body.name ?? '').trim()
-    const baseUrl = String(body.baseUrl ?? '').trim()
+    const rawBaseUrl = String(body.baseUrl ?? '').trim()
+    const baseUrl = normalizeBaseUrl(rawBaseUrl)
     const model = String(body.model ?? '').trim()
     const enabled = body.enabled !== false
     if (!name) throw apiError(400, 'VALIDATION', '供应商名称必填')
-    if (!baseUrl || !/^https?:\/\//.test(baseUrl)) throw apiError(400, 'VALIDATION', 'Base URL 必须为 http(s) 地址')
+    if (!baseUrl || !/^https?:\/\//i.test(baseUrl)) throw apiError(400, 'VALIDATION', 'Base URL 必须为有效 http(s) 地址')
     if (!model) throw apiError(400, 'VALIDATION', '模型必填')
 
     const id = `p_${Math.random().toString(36).slice(2, 10)}`
     const provider: AiProvider = { id, name, kind: 'openai-compatible', baseUrl, model, enabled }
     const providers = cfg.ai.providers ?? []
     cfg.ai.providers = [...providers, provider]
-    if (enabled) cfg.ai.activeProviderId = id
+    if (enabled) {
+      for (const x of cfg.ai.providers) x.enabled = x.id === id
+      cfg.ai.activeProviderId = id
+    }
     await services.saveCfg(cfg)
     sendJson(ctx.res, 201, toView(provider, false))
   })
@@ -104,8 +107,9 @@ export function register(router: import('../http/router').Router, services: AiSe
     const body = (await readJsonBody(ctx.req)) as Record<string, unknown>
     if (typeof body.name === 'string' && body.name.trim()) p.name = body.name.trim()
     if (typeof body.baseUrl === 'string' && body.baseUrl.trim()) {
-      if (!/^https?:\/\//.test(body.baseUrl.trim())) throw apiError(400, 'VALIDATION', 'Base URL 必须为 http(s) 地址')
-      p.baseUrl = body.baseUrl.trim()
+      const normalized = normalizeBaseUrl(body.baseUrl.trim())
+      if (!/^https?:\/\//i.test(normalized)) throw apiError(400, 'VALIDATION', 'Base URL 必须为有效 http(s) 地址')
+      p.baseUrl = normalized
     }
     if (typeof body.model === 'string' && body.model.trim()) p.model = body.model.trim()
     if (body.enabled === true) {
@@ -152,24 +156,65 @@ export function register(router: import('../http/router').Router, services: AiSe
     sendJson(ctx.res, 200, { ok: true, hasKey: true })
   })
 
-  // ---------- 测试连接 ----------
+  // ---------- 测试连接与测速（支持现有 providerId 或即时填写的 baseUrl/apiKey） ----------
   router.post('/api/ai/test', async (ctx: Ctx) => {
     const cfg = await services.loadCfg()
     await ensureLegacyMigration(cfg, services)
     const body = (await readJsonBody(ctx.req)) as Record<string, unknown>
-    const providerId = String(body.providerId ?? '').trim()
-    if (!providerId) throw apiError(400, 'VALIDATION', 'providerId 必填')
-    const p = providerOf(cfg, providerId)
-    const key = await apiKeyOf(p.id)
-    if (!key) throw apiError(400, 'AI_CONFIG', `「${p.name}」未设置 API Key`)
+    let baseUrl = ''
+    let model = ''
+    let key = ''
+    let name = ''
+
+    if (typeof body.providerId === 'string' && body.providerId.trim()) {
+      const p = providerOf(cfg, body.providerId.trim())
+      baseUrl = p.baseUrl
+      model = p.model
+      name = p.name
+      key = await apiKeyOf(p.id)
+      if (!key) throw apiError(400, 'AI_CONFIG', `「${p.name}」未设置 API Key`)
+    } else {
+      baseUrl = normalizeBaseUrl(String(body.baseUrl ?? '').trim())
+      model = String(body.model ?? '').trim()
+      key = String(body.apiKey ?? '').trim()
+      name = String(body.name ?? '测试供应商').trim()
+      if (!baseUrl) throw apiError(400, 'VALIDATION', 'baseUrl 必填')
+      if (!key) throw apiError(400, 'VALIDATION', 'apiKey 必填')
+    }
+
     try {
-      const reply = await testConnection(p, key)
-      sendJson(ctx.res, 200, { ok: true, detail: reply })
+      const result = await testConnection({ baseUrl, model, name }, key)
+      sendJson(ctx.res, 200, result)
     } catch (e) {
       throw apiError(502, 'AI_FAILED', (e as Error).message)
     }
   })
 
+  // ---------- 在线拉取模型列表（GET /v1/models） ----------
+  router.post('/api/ai/models', async (ctx: Ctx) => {
+    const cfg = await services.loadCfg()
+    await ensureLegacyMigration(cfg, services)
+    const body = (await readJsonBody(ctx.req)) as Record<string, unknown>
+    let baseUrl = ''
+    let key = ''
+
+    if (typeof body.providerId === 'string' && body.providerId.trim()) {
+      const p = providerOf(cfg, body.providerId.trim())
+      baseUrl = p.baseUrl
+      key = await apiKeyOf(p.id)
+    } else {
+      baseUrl = normalizeBaseUrl(String(body.baseUrl ?? '').trim())
+      key = String(body.apiKey ?? '').trim()
+    }
+    if (!baseUrl) throw apiError(400, 'VALIDATION', 'baseUrl 必填')
+
+    try {
+      const models = await fetchModels({ baseUrl }, key)
+      sendJson(ctx.res, 200, { ok: true, models })
+    } catch (e) {
+      throw apiError(502, 'AI_FAILED', (e as Error).message)
+    }
+  })
   // ---------- 日志润色（按生效供应商） ----------
   router.post('/api/ai/polish', async (ctx: Ctx) => {
     const body = (await readJsonBody(ctx.req)) as Record<string, unknown>

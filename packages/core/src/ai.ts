@@ -5,7 +5,7 @@
 // - testConnection：最小请求验证 key/模型可用
 // 未启用 / 缺凭据时由调用方短路或抛错，绝不静默返回原文误导用户。
 
-import type { AiProvider, CommitType } from '@bxverse/shared'
+import type { AiProvider, CommitType, AiTestResult } from '@bxverse/shared'
 
 const AI_TIMEOUT_MS = 30_000
 const MAX_TEXT_LENGTH = 200_000
@@ -31,11 +31,32 @@ export interface ChatOpts {
 }
 
 /**
+ * 智能 URL 归一化（容错：去除尾部多余斜杠、/chat/completions 后缀、补齐协议与 /v1 等）。
+ */
+export function normalizeBaseUrl(raw: string): string {
+  let s = (raw ?? '').trim()
+  if (!s) return ''
+  // 补全 http/https 协议
+  if (!/^https?:\/\//i.test(s)) {
+    if (/^(localhost|127\.0\.0\.1)(:\d+)?/i.test(s)) {
+      s = `http://${s}`
+    } else {
+      s = `https://${s}`
+    }
+  }
+  // 剥离末尾的 /chat/completions 或 /completions
+  s = s.replace(/\/+(?:chat\/)?completions(?:\/.*)?$/i, '')
+  // 去除尾部多余斜杠
+  s = s.replace(/\/+$/, '')
+  return s
+}
+
+/**
  * OpenAI 兼容 chat/completions 基础调用。
  * 上游失败抛错（含状态与截断响应体）；成功返回 content（去除 ``` 包裹）。
  */
 export async function chatCompletion(
-  provider: AiProvider,
+  provider: { baseUrl: string; model: string; name?: string },
   apiKey: string,
   system: string,
   user: string,
@@ -43,14 +64,15 @@ export async function chatCompletion(
 ): Promise<string> {
   const timeout = opts.timeoutMs ?? AI_TIMEOUT_MS
   const maxChars = opts.maxChars ?? MAX_TEXT_LENGTH
-  if (!provider?.baseUrl || !provider.model) throw new Error('AI 供应商 Base URL / 模型未配置')
+  const baseUrl = normalizeBaseUrl(provider?.baseUrl)
+  if (!baseUrl || !provider.model) throw new Error('AI 供应商 Base URL / 模型未配置')
   if (!apiKey) throw new Error('AI 供应商未设置 API Key')
   if (!user.trim()) throw new Error('输入内容为空')
   if (user.length > maxChars) {
     throw new Error(`输入过长（${user.length} 字符，上限 ${maxChars}），请缩减后重试`)
   }
 
-  const url = `${provider.baseUrl.replace(/\/+$/, '')}/chat/completions`
+  const url = `${baseUrl}/chat/completions`
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), timeout)
   try {
@@ -72,13 +94,45 @@ export async function chatCompletion(
       signal: controller.signal,
     })
     if (!res.ok) {
-      const detail = (await res.text().catch(() => '')).slice(0, 200)
+      const detail = (await res.text().catch(() => '')).slice(0, 300)
       throw new Error(`AI 服务响应异常（${res.status}）：${detail || res.statusText}`)
     }
     const data = (await res.json()) as ChatCompletionResp
     const content = data.choices?.[0]?.message?.content?.trim()
     if (!content) throw new Error('AI 服务未返回有效内容')
     return stripFence(content)
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
+/**
+ * 在线拉取供应商支持的模型列表（GET /v1/models）。
+ * 提取模型 id 并去重排序返回；如不支持则抛出明确错误。
+ */
+export async function fetchModels(
+  provider: { baseUrl: string },
+  apiKey?: string,
+  opts: { timeoutMs?: number } = {},
+): Promise<string[]> {
+  const baseUrl = normalizeBaseUrl(provider.baseUrl)
+  if (!baseUrl) throw new Error('请先填写 Base URL')
+  const url = `${baseUrl}/models`
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), opts.timeoutMs ?? 15_000)
+  try {
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+    if (apiKey) headers.Authorization = `Bearer ${apiKey}`
+    const res = await fetch(url, { method: 'GET', headers, signal: controller.signal })
+    if (!res.ok) {
+      const detail = (await res.text().catch(() => '')).slice(0, 200)
+      throw new Error(`无法获取模型列表（${res.status}）：${detail || res.statusText}`)
+    }
+    const json = (await res.json()) as { data?: { id?: string }[]; models?: { id?: string }[] }
+    const rawList = Array.isArray(json.data) ? json.data : (Array.isArray(json.models) ? json.models : [])
+    const ids = Array.from(new Set(rawList.map(m => String(m.id ?? '')).filter(Boolean)))
+    ids.sort((a, b) => a.localeCompare(b))
+    return ids
   } finally {
     clearTimeout(timer)
   }
@@ -92,18 +146,29 @@ export async function polishLog(provider: AiProvider, apiKey: string, text: stri
   return chatCompletion(provider, apiKey, POLISH_SYSTEM_PROMPT, text)
 }
 
-/** 测试连接：最小 chat 请求验证 key/模型可用，返回模型直答内容 */
-export async function testConnection(provider: AiProvider, apiKey: string): Promise<string> {
-  const out = await chatCompletion(
-    provider,
+/** 测试连接：最小 chat 请求验证 key/模型可用并测速，返回延迟毫秒与模型回复 */
+export async function testConnection(
+  provider: { baseUrl: string; model?: string; name?: string },
+  apiKey: string,
+): Promise<AiTestResult> {
+  const targetModel = provider.model?.trim() || 'deepseek-chat'
+  const start = Date.now()
+  const reply = await chatCompletion(
+    { baseUrl: provider.baseUrl, model: targetModel, name: provider.name },
     apiKey,
     '你是一个连通性测试助手。',
-    '请只回复两个字：正常',
+    '请回复：正常',
     { temperature: 0, timeoutMs: 15_000 },
   )
-  return out
+  const latencyMs = Date.now() - start
+  return {
+    ok: true,
+    latencyMs,
+    model: targetModel,
+    reply,
+    providerName: provider.name,
+  }
 }
-
 /** 去除模型偶发的 ```markdown 代码块包裹 */
 function stripFence(s: string): string {
   const m = /^```[a-zA-Z]*\n([\s\S]*?)\n```$/.exec(s.trim())

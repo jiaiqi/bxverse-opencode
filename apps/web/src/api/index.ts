@@ -2,6 +2,7 @@
 // API 资源层：全部端点函数（类型引用 @bxverse/shared）
 
 import type {
+  AiTestResult,
   AppConfig,
   BumpType,
   CloneRequest,
@@ -102,7 +103,10 @@ export const api = {
     http.patch<{ id: string; name: string; baseUrl: string; model: string; enabled: boolean; hasKey: boolean }>(`/ai/providers/${id}`, body),
   aiDeleteProvider: (id: string) => http.del<{ ok: boolean }>(`/ai/providers/${id}`),
   aiSetCredential: (id: string, apiKey: string) => http.put<{ ok: boolean; hasKey: boolean }>(`/ai/providers/${id}/credential`, { apiKey }),
-  aiTestProvider: (providerId: string) => http.post<{ ok: boolean; detail: string }>('/ai/test', { providerId }),
+  aiTestProvider: (body: { providerId?: string; baseUrl?: string; apiKey?: string; model?: string; name?: string }) =>
+    http.post<AiTestResult>('/ai/test', body),
+  aiFetchModels: (body: { providerId?: string; baseUrl?: string; apiKey?: string }) =>
+    http.post<{ ok: boolean; models: string[] }>('/ai/models', body),
   aiCommitMessage: (body: { fileSummary: string; diff: string }) =>
     http.post<{ ok: boolean; subject: string; body: string; type: CommitType; provider?: string }>('/ai/commit-message', body),
   aiExplainDiff: (body: { filePath: string; diff: string }) =>

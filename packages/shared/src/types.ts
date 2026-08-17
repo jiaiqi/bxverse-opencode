@@ -405,3 +405,34 @@ export interface AiExplainDiffResult {
   risks: string[]
   provider?: string
 }
+
+// 扩展：R21 智能 AI 供应商预设与在线模型探测
+export type AiProviderCategory = 'domestic' | 'global' | 'aggregator' | 'local' | 'custom'
+
+export interface AiModelRecommendation {
+  id: string
+  label: string
+  description?: string
+  isDefault?: boolean
+}
+
+export interface AiProviderPreset {
+  key: string
+  name: string
+  category: AiProviderCategory
+  baseUrl: string
+  docUrl?: string
+  placeholderModel: string
+  recommendedModels: AiModelRecommendation[]
+  hint?: string
+  color?: string
+}
+
+export interface AiTestResult {
+  ok: boolean
+  latencyMs: number
+  model: string
+  reply: string
+  detail?: string
+  providerName?: string
+}
