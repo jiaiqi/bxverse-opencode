@@ -563,12 +563,14 @@ emits: { finished: [result: { releaseId: string; version: string; failedRepos: s
 ```ts
 props: {
   projectId: string
-  filename: string            // 默认文件名（如 versions.json / {version}-versions.json）
+  filename: string            // 默认文件名（如 version.json / {version}-version.json）
   loadItems: () => Promise<RepoVersionItem[]>   // 清单数据源（当前版本或某次发布快照）
   label?: string; size?: 'tiny'|'small'|'medium'; quaternary?: boolean
 }
 ```
 - 四个入口：**直接打开（预览）**（highlight.js 渲染 JSON，可复制/另存）、**另存为文件**（`useFsAccess().saveTextFile`：`showSaveFilePicker` 原生对话框，不支持或失败回退 anchor 下载，取消静默）、**写入项目仓库**（弹窗内 NSelect 选仓库 + DirPicker 点选目录 + 文件名（.json 校验）；`api.exportProjectVersions` 写入，**不 commit**，由用户自行提交）、**导出到本地目录**（`showDirectoryPicker` 原生目录选择器 + 句柄直写，无路径依赖）。
+- 菜单内置「**版本号格式**」开关（第 5 项，`i-carbon-tag`）：默认**完整**（`vX.Y.Z.YYMMDDHH`）；切换为**仅日期**后，四种方式导出的 `version` 字段为 `V` + 8 位时间戳（如 `V26081728`，从版本号末段提取；提取不到时间戳则原样保留）。选择记忆在 localStorage（key `bxverse-export-version-scheme`）。
+- **默认文件名** `version.json`（写入仓库/本地导出的默认值与 placeholder；项目页默认导出 `version.json`；发布历史行与发布完成页按版本号前缀 `{版本}-version.json`）。
 - localStorage 记住「写入项目仓库」上次选择：key `bxverse-export-{projectId}-{filename}`（repoId/dir/filename，仓库已不存在则回退第一个仓库）。
 - 触发按钮外层 `<div @click.stop>` 拦截点击冒泡——组件常嵌在可点击行（发布历史行）内，防止误触发行点击。
 
@@ -679,8 +681,10 @@ state: {
     external: { state: LogState; content: string }   // 初始 = plan.externalDraft, 'auto'
     internal: { state: LogState; content: string }   // 初始 = plan.internalDraft, 'auto'
   }
-  offline: boolean                       // 默认 false
-  skipBuild: boolean                     // 默认 false
+  offline: boolean                       // 默认 true（离线发布，默认不推送远程）
+  skipBuild: boolean                     // 默认 true（跳过构建命令）
+  backupSource: boolean                  // 默认 false（不备份源码）
+  backupArtifacts: boolean               // 默认 false（不备份产物）
   taskId: string | null
   events: PublishEvent[]
   phase: 'idle' | 'planning' | 'running' | 'done' | 'failed'
@@ -840,7 +844,7 @@ const routes = [
 远程：!offline && hasRemote → git push --tags（失败仅警告）
 ```
 
-步骤 4 顶部开关：`offline`（「离线发布（跳过远程推送）」）、`skipBuild`（「跳过构建命令」）——两个开关直接影响上方清单行（行灰显或标注「已跳过」）。
+步骤 4 顶部开关：`offline`（「离线发布（跳过远程推送）」）、`skipBuild`（「跳过构建命令」）、`backupSource`（「源码备份」）、`backupArtifacts`（「产物备份」）——**默认离线发布 + 跳过构建 + 不备份**（执行更快，可手动开启）；开关直接影响上方清单行（行灰显或标注「已跳过」）。
 
 步骤 5 执行请求：
 

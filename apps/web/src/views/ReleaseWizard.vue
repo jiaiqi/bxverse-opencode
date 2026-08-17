@@ -497,7 +497,7 @@ const resultReleaseId = computed(() => store.result?.releaseId ?? '')
             <VersionExportDropdown
               v-if="resultReleaseId"
               :project-id="projectId"
-              :filename="`${store.result!.version}-versions.json`"
+              :filename="`${store.result!.version}-version.json`"
               :load-items="() => api.releaseVersions(resultReleaseId)"
             />
             <NButton type="primary" secondary @click="store.reset(projectId); detect(); store.setSelected(changedRepoIds)">再次发布</NButton>

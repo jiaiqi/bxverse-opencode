@@ -4,6 +4,7 @@
 //   2. 写入项目仓库（弹窗内树形目录选择器点选目录）
 //   3. 导出到本地目录（showDirectoryPicker 原生选择器 + 句柄直写）
 //   4. 直接打开（弹窗内预览 version.json 内容，可复制/另存）
+// 菜单内置「版本号格式」开关：完整（vX.Y.Z.YYMMDDHH，默认）/ 仅日期（V + 8 位时间戳，如 V26081728）
 
 import hljs from 'highlight.js'
 import type { RepoVersionItem } from '@bxverse/shared'
@@ -36,11 +37,37 @@ const fs = useFsAccess()
 const project = computed(() => projectsStore.byId(props.projectId))
 const exporting = ref(false)
 
+// ---------- 版本号格式：完整（默认）/ 仅日期 ----------
+const schemeKey = 'bxverse-export-version-scheme'
+const dateOnly = ref(localStorage.getItem(schemeKey) === 'date')
+
+function toggleScheme(): void {
+  dateOnly.value = !dateOnly.value
+  localStorage.setItem(schemeKey, dateOnly.value ? 'date' : 'full')
+  message.success(dateOnly.value ? '已切换：版本号仅日期（V+8 位时间戳）' : '已切换：版本号完整（vX.Y.Z.YYMMDDHH）')
+}
+
+/** vX.Y.Z.YYMMDDHH / vYYMMDDHH → VYYMMDDHH；无法提取时间戳则原样保留 */
+function dateOnlyVersion(version: string): string {
+  const m = /^v?(\d+)\.(\d+)\.(\d+)\.(\d{8,10})$/.exec(version.trim())
+  if (m) return `V${m[4]}`
+  const t = /^v?(\d{8,10})$/.exec(version.trim())
+  if (t) return `V${t[1]}`
+  return version
+}
+
+/** 按当前格式开关处理清单（仅日期时改写 version 字段） */
+async function itemsForExport(): Promise<RepoVersionItem[]> {
+  const raw = await props.loadItems()
+  if (!dateOnly.value) return raw
+  return raw.map(it => ({ ...it, version: dateOnlyVersion(it.version) }))
+}
+
 // ---------- 方式一：另存为 ----------
 async function exportDownload() {
   exporting.value = true
   try {
-    const items = await props.loadItems()
+    const items = await itemsForExport()
     const content = `${JSON.stringify(items, null, 2)}\n`
     const result = await fs.saveTextFile(props.filename, content)
     if (result !== 'cancelled') {
@@ -55,7 +82,7 @@ async function exportDownload() {
 
 // ---------- 方式二：写入项目仓库 ----------
 const showWrite = ref(false)
-const writeForm = reactive({ repoId: '', dir: '', filename: 'versions.json' })
+const writeForm = reactive({ repoId: '', dir: '', filename: 'version.json' })
 const writeSaving = ref(false)
 
 function openWrite() {
@@ -83,7 +110,7 @@ async function submitWrite() {
   writeSaving.value = true
   try {
     // 传递快照/当前清单内容，保证写入的是用户所见清单（历史导出不重新采集）
-    const items = await props.loadItems()
+    const items = await itemsForExport()
     const result = await api.exportProjectVersions(props.projectId, {
       repoId: writeForm.repoId,
       path: writePath.value,
@@ -105,7 +132,7 @@ async function submitWrite() {
 
 // ---------- 方式三：导出到本地目录 ----------
 const showLocal = ref(false)
-const localForm = reactive({ dirName: '', dirHandle: null as FileSystemDirectoryHandle | null, filename: 'versions.json' })
+const localForm = reactive({ dirName: '', dirHandle: null as FileSystemDirectoryHandle | null, filename: 'version.json' })
 const localSaving = ref(false)
 
 async function pickLocalDir() {
@@ -123,7 +150,7 @@ async function submitLocal() {
   }
   localSaving.value = true
   try {
-    const items = await props.loadItems()
+    const items = await itemsForExport()
     const content = `${JSON.stringify(items, null, 2)}\n`
     await fs.writeToDirectory(localForm.dirHandle, localForm.filename.trim(), content)
     showLocal.value = false
@@ -154,7 +181,7 @@ async function openPreview() {
   previewLoading.value = true
   previewContent.value = ''
   try {
-    const items = await props.loadItems()
+    const items = await itemsForExport()
     previewContent.value = `${JSON.stringify(items, null, 2)}\n`
   } catch (e) {
     message.error((e as Error).message)
@@ -180,15 +207,22 @@ async function downloadPreview() {
   }
 }
 
-const exportOptions = [
+const exportOptions = computed(() => [
   { label: '直接打开（预览内容）', key: 'preview', icon: () => h('i', { class: 'i-carbon-view text-16px' }) },
   { label: '另存为文件（原生对话框）', key: 'download', icon: () => h('i', { class: 'i-carbon-download text-16px' }) },
   { label: '写入项目仓库（选择目录）', key: 'write', icon: () => h('i', { class: 'i-carbon-folder-add text-16px' }) },
   { label: '导出到本地目录（原生选择器）', key: 'local', icon: () => h('i', { class: 'i-carbon-save text-16px' }) },
-]
+  {
+    label: dateOnly.value ? '版本号格式：仅日期（V+8 位时间戳）' : '版本号格式：完整（vX.Y.Z.YYMMDDHH）',
+    key: 'scheme',
+    icon: () => h('i', { class: 'i-carbon-tag text-16px' }),
+  },
+])
 
 function onSelect(key: string) {
-  if (key === 'preview') void openPreview()
+  if (key === 'scheme') {
+    toggleScheme()
+  } else if (key === 'preview') void openPreview()
   else if (key === 'download') void exportDownload()
   else if (key === 'write') openWrite()
   else {
@@ -260,7 +294,7 @@ function onSelect(key: string) {
       </div>
       <div>
         <div class="text-sm font-medium text-text-1 mb-1.5">文件名</div>
-        <NInput v-model:value="writeForm.filename" placeholder="versions.json" />
+        <NInput v-model:value="writeForm.filename" placeholder="version.json" />
         <div class="text-xs text-text-3 mt-1.5">
           写入路径：<span class="code-text text-brand-600">{{ writePath }}</span>（不 commit，由你自行提交）
         </div>
@@ -297,7 +331,7 @@ function onSelect(key: string) {
       </div>
       <div>
         <div class="text-sm font-medium text-text-1 mb-1.5">文件名</div>
-        <NInput v-model:value="localForm.filename" placeholder="versions.json" />
+        <NInput v-model:value="localForm.filename" placeholder="version.json" />
       </div>
     </div>
     <template #footer>

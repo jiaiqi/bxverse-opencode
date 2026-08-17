@@ -148,7 +148,7 @@ usePolling(async () => {
         </NButton>
         <VersionExportDropdown
           :project-id="projectId"
-          filename="versions.json"
+          filename="version.json"
           :load-items="() => api.projectVersions(projectId)"
         />
         <NButton quaternary @click="showEdit = true">
@@ -219,7 +219,7 @@ usePolling(async () => {
                 <span class="flex-1" />
                 <VersionExportDropdown
                   :project-id="projectId"
-                  :filename="`${r.version}-versions.json`"
+                  :filename="`${r.version}-version.json`"
                   :load-items="() => api.releaseVersions(r.id)"
                   label="版本清单"
                   size="tiny"
