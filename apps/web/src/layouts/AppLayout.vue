@@ -1,214 +1,227 @@
 <script setup lang="ts">
-// AppLayout.vue —— 侧栏 + 顶栏布局壳（R20 顶栏：页标题/命令面板/服务状态/主题/同步/新建）
+// AppLayout.vue —— 全景驾驶舱布局壳（次世代深空暗夜架构）
 
-import { RouterLink } from 'vue-router'
+import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { useMessage } from 'naive-ui'
-import { useAppStore } from '../stores/app'
+
 import { useProjectsStore } from '../stores/projects'
 import { useUiStore } from '../stores/ui'
 import AddProjectDialog from '../components/AddProjectDialog.vue'
-import RuntimeStatus from '../components/RuntimeStatus.vue'
+import AddRepoDialog from '../components/AddRepoDialog.vue'
 
 const route = useRoute()
-const appStore = useAppStore()
+const router = useRouter()
 const projectsStore = useProjectsStore()
 const uiStore = useUiStore()
 const message = useMessage()
+
 const showAddProject = ref(false)
+const showAddRepo = ref(false)
+const showProjectMenu = ref(false)
 const syncing = ref(false)
-const collapsed = ref(false)
 
-const pageTitle = computed(() => String(route.meta.title ?? ''))
+const currentProjectId = computed(() => String(route.params.id || projectsStore.items[0]?.id || ''))
+const currentProject = computed(() => projectsStore.byId(currentProjectId.value) || projectsStore.items[0] || null)
 
-const themeTarget = computed(() => {
-  // wenxi 风格下点击切回 indigo（保留当前 mode 语义）；indigo 下循环 mode
-  if (appStore.themeStyle === 'wenxi') return null
-  const mode = appStore.themeMode
-  return mode === 'light' ? 'dark' : mode === 'dark' ? 'system' : 'light'
-})
-const themeIcon = computed(() => {
-  if (appStore.themeStyle === 'wenxi') return 'i-carbon-color-palette'
-  return appStore.themeMode === 'light' ? 'i-carbon-sun' : appStore.themeMode === 'dark' ? 'i-carbon-moon' : 'i-carbon-screen'
-})
-const themeLabel = computed(() => {
-  if (appStore.themeStyle === 'wenxi') return 'WenXi'
-  return appStore.themeMode
-})
-const themeTitle = computed(() =>
-  appStore.themeStyle === 'wenxi' ? '主题风格：WenXi 深色玻璃拟态（点击切回靛蓝套件）' : `主题：${appStore.themeMode}（点击切换）`,
-)
-
-async function cycleTheme() {
-  if (appStore.themeStyle === 'wenxi') {
-    await appStore.setThemeStyle('indigo')
-    return
-  }
-  await appStore.setTheme(themeTarget.value as 'light' | 'dark' | 'system')
+const navItems = computed(() => [
+  { id: 'dashboard', to: '/', icon: 'i-carbon-dashboard', label: '总览看板', shortLabel: '看板' },
+  { id: 'project', to: currentProject.value ? `/project/${currentProject.value.id}` : '/', icon: 'i-carbon-catalog', label: '项目与仓库', shortLabel: '项目台' },
+  { id: 'release', to: currentProject.value ? `/project/${currentProject.value.id}/release` : '/', icon: 'i-carbon-rocket', label: '统一发版向导', shortLabel: '发版向导' },
+  { id: 'backups', to: currentProject.value ? `/project/${currentProject.value.id}/backups` : '/', icon: 'i-carbon-security', label: '备份审计对比', shortLabel: '审计比' },
+  { id: 'settings', to: '/settings', icon: 'i-carbon-settings', label: '系统与 AI 中枢', shortLabel: '设置' },
+])
+function selectProject(id: string) {
+  showProjectMenu.value = false
+  router.push(`/project/${id}`)
 }
 
-async function syncData() {
+async function syncData(action: 'pull' | 'push') {
   syncing.value = true
   try {
-    const result = await import('../api').then(m => m.api.sync('pull'))
-    message.success(result.ok ? '数据仓库已同步' : `同步失败：${String(result.message ?? '')}`)
+    const result = await import('../api').then(m => m.api.sync(action))
+    message.success(result.ok ? `数据仓库 ${action === 'pull' ? '拉取' : '推送'} 成功` : `失败: ${String(result.message ?? '')}`)
   } catch (e) {
     message.error((e as Error).message)
   } finally {
     syncing.value = false
   }
 }
+
+function triggerFastRelease() {
+  if (currentProject.value) {
+    router.push(`/project/${currentProject.value.id}/release`)
+  } else {
+    showAddProject.value = true
+  }
+}
 </script>
 
 <template>
-  <div class="flex h-screen overflow-hidden">
-    <!-- 跳过导航 -->
-    <a href="#main-content" class="sr-only focus:not-sr-only focus:absolute focus:z-50 focus:top-2 focus:left-2 focus:bg-surface focus:px-3 focus:py-2 focus:rounded-md focus:border focus:border-brand-500">
-      跳到主内容
-    </a>
-
-    <!-- 侧栏 -->
-    <aside
-      class="sidebar flex flex-col shrink-0 bg-surface border-r border-border transition-[width] duration-200"
-      :class="collapsed ? 'w-14' : 'w-58'"
-    >
-      <!-- Logo -->
-      <RouterLink to="/" class="flex items-center gap-2.5 px-4 h-14 shrink-0 no-underline hover:bg-surface-hover transition-colors duration-150" :class="collapsed ? 'justify-center px-0' : ''">
-        <span class="sb-logo-mark"><i aria-hidden="true" class="i-carbon-cube text-13px" /></span>
-        <template v-if="!collapsed">
-          <span class="font-semibold text-13.5px text-text-1 leading-4 whitespace-nowrap">
-            BX 版本管理台
-            <small class="block text-10px font-normal text-text-3 tracking-widest font-mono">BXVERSE · LOCAL</small>
+  <div class="flex flex-col h-screen overflow-hidden bg-bg font-sans select-none text-text-1">
+    <!-- 顶栏全局控制台 -->
+    <header class="h-12 border-b border-border bg-surface/90 backdrop-blur px-4 flex items-center justify-between shrink-0 z-30">
+      <!-- 左：Logo 与项目切换器 -->
+      <div class="flex items-center gap-3">
+        <RouterLink to="/" class="flex items-center gap-2 no-underline text-inherit cursor-pointer">
+          <div class="w-6 h-6 rounded-md bg-gradient-to-br from-brand-400 via-info to-brand-600 flex items-center justify-center text-black font-bold text-xs shadow-sm">
+            <i aria-hidden="true" class="i-carbon-cube text-13px" />
+          </div>
+          <span class="font-bold tracking-tight text-text-1 font-mono text-sm">
+            BXVERSE<span class="text-brand-500 ml-1 text-xs font-sans px-1.5 py-0.2 rounded bg-brand-soft border border-brand-200">Next</span>
           </span>
-        </template>
-      </RouterLink>
-
-      <!-- 导航 -->
-      <nav class="flex-1 overflow-y-auto px-2.5 py-2 space-y-1" aria-label="主导航">
-        <RouterLink
-          to="/"
-          class="sidebar-item no-underline"
-          :class="{ 'sidebar-item-active': route.path === '/' }"
-        >
-          <i aria-hidden="true" class="i-carbon-dashboard sidebar-icon" />
-          <span v-if="!collapsed">总览</span>
         </RouterLink>
 
-        <!-- 项目分组 -->
-        <div v-if="!collapsed" class="flex items-center justify-between px-3 pt-4 pb-1">
-          <span class="text-xs text-text-3">项目</span>
+        <div class="h-4 w-px bg-border"></div>
+
+        <!-- 项目选择器下拉 -->
+        <div class="relative">
           <button
-            class="w-6 h-6 flex items-center justify-center rounded-md text-text-3 hover:text-brand-500 hover:bg-surface-hover transition-colors duration-150 bg-transparent"
-            aria-label="新建项目"
-            @click="showAddProject = true"
+            @click="showProjectMenu = !showProjectMenu"
+            class="flex items-center gap-2 px-2.5 py-1 rounded-md bg-surface-hover hover:bg-surface-alt border border-border text-xs transition-colors cursor-pointer text-text-1"
           >
-            <i aria-hidden="true" class="i-carbon-add text-14px" />
+            <span class="w-2 h-2 rounded-full bg-brand-500"></span>
+            <span class="font-medium text-text-1">{{ currentProject ? currentProject.name : '请创建项目' }}</span>
+            <span v-if="currentProject" class="font-mono text-text-3 text-[10px]">{{ currentProject.version }}</span>
+            <i aria-hidden="true" class="i-carbon-chevron-down text-text-3 text-12px" />
           </button>
-        </div>
-        <div v-else class="pt-4 pb-1 flex justify-center">
-          <button
-            class="w-6 h-6 flex items-center justify-center rounded-md text-text-3 hover:text-brand-500 hover:bg-surface-hover transition-colors duration-150 bg-transparent"
-            aria-label="新建项目"
-            @click="showAddProject = true"
+
+          <!-- 下拉菜单 -->
+          <div
+            v-if="showProjectMenu"
+            class="absolute top-8 left-0 w-72 bg-surface border border-border-strong rounded-xl shadow-lg p-2 z-50 animate-fadeIn"
           >
-            <i aria-hidden="true" class="i-carbon-add text-14px" />
-          </button>
+            <div class="flex items-center justify-between px-2 py-1 text-[10px] font-mono text-text-3 uppercase">
+              <span>业务项目 ({{ projectsStore.items.length }})</span>
+              <button @click="showAddProject = true; showProjectMenu = false" class="text-brand-500 hover:underline flex items-center gap-0.5 bg-transparent border-0 cursor-pointer">
+                <i aria-hidden="true" class="i-carbon-add text-12px" /> 新建项目
+              </button>
+            </div>
+
+            <div class="space-y-1 my-1 max-h-60 overflow-y-auto">
+              <div
+                v-for="p in projectsStore.items"
+                :key="p.id"
+                @click="selectProject(p.id)"
+                class="flex items-center justify-between p-2 rounded-lg hover:bg-surface-hover cursor-pointer transition-colors"
+                :class="{ 'bg-surface-hover border border-brand-300 text-brand-600': currentProject?.id === p.id }"
+              >
+                <div class="flex items-center gap-2 truncate">
+                  <span class="w-1.5 h-1.5 rounded-full" :class="currentProject?.id === p.id ? 'bg-brand-500' : 'bg-text-3'"></span>
+                  <div class="truncate">
+                    <div class="text-xs truncate font-semibold text-text-1">{{ p.name }}</div>
+                    <div class="text-[10px] font-mono text-text-3 truncate">{{ p.repos.length }} 个工程 · {{ p.version }}</div>
+                  </div>
+                </div>
+                <i aria-hidden="true" class="i-carbon-chevron-right text-text-3 text-12px" />
+              </div>
+            </div>
+          </div>
         </div>
-        <RouterLink
-          v-for="p in projectsStore.items"
-          :key="p.id"
-          :to="`/project/${p.id}`"
-          class="sidebar-item no-underline"
-          :class="{ 'sidebar-item-active': route.params.id === p.id }"
-          :title="p.name"
+      </div>
+
+      <!-- 中：全系统命令面板搜索框 (Ctrl+K) -->
+      <div class="flex-1 max-w-md mx-4">
+        <button
+          @click="uiStore.togglePalette(true)"
+          class="w-full flex items-center justify-between px-3 py-1 rounded-md bg-surface-alt hover:bg-surface-hover border border-border text-text-3 text-xs transition-all cursor-pointer"
         >
-          <i aria-hidden="true" class="i-carbon-catalog sidebar-icon" />
-          <span v-if="!collapsed" class="flex-1 truncate">{{ p.name }}</span>
-          <span
-            v-if="projectsStore.overview?.projects.find(x => x.id === p.id)?.changedRepoCount"
-            class="w-2 h-2 rounded-full bg-brand-500 shrink-0"
-            title="有仓库待发布"
-          />
-        </RouterLink>
-        <div v-if="!projectsStore.loading && projectsStore.items.length === 0" class="px-3 py-2 text-xs text-text-3">
-          {{ collapsed ? '' : '暂无项目' }}
+          <div class="flex items-center gap-2">
+            <i aria-hidden="true" class="i-carbon-search text-text-3" />
+            <span>搜索仓库、操作、版本或输入指令…</span>
+          </div>
+          <kbd class="px-1.5 py-0.5 text-[10px] font-mono rounded bg-surface border border-border text-text-3">Ctrl K</kbd>
+        </button>
+      </div>
+
+      <!-- 右：快捷操作、AI 状态、数据仓库同步、一键发版 -->
+      <div class="flex items-center gap-2.5">
+        <!-- 接入仓库快捷按钮 -->
+        <button
+          v-if="currentProject"
+          @click="showAddRepo = true"
+          class="flex items-center gap-1 px-2.5 py-1 rounded-md bg-surface-hover hover:bg-surface-alt border border-border text-xs text-info hover:text-text-1 transition-colors cursor-pointer"
+          title="向当前项目接入新 Git 仓库"
+        >
+          <i aria-hidden="true" class="i-carbon-branch text-12px" />
+          <span>接入仓库</span>
+        </button>
+
+        <!-- 新建项目 -->
+        <button
+          @click="showAddProject = true"
+          class="flex items-center gap-1 px-2.5 py-1 rounded-md bg-surface-hover hover:bg-surface-alt border border-border text-xs text-text-2 hover:text-text-1 transition-colors cursor-pointer"
+          title="创建新业务项目"
+        >
+          <i aria-hidden="true" class="i-carbon-add text-12px text-brand-500" />
+          <span>新建项目</span>
+        </button>
+
+        <!-- 数据仓库 Git 同步 -->
+        <div class="flex items-center gap-1 bg-surface-hover border border-border rounded-md px-1.5 py-0.5 text-xs font-mono text-text-3">
+          <button @click="syncData('pull')" class="p-0.5 hover:text-text-1 bg-transparent border-0 cursor-pointer" title="从远程数据仓库拉取 (git pull)">
+            <i aria-hidden="true" class="i-carbon-cloud-download text-12px" />
+          </button>
+          <button @click="syncData('push')" class="p-0.5 hover:text-text-1 bg-transparent border-0 cursor-pointer" title="向远程数据仓库推送 (git push)">
+            <i aria-hidden="true" class="i-carbon-cloud-upload text-12px" />
+          </button>
+        </div>
+
+        <!-- 守护进程 -->
+        <div class="flex items-center gap-1.5 text-[11px] font-mono text-text-3 px-2 py-0.5 rounded bg-surface-hover border border-border">
+          <span class="w-1.5 h-1.5 rounded-full bg-brand-500"></span>
+          <span>127.0.0.1:8899</span>
+        </div>
+
+        <div class="h-4 w-px bg-border"></div>
+
+        <!-- 一键统一发布大按钮 -->
+        <button
+          @click="triggerFastRelease"
+          class="btn-primary h-7.5 px-3.5 text-xs font-bold font-mono"
+        >
+          <i aria-hidden="true" class="i-carbon-rocket text-13px" />
+          <span>统一发版</span>
+        </button>
+      </div>
+    </header>
+
+    <!-- 核心全景工作台主体（左侧导航 + 视口） -->
+    <div class="flex-1 flex overflow-hidden">
+      <!-- 极简模式左导航 -->
+      <nav class="w-16 border-r border-border bg-surface flex flex-col items-center py-3 justify-between shrink-0">
+        <div class="space-y-3">
+          <RouterLink
+            v-for="nav in navItems"
+            :key="nav.id"
+            :to="nav.to"
+            class="w-10 h-10 rounded-xl flex flex-col items-center justify-center transition-all group relative no-underline text-inherit cursor-pointer"
+            :class="(route.path === nav.to || (nav.id === 'project' && route.path.startsWith('/project/') && !route.path.includes('/release') && !route.path.includes('/backups')) || (nav.id === 'release' && route.path.includes('/release')) || (nav.id === 'backups' && route.path.includes('/backups'))) ? 'bg-brand-soft text-brand-600 border border-brand-200 font-semibold' : 'text-text-3 hover:bg-surface-hover hover:text-text-1 border border-transparent'"
+            :title="nav.label"
+          >
+            <i aria-hidden="true" class="text-16px" :class="nav.icon" />
+            <span class="text-[9px] font-mono mt-0.5">{{ nav.shortLabel }}</span>
+          </RouterLink>
+        </div>
+
+        <div class="space-y-2">
+          <RouterLink
+            to="/settings"
+            class="w-10 h-10 rounded-xl flex items-center justify-center text-text-3 hover:bg-surface-hover hover:text-text-1 no-underline"
+            :class="{ 'bg-brand-soft text-brand-600': route.path === '/settings' }"
+            title="系统与 AI 设置"
+          >
+            <i aria-hidden="true" class="i-carbon-settings text-16px" />
+          </RouterLink>
         </div>
       </nav>
 
-      <!-- 底部 -->
-      <div class="sb-foot px-2.5 py-2 border-t border-border space-y-1 shrink-0">
-        <RouterLink
-          to="/settings"
-          class="sidebar-item w-full text-left no-underline"
-          :class="{ 'sidebar-item-active': route.path === '/settings' }"
-        >
-          <i aria-hidden="true" class="i-carbon-settings sidebar-icon" />
-          <span v-if="!collapsed" class="flex-1">设置</span>
-        </RouterLink>
-        <button class="sidebar-item w-full text-left" :title="themeTitle" @click="cycleTheme">
-          <i aria-hidden="true" class="sidebar-icon" :class="themeIcon" />
-          <span v-if="!collapsed" class="flex-1">主题</span>
-          <span v-if="!collapsed" class="text-xs text-text-3">{{ themeLabel }}</span>
-        </button>
-        <button class="sidebar-item w-full text-left" @click="uiStore.togglePalette(true)">
-          <i aria-hidden="true" class="i-carbon-search sidebar-icon" />
-          <span v-if="!collapsed" class="flex-1">命令面板</span>
-          <span v-if="!collapsed" class="sb-kbd">Ctrl K</span>
-        </button>
-      </div>
-    </aside>
-
-    <!-- 顶栏 + 内容区 -->
-    <div class="flex-1 flex flex-col min-w-0">
-      <header class="topbar flex items-center gap-3 px-6 h-14 shrink-0 bg-surface border-b border-border">
-        <div class="flex items-baseline gap-2 min-w-0">
-          <span class="text-14px font-semibold text-text-1 truncate">{{ pageTitle }}</span>
-          <span v-if="!collapsed" class="hidden md:block text-11px text-text-3 whitespace-nowrap">BX 版本管理台 · 本地</span>
-        </div>
-        <div class="flex-1" />
-
-        <!-- 命令面板搜索（Ctrl+K） -->
-        <button
-          class="hidden md:flex items-center gap-2 h-8 px-3.5 rounded-[var(--bx-radius-md)] text-xs text-text-3 border border-border bg-surface-hover hover:border-border-strong hover:text-text-2 transition-[border-color,box-shadow] duration-140 ease-[cubic-bezier(0.23,1,0.32,1)] focus-ring w-56"
-          @click="uiStore.togglePalette(true)"
-        >
-          <i aria-hidden="true" class="i-carbon-search text-13px" />
-          搜索项目 / 仓库 / 版本…
-          <span class="sb-kbd ml-auto">Ctrl K</span>
-        </button>
-
-        <RuntimeStatus />
-
-        <div class="w-px h-5 bg-border shrink-0" aria-hidden="true" />
-
-        <button
-          class="w-8 h-8 flex items-center justify-center rounded-md text-text-3 hover:text-text-1 hover:bg-surface-hover transition-colors duration-150 focus-ring"
-          :title="themeTitle"
-          aria-label="切换主题"
-          @click="cycleTheme"
-        >
-          <i aria-hidden="true" class="text-16px" :class="themeIcon" />
-        </button>
-
-        <button
-          class="inline-flex items-center gap-1.5 h-8 px-3.5 rounded-[var(--bx-radius-btn)] text-xs text-text-2 border border-border hover:border-border-strong hover:text-text-1 hover:bg-surface-hover transition-colors duration-150 focus-ring"
-          :disabled="syncing"
-          @click="syncData"
-        >
-          <i aria-hidden="true" class="i-carbon-renew text-13px" :class="{ 'animate-spin': syncing }" />
-          <span class="hidden lg:inline">同步数据</span>
-        </button>
-
-        <button class="btn-primary h-8 px-3.5 text-xs" @click="showAddProject = true">
-          <i aria-hidden="true" class="i-carbon-add text-13px" />
-          <span class="hidden lg:inline">新建项目</span>
-        </button>
-      </header>
-
-      <main id="main-content" class="flex-1 overflow-y-auto" tabindex="-1">
+      <!-- 主视口内容区 -->
+      <main id="main-content" class="flex-1 overflow-y-auto bg-bg" tabindex="-1">
         <slot />
       </main>
     </div>
 
-    <AddProjectDialog v-model:show="showAddProject" />
+    <AddProjectDialog v-model:show="showAddProject" @saved="projectsStore.load()" />
+    <AddRepoDialog v-if="currentProject" v-model:show="showAddRepo" :project-id="currentProject.id" @added="projectsStore.load()" />
   </div>
 </template>
