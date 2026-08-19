@@ -381,7 +381,7 @@ const resultReleaseId = computed(() => store.result?.releaseId ?? '')
         </div>
 
         <!-- 6 步时间轴 -->
-        <div class="grid grid-cols-6 gap-2 pt-2">
+        <div class="flex items-stretch gap-2 pt-2 overflow-x-auto">
           <div
             v-for="(st, idx) in [
               { title: '检测变更', desc: 'Preflight' },
@@ -392,7 +392,7 @@ const resultReleaseId = computed(() => store.result?.releaseId ?? '')
               { title: '完成归档', desc: 'Done' }
             ]"
             :key="idx"
-            class="flex flex-col items-center text-center cursor-pointer"
+            class="flex flex-col items-center text-center cursor-pointer min-w-[80px] flex-1"
             @click="idx + 1 < store.step && (store.step = idx + 1)"
           >
             <div
@@ -433,10 +433,12 @@ const resultReleaseId = computed(() => store.result?.releaseId ?? '')
               </div>
               <div class="flex items-center gap-2 shrink-0">
                 <NButton size="tiny" type="warning" @click="doBatchCheckout(branchAlignment.defaultBranch)">
-                  ⚡ 一键切至主分支
+                  <template #icon><i aria-hidden="true" class="i-carbon-reset" /></template>
+                  一键切至主分支
                 </NButton>
                 <NButton size="tiny" quaternary @click="doBatchPull">
-                  ↓ 批量快进拉取
+                  <template #icon><i aria-hidden="true" class="i-carbon-cloud-download" /></template>
+                  批量快进拉取
                 </NButton>
               </div>
             </div>
@@ -692,6 +694,12 @@ const resultReleaseId = computed(() => store.result?.releaseId ?? '')
                 <NAlert type="warning" :show-icon="true" class="text-left">
                   以下仓库发布失败（未更新检测基准，可下次重新发布）：
                   {{ store.result.failedRepos.join('、') }}
+                </NAlert>
+              </div>
+              <div v-if="store.result.syncFailedRepos?.length" class="mt-3">
+                <NAlert type="warning" :show-icon="true" class="text-left">
+                  以下仓库基版同步失败（version.json 未更新为最新项目版本）：
+                  {{ store.result.syncFailedRepos.join('、') }}
                 </NAlert>
               </div>
             </div>

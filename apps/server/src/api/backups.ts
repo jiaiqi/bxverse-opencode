@@ -144,19 +144,32 @@ export function register(
     if (!meta) throw apiError(404, 'NOT_FOUND', '备份元数据不存在')
 
     const dir = backupDirOf(cfg, meta)
-    const files = meta.items.map(i => ({
-      path: i.file,
-      status: ((): 'same' | 'modified' | 'removed' => {
-        const abs = path.join(dir, i.file)
-        if (!fs.existsSync(abs)) return 'removed'
-        try {
-          const st = fs.statSync(abs)
-          return st.size === i.size ? 'same' : 'modified'
-        } catch {
-          return 'removed'
+    const files = await Promise.all(meta.items.map(async (i) => {
+      const abs = path.join(dir, i.file)
+      if (!fs.existsSync(abs)) {
+        return {
+          path: i.file,
+          status: 'removed' as const,
+          left: { sha256: i.sha256, size: i.size },
         }
-      })(),
-      left: { sha256: i.sha256, size: i.size },
+      }
+      try {
+        const stat = fs.statSync(abs)
+        const sha256 = await backup.hashFile(abs)
+        const same = stat.size === i.size && sha256 === i.sha256
+        return {
+          path: i.file,
+          status: same ? 'same' as const : 'modified' as const,
+          left: { sha256: i.sha256, size: i.size },
+          right: { sha256, size: stat.size },
+        }
+      } catch {
+        return {
+          path: i.file,
+          status: 'removed' as const,
+          left: { sha256: i.sha256, size: i.size },
+        }
+      }
     }))
     const totals = {
       added: 0,

@@ -20,7 +20,8 @@ const showAddRepo = ref(false)
 const showProjectMenu = ref(false)
 const syncing = ref(false)
 
-const currentProjectId = computed(() => String(route.params.id || projectsStore.items[0]?.id || ''))
+// 优先读取 route.params.pid（仓库详情页 /repo/:pid/:rid），其次 route.params.id（项目详情页 /project/:id），最后回退到首个项目
+const currentProjectId = computed(() => String(route.params.pid || route.params.id || projectsStore.items[0]?.id || ''))
 const currentProject = computed(() => projectsStore.byId(currentProjectId.value) || projectsStore.items[0] || null)
 
 const navItems = computed(() => [
@@ -98,12 +99,13 @@ function triggerFastRelease() {
             </div>
 
             <div class="space-y-1 my-1 max-h-60 overflow-y-auto">
-              <div
+              <button
                 v-for="p in projectsStore.items"
                 :key="p.id"
                 @click="selectProject(p.id)"
-                class="flex items-center justify-between p-2 rounded-lg hover:bg-surface-hover cursor-pointer transition-colors"
+                class="flex items-center justify-between p-2 rounded-lg hover:bg-surface-hover cursor-pointer transition-colors w-full text-left border-0 bg-transparent focus-ring"
                 :class="{ 'bg-surface-hover border border-brand-300 text-brand-600': currentProject?.id === p.id }"
+                :aria-label="`切换到项目 ${p.name}`"
               >
                 <div class="flex items-center gap-2 truncate">
                   <span class="w-1.5 h-1.5 rounded-full" :class="currentProject?.id === p.id ? 'bg-brand-500' : 'bg-text-3'"></span>
@@ -113,7 +115,7 @@ function triggerFastRelease() {
                   </div>
                 </div>
                 <i aria-hidden="true" class="i-carbon-chevron-right text-text-3 text-12px" />
-              </div>
+              </button>
             </div>
           </div>
         </div>
@@ -158,10 +160,10 @@ function triggerFastRelease() {
 
         <!-- 数据仓库 Git 同步 -->
         <div class="flex items-center gap-1 bg-surface-hover border border-border rounded-md px-1.5 py-0.5 text-xs font-mono text-text-3">
-          <button @click="syncData('pull')" class="p-0.5 hover:text-text-1 bg-transparent border-0 cursor-pointer" title="从远程数据仓库拉取 (git pull)">
+          <button @click="syncData('pull')" :disabled="syncing" class="p-0.5 hover:text-text-1 bg-transparent border-0 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed" title="从远程数据仓库拉取 (git pull)" aria-label="拉取数据仓库">
             <i aria-hidden="true" class="i-carbon-cloud-download text-12px" />
           </button>
-          <button @click="syncData('push')" class="p-0.5 hover:text-text-1 bg-transparent border-0 cursor-pointer" title="向远程数据仓库推送 (git push)">
+          <button @click="syncData('push')" :disabled="syncing" class="p-0.5 hover:text-text-1 bg-transparent border-0 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed" title="向远程数据仓库推送 (git push)" aria-label="推送数据仓库">
             <i aria-hidden="true" class="i-carbon-cloud-upload text-12px" />
           </button>
         </div>

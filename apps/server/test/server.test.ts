@@ -441,7 +441,12 @@ describe('AI 日志润色（/api/ai/polish）', () => {
         const addr = stub!.address() as { port: number }
         const base = `http://127.0.0.1:${addr.port}`
         void client.post('/api/config', { ai: { enabled: true, baseUrl: base, model: 'stub-model', apiKey: '' } })
-          .then(() => resolve())
+          .then(async () => {
+            const providers = await client.get('/api/ai/providers')
+            const provider = (providers.body as { id: string }[])[0]
+            await client.post(`/api/ai/providers/${provider.id}/credential`, { apiKey: 'test-key' })
+            resolve()
+          })
       })
     })
     const { status, body } = await client.post('/api/ai/polish', { text: 'hello world' })

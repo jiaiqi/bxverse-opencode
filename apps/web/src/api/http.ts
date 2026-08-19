@@ -1,5 +1,5 @@
 // apps/web/src/api/http.ts
-// HTTP 客户端：token 注入（sessionStorage 持久）、401 自动重新引导、错误归一、SSE 流式订阅
+// HTTP 客户端：token 注入、401 引导、错误归一、SSE 流式订阅
 
 export class ApiError extends Error {
   code: string
@@ -21,7 +21,7 @@ export const setToken = (t: string): void => {
   sessionStorage.setItem(TOKEN_KEY, t)
 }
 
-/** 引导：GET /api/config 拿 token（唯一免 token 端点） */
+/** 引导：GET /api/config 拿 token */
 export async function bootstrap(): Promise<boolean> {
   try {
     const res = await fetch('/api/config', { cache: 'no-store' })
@@ -42,31 +42,20 @@ interface RequestOptions {
 async function request<T>(method: string, path: string, opts: RequestOptions = {}): Promise<T> {
   const headers: Record<string, string> = {}
   if (token) headers['X-BX-Token'] = token
-  // 非 GET/HEAD 一律带 JSON Content-Type（服务端 CSRF 校验要求，DELETE 无 body 也必须带）
   if (method !== 'GET' && method !== 'HEAD') headers['Content-Type'] = 'application/json'
-  let payload: string | undefined
-  if (opts.body !== undefined) {
-    payload = JSON.stringify(opts.body)
-  }
+  const payload = opts.body === undefined ? undefined : JSON.stringify(opts.body)
   const res = await fetch(`/api${path}`, { method, headers, body: payload, cache: 'no-store' })
   if (res.status === 401 && !opts.skipRetry) {
-    // 会话失效：重新引导一次后重试
-    if (await bootstrap()) {
-      return request<T>(method, path, { ...opts, skipRetry: true })
-    }
+    if (await bootstrap()) return request<T>(method, path, { ...opts, skipRetry: true })
     throw new ApiError('UNAUTHORIZED', 401, '会话失效，请刷新页面重试')
   }
   if (!res.ok) {
     let body: { error?: string; code?: string } | null = null
-    try {
-      body = await res.json()
-    } catch {
-      body = null
-    }
+    try { body = await res.json() as { error?: string; code?: string } } catch { body = null }
     throw new ApiError(body?.code ?? 'INTERNAL', res.status, body?.error ?? `请求失败（${res.status}）`)
   }
   if (res.status === 204) return undefined as T
-  return (await res.json()) as T
+  return await res.json() as T
 }
 
 export const http = {
@@ -77,37 +66,21 @@ export const http = {
   del: <T>(path: string) => request<T>('DELETE', path),
 }
 
-/**
- * 附件下载（带 token）：返回 blob 与文件名（解析 Content-Disposition）。
- * 前端触发浏览器另存为（备份文件较大，不走 JSON）。
- */
 export async function download(path: string): Promise<{ blob: Blob; filename: string }> {
-  const headers: Record<string, string> = {}
-  if (token) headers['X-BX-Token'] = token
-  const res = await fetch(`/api${path}`, { headers, cache: 'no-store' })
-  if (!res.ok) {
-    let code = 'DOWNLOAD_FAILED'
-    try {
-      const body = (await res.json()) as { code?: string }
-      code = body.code ?? code
-    } catch { /* 非 JSON 错误体 */ }
-    throw new ApiError(code, res.status, `下载失败（${res.status}）`)
-  }
+  const res = await fetch(`/api${path}`, { headers: token ? { 'X-BX-Token': token } : {}, cache: 'no-store' })
+  if (!res.ok) throw new ApiError('DOWNLOAD_FAILED', res.status, `下载失败（${res.status}）`)
   const cd = res.headers.get('Content-Disposition') ?? ''
   const star = /filename\*=UTF-8''([^;]+)/i.exec(cd)
-  const filename = star
-    ? decodeURIComponent(star[1])
-    : (/\bfilename="([^"]+)"/i.exec(cd)?.[1] ?? 'download.bin')
+  const filename = star ? decodeURIComponent(star[1]) : (/\bfilename="([^"]+)"/i.exec(cd)?.[1] ?? 'download.bin')
   return { blob: await res.blob(), filename }
 }
 
 /**
- * SSE 流式订阅（fetch + ReadableStream；EventSource 无法携带自定义头）。
- * onEvent 每帧回调；onError 连接失败回调；返回取消函数。
+ * SSE fetch 流：支持跨 chunk、CRLF、多行 data、尾帧 flush；调用返回 abort 函数。
  */
 export function streamSse(
   path: string,
-  onEvent: (event: { type: string; message: string; repoId?: string; data?: unknown }) => void,
+  onEvent: (event: { seq?: number; type: string; message: string; repoId?: string; data?: unknown }) => void,
   onError: (err: Error) => void,
 ): () => void {
   const controller = new AbortController()
@@ -123,24 +96,33 @@ export function streamSse(
       }
       const reader = res.body.getReader()
       const decoder = new TextDecoder()
-      let buf = ''
-      while (!controller.signal.aborted) {
-        const { done, value } = await reader.read()
-        if (done) break
-        buf += decoder.decode(value, { stream: true })
-        const lines = buf.split('\n')
-        buf = lines.pop() ?? ''
+      let buffer = ''
+      let dataLines: string[] = []
+      const consumeFrame = (frame: string): void => {
+        const lines = frame.split(/\r?\n/)
         for (const line of lines) {
-          if (!line.startsWith('data: ')) continue
-          try {
-            onEvent(JSON.parse(line.slice(6)))
-          } catch {
-            // 忽略坏帧
+          if (line.startsWith('data:')) dataLines.push(line.slice(5).trimStart())
+          else if (line === '') {
+            if (dataLines.length > 0) {
+              try { onEvent(JSON.parse(dataLines.join('\n'))) } catch { /* 忽略坏帧 */ }
+              dataLines = []
+            }
           }
         }
       }
-    } catch (e) {
-      if (!controller.signal.aborted) onError(e as Error)
+      while (!controller.signal.aborted) {
+        const { done, value } = await reader.read()
+        if (done) break
+        buffer += decoder.decode(value, { stream: true })
+        const frames = buffer.split(/\r?\n\r?\n/)
+        buffer = frames.pop() ?? ''
+        for (const frame of frames) consumeFrame(`${frame}\n`)
+      }
+      buffer += decoder.decode()
+      if (buffer.trim()) consumeFrame(`${buffer}\n\n`)
+      // 正常关闭（服务端完成任务后主动关闭连接）不触发 onError，避免控制台误判为断线重连
+    } catch (error) {
+      if (!controller.signal.aborted) onError(error as Error)
     }
   })()
   return () => controller.abort()

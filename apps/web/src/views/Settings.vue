@@ -327,6 +327,10 @@ watchEffect(() => {
   form.theme = c.theme
   form.themeStyle = c.themeStyle ?? 'indigo'
   form.pwaEnabled = c.pwa.enabled
+  form.pollInterval = c.pollInterval ?? 30_000
+  form.aiEnabled = c.ai.enabled
+  form.aiBaseUrl = c.ai.baseUrl
+  form.aiModel = c.ai.model
   form.aiApiKey = c.ai.apiKey
   form.aiRoutes = {
     commit: c.ai.routes?.commit ?? '',
@@ -348,13 +352,14 @@ async function save() {
   saving.value = true
   try {
     await appStore.setTheme(form.theme)
-    await api.saveConfig({
+    const { config } = await api.saveConfig({
       theme: form.theme,
       themeStyle: form.themeStyle,
       pwa: { enabled: form.pwaEnabled },
       pollInterval: form.pollInterval,
       ai: { enabled: form.aiEnabled, baseUrl: form.aiBaseUrl, model: form.aiModel, apiKey: '', routes: form.aiRoutes },
     })
+    appStore.config = config
     message.success('设置已保存')
   } catch (e) {
     message.error((e as Error).message)
@@ -768,7 +773,10 @@ function rotateToken() {
             <!-- 智能格式修复提示 -->
             <div v-if="urlFixSuggestion" class="flex items-center justify-between px-2.5 py-1.5 rounded bg-warning/10 border border-warning/30 text-xs text-warning mt-1.5">
               <span>检测到 URL 格式可规范化为：<code class="font-mono font-semibold">{{ urlFixSuggestion }}</code></span>
-              <NButton size="tiny" type="warning" tertiary @click="applyUrlFix">⚡ 一键修复</NButton>
+              <NButton size="tiny" type="warning" tertiary @click="applyUrlFix">
+                <template #icon><i aria-hidden="true" class="i-carbon-reset" /></template>
+                一键修复
+              </NButton>
             </div>
             <span v-else class="hint">填写包含协议与版本的端点前缀，如 <code>https://api.deepseek.com/v1</code></span>
           </div>

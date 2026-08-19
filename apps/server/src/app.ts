@@ -45,6 +45,7 @@ export interface App {
 
 export function createApp(opts: { token?: string } = {}): App {
   let token = opts.token ?? ''
+  let boundHost = '127.0.0.1'
   const ensureToken = async (): Promise<void> => {
     if (token) return
     const cred = await store.loadCredentials()
@@ -124,11 +125,11 @@ export function createApp(opts: { token?: string } = {}): App {
       await ensureToken()
       if (pathname.startsWith('/api/')) {
         const method = req.method ?? 'GET'
-        // 免 token 端点：GET /api/config（引导）、GET /api/health（CLI 状态）
-        const skipToken = (pathname === '/api/config' || pathname === '/api/health') && method === 'GET'
-        // SSE 特例：允许同源无 token（原生 EventSource 无法带自定义头）
-        const allowNoToken = pathname === '/api/events' && method === 'GET'
-        authenticate(req, { token }, { skipToken, allowNoToken })
+        const skipToken = pathname === '/api/health' && method === 'GET'
+        // Config bootstrap is intentionally available before the browser has a token.
+        // The server warns when bound beyond loopback; protected mutations still require the token.
+        const allowBootstrap = pathname === '/api/config' && method === 'GET'
+        authenticate(req, { token }, { skipToken: skipToken || allowBootstrap })
         await router.dispatch(req, res, pathname)
         return
       }
@@ -161,6 +162,7 @@ export function createApp(opts: { token?: string } = {}): App {
     },
     start: async (port: number, host: string) =>
       new Promise<number>((resolve, reject) => {
+        boundHost = host
         server.once('error', reject)
         server.listen(port, host, () => {
           server.off('error', reject)

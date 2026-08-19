@@ -3,7 +3,7 @@
 
 import fs from 'node:fs'
 import path from 'node:path'
-import type { PublishPlan, PublishRequest } from '@bxverse/shared'
+import type { PublishPlan, PublishRequest, RepoBackupRef } from '@bxverse/shared'
 import { atomicWrite, resolveHome } from './home'
 
 export type JournalPhase =
@@ -25,6 +25,15 @@ export interface JournalStep {
   phase: JournalPhase
   state: 'pending' | 'running' | 'done' | 'failed'
   detail: string
+  /** 扩展：步骤产物，供崩溃恢复复用 */
+  releaseId?: string
+  targetCommit?: string
+  inputHash?: string
+  recordPath?: string
+  backupRefs?: RepoBackupRef[]
+  outputRefs?: string[]
+  startedAt?: string
+  finishedAt?: string
 }
 
 export interface Journal {

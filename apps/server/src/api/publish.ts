@@ -81,9 +81,11 @@ function validateRequest(body: Record<string, unknown>): PublishRequest {
     bump: bump as PublishRequest['bump'],
     repoIds,
     excludeCommits,
-    skipBuild: body.skipBuild === true,
-    offline: body.offline === true,
+    skipBuild: body.skipBuild !== false,
+    offline: body.offline !== false,
     dryRun: body.dryRun === true,
+    backupSource: body.backupSource === true,
+    backupArtifacts: body.backupArtifacts === true,
     externalContent: typeof body.externalContent === 'string' ? body.externalContent : undefined,
     internalContent: typeof body.internalContent === 'string' ? body.internalContent : undefined,
   }

@@ -20,7 +20,7 @@ const message = useMessage()
 
 const pid = computed(() => String(route.params.pid))
 const rid = computed(() => String(route.params.rid))
-const { repo } = computed(() => projectsStore.repoById(pid.value, rid.value)).value
+const repo = computed(() => projectsStore.repoById(pid.value, rid.value)?.repo ?? null)
 
 const VALID_TABS = ['git', 'files', 'logs', 'settings'] as const
 const tab = ref<'git' | 'files' | 'logs' | 'settings'>(
@@ -155,17 +155,17 @@ const settingsForm = reactive({
 const saving = ref(false)
 
 function openSettings() {
-  if (!repo) return
-  settingsForm.name = repo.name
-  settingsForm.displayName = repo.displayName ?? ''
-  settingsForm.buildCommand = repo.buildCommand ?? ''
-  settingsForm.outputDir = repo.outputDir ?? 'public'
-  settingsForm.writeVersionFile = repo.writeVersionFile ?? true
-  settingsForm.artifactDir = repo.artifactDir ?? ''
+  if (!repo.value) return
+  settingsForm.name = repo.value.name
+  settingsForm.displayName = repo.value.displayName ?? ''
+  settingsForm.buildCommand = repo.value.buildCommand ?? ''
+  settingsForm.outputDir = repo.value.outputDir ?? 'public'
+  settingsForm.writeVersionFile = repo.value.writeVersionFile ?? true
+  settingsForm.artifactDir = repo.value.artifactDir ?? ''
 }
 
 async function saveSettings() {
-  if (!repo) return
+  if (!repo.value) return
   saving.value = true
   try {
     await projectsStore.updateRepo(pid.value, rid.value, {
@@ -185,10 +185,10 @@ async function saveSettings() {
 }
 
 function confirmRemove() {
-  if (!repo) return
+  if (!repo.value) return
   dialog.warning({
     title: '移除仓库',
-    content: `确定将「${repo.name}」移出本项目？${repo.path.includes('\\.bxverse\\') || repo.path.includes('/.bxverse/') ? '（克隆接入的仓库可勾选同时删除本地克隆目录）' : '（本地路径接入，仅移除管理记录，不触碰磁盘文件）'}`,
+    content: `确定将「${repo.value.name}」移出本项目？${repo.value.path.includes('\\.bxverse\\') || repo.value.path.includes('/.bxverse/') ? '（克隆接入的仓库可勾选同时删除本地克隆目录）' : '（本地路径接入，仅移除管理记录，不触碰磁盘文件）'}`,
     positiveText: '移除',
     negativeText: '取消',
     onPositiveClick: async () => {

@@ -53,6 +53,7 @@ export class SseHub {
       for (const c of this.clients) {
         if (!c.closed && c.taskId === taskId) {
           c.closed = true
+          clearInterval(c.heartbeat)
           c.res.end()
           this.clients.delete(c)
         }
@@ -81,7 +82,7 @@ export class SseHub {
     try {
       client.res.write(`event: publish\ndata: ${JSON.stringify(event)}\n\n`)
     } catch {
-      client.closed = true
+      this.remove(client)
     }
   }
 

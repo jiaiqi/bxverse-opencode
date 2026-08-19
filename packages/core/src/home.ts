@@ -5,6 +5,7 @@
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
+import { randomBytes } from 'node:crypto'
 import { APP_DATA_DIR_NAME } from '@bxverse/shared'
 
 export interface HomeDirs {
@@ -49,7 +50,7 @@ export function ensureDirs(home: HomeDirs = resolveHome()): HomeDirs {
  * 全局约定：app.json / credentials.json / journal / 发布记录全部遵守。
  */
 export function atomicWrite(file: string, content: string, mode?: number): void {
-  const tmp = path.join(path.dirname(file), `.${path.basename(file)}.tmp-${process.pid}`)
+  const tmp = path.join(path.dirname(file), `.${path.basename(file)}.tmp-${process.pid}-${randomBytes(6).toString('hex')}`)
   fs.mkdirSync(path.dirname(file), { recursive: true })
   fs.writeFileSync(tmp, content, mode ? { mode } : 'utf8')
   fs.renameSync(tmp, file)

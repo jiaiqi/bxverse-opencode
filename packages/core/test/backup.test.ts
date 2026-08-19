@@ -6,6 +6,7 @@ import zlib from 'node:zlib'
 import { DataStore, loadAppConfig, saveAppConfig } from '../src/store'
 import { git } from '../src/git'
 import * as backup from '../src/backup'
+import { createArchiveGz } from '../src/backup/source'
 import { buildManifest } from '../src/backup/manifest'
 import { compareManifests, compareSource, verifyManifest } from '../src/compare'
 import { commit, makeRepo } from './helpers/repo'
@@ -15,6 +16,15 @@ function gunzipToBuffer(file: string): Buffer {
 }
 
 describe('backup：源码与产物备份（R19）', () => {
+  it('源码归档引用不存在时快速失败并清理半成品', async () => {
+    const repoPath = makeRepo()
+    commit(repoPath, 'feat: 初始', { 'src/a.ts': 'aaa' })
+    const outFile = path.join(process.env.BX_HOME!, 'backups', 'invalid', 'source.tar.gz')
+
+    await expect(createArchiveGz(repoPath, 'missing-ref', outFile)).rejects.toThrow()
+    expect(fs.existsSync(outFile)).toBe(false)
+  })
+
   it('源码备份：bundle 可验证 + 快照遵循 .gitignore', async () => {
     const repoPath = makeRepo()
     commit(repoPath, 'feat: 初始', { 'src/a.ts': 'aaa', 'README.md': 'readme' })

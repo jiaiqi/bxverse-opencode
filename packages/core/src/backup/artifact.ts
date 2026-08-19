@@ -5,6 +5,7 @@
 
 import fs from 'node:fs'
 import path from 'node:path'
+import { atomicWrite } from '../home'
 import { buildManifest, readManifest, walkFiles, type Manifest } from './manifest'
 import { createTarGz } from './tar'
 
@@ -41,6 +42,6 @@ export async function backupArtifact(repoPath: string, artifactDir: string, outD
     }
   }
   await createTarGz(files, tarFile)
-  fs.writeFileSync(manifestFile, JSON.stringify(manifest, null, 2))
+  atomicWrite(manifestFile, JSON.stringify(manifest, null, 2))
   return { tarFile, manifestFile, fileCount: manifest.totals.files, totalBytes: manifest.totals.bytes }
 }

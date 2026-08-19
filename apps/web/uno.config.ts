@@ -61,7 +61,7 @@ export default defineConfig({
     ['chip-error', 'text-error bg-error-soft border-error/25'],
     ['code-text', 'font-mono text-13px'],
     ['link', 'text-brand-500 hover:text-brand-400 hover:underline transition-colors duration-150 cursor-pointer'],
-    ['text-13px', 'font-size:13px'],
+    ['text-13px', 'text-[13px]'],
     ['stat-value', 'text-[26px] font-bold font-mono text-text-1 tracking-tight leading-6'],
     ['stat-label', 'text-xs text-text-3'],
     ['skeleton', 'relative overflow-hidden rounded-md bg-surface-hover before:content-[\'\'] before:absolute before:inset-0 before:bg-gradient-to-r before:from-transparent before:via-text-3/20 before:to-transparent before:animate-pulse'],

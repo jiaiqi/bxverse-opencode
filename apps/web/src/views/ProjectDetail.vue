@@ -259,10 +259,12 @@ usePolling(async () => {
         </div>
         <div class="flex items-center gap-2 shrink-0">
           <NButton size="tiny" type="warning" @click="doBatchCheckout(branchAlignment.defaultBranch)">
-            ⚡ 一键切至主分支
+            <template #icon><i aria-hidden="true" class="i-carbon-reset" /></template>
+            一键切至主分支
           </NButton>
           <NButton size="tiny" quaternary @click="doBatchPull">
-            ↓ 批量快进拉取
+            <template #icon><i aria-hidden="true" class="i-carbon-cloud-download" /></template>
+            批量快进拉取
           </NButton>
         </div>
       </div>

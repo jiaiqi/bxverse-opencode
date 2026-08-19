@@ -21,6 +21,7 @@ import * as changelog from './changelog'
 import * as git from './git'
 import { JournalStore } from './journal'
 import type { Journal, JournalPhase } from './journal'
+import { atomicWrite } from './home'
 import { runPreflight } from './preflight'
 import { DataStore, loadAppConfig, versionSafe } from './store'
 import * as version from './version'
@@ -43,6 +44,8 @@ export async function collectChanges(repo: RepoDef): Promise<RepoStatus> {
     milestoneTag: null,
     lastPublishCommit: repo.lastPublishCommit ?? null,
     changed: false,
+    warnings: [],
+    truncated: false,
     commits: [],
   }
   if (!fs.existsSync(repo.path) || !(await git.isRepo(repo.path))) return st
@@ -80,7 +83,14 @@ export async function collectChanges(repo: RepoDef): Promise<RepoStatus> {
   st.milestoneTag = milestoneTags.sort((a, b) => version.compareSemver(b, a))[0] ?? null
 
   if (st.head) {
-    st.commits = await git.commitsSince(repo.path, repo.lastPublishCommit ?? null)
+    const diagnostics: string[] = []
+    const maxCommits = repo.lastPublishCommit ? 3000 : 500
+    st.commits = await git.commitsSince(repo.path, repo.lastPublishCommit ?? null, {
+      maxCommits,
+      warnings: diagnostics,
+    })
+    st.warnings = diagnostics
+    st.truncated = diagnostics.some(message => message.includes('超过'))
     st.changed = st.commits.length > 0 || st.dirty > 0
   }
   return st
@@ -119,6 +129,7 @@ export async function planPublish(req: PublishRequest): Promise<PublishPlan> {
   for (const repo of project.repos) {
     if (!candidateIds.includes(repo.id)) continue
     statuses[repo.id] = await collectChanges(repo)
+    warnings.push(...(statuses[repo.id].warnings ?? []).map(w => `${repo.name}：${w}`))
   }
 
   let changedRepos = project.repos.filter(r => candidateIds.includes(r.id) && statuses[r.id]?.changed)
@@ -192,6 +203,8 @@ export async function planPublish(req: PublishRequest): Promise<PublishPlan> {
       to: st.head,
       commits,
       buildCommand: repo.buildCommand,
+      diffStat: diffs[repo.id],
+      warnings: st.warnings,
     }
   })
 
@@ -227,22 +240,18 @@ export async function planPublish(req: PublishRequest): Promise<PublishPlan> {
     buildStamp: stamp,
     from: null,
     tags: [milestoneTag],
-    stats: changelog.computeStats(allCommits),
+    stats: changelog.computeStats(allCommits, Object.values(diffs).reduce((sum, diff) => ({
+      filesChanged: sum.filesChanged + diff.filesChanged,
+      insertions: sum.insertions + diff.insertions,
+      deletions: sum.deletions + diff.deletions,
+    }), { filesChanged: 0, insertions: 0, deletions: 0 })),
   })
 
   if (!(await git.hasRemote(store.dataDir))) {
     warnings.push('数据仓库未配置远程，发布后仅本地提交（可稍后手动同步）')
   }
 
-  // 截断提交文件列表（日志已用完整数据生成；截断仅减少计划响应体积，前端展示足够）
-  const MAX_FILES_PER_COMMIT = 20
-  for (const repo of changed) {
-    repo.commits = repo.commits.map(c =>
-      c.files.length > MAX_FILES_PER_COMMIT
-        ? { ...c, files: c.files.slice(0, MAX_FILES_PER_COMMIT) }
-        : c,
-    )
-  }
+  // 执行上下文保留完整提交文件列表；HTTP 层如需压缩应构造独立 DTO，不能污染落盘记录。
 
   return {
     projectId: project.id,
@@ -282,7 +291,7 @@ function appendHistory(outDir: string, item: HistoryItem): void {
     }
   }
   arr.push(item)
-  fs.writeFileSync(hp, JSON.stringify(arr, null, 2))
+  atomicWrite(hp, JSON.stringify(arr, null, 2))
 }
 
 /**
@@ -313,7 +322,7 @@ export async function writeVersionFiles(
       throw new Error(`version.json 与计划不一致（可能被外部修改）: ${vfPath}`)
     }
   }
-  fs.writeFileSync(vfPath, JSON.stringify(data, null, 2))
+  atomicWrite(vfPath, JSON.stringify(data, null, 2))
   appendHistory(outDir, data)
 }
 
@@ -336,7 +345,7 @@ export async function syncUnchangedVersionFile(repo: RepoDef, projectVersion: st
     build: base.build ?? '',
     buildTime: base.buildTime ?? '',
   }
-  fs.writeFileSync(vfPath, JSON.stringify(data, null, 2))
+  atomicWrite(vfPath, JSON.stringify(data, null, 2))
   appendHistory(outDir, { ...data, sync: true })
 }
 
@@ -366,7 +375,7 @@ export async function executePublish(
   const store = new DataStore({ dataDir: cfg.dataDir })
   const journalStore = new JournalStore()
 
-  // ---- 备份配置（R19：默认开启，warn 降级；dir 可配） ----
+  // ---- 备份配置（R19：总开关默认开启；单次发布必须显式打开具体备份类型） ----
   const backupCfg = { enabled: true, source: 'both' as const, onFailure: 'warn' as const, ...(cfg.backup ?? {}) }
   const backupRoot = backupCfg.dir?.trim() || path.join(store.homeDir, 'backups')
 
@@ -391,13 +400,32 @@ export async function executePublish(
 
   const stepOf = (repoId: string | null, phase: JournalPhase) =>
     journal.steps.find(s => s.repoId === repoId && s.phase === phase)
-  const setStep = (repoId: string | null, phase: JournalPhase, state: 'pending' | 'running' | 'done' | 'failed', detail = '') => {
+  const setStep = (
+    repoId: string | null,
+    phase: JournalPhase,
+    state: 'pending' | 'running' | 'done' | 'failed',
+    detail = '',
+    result: Partial<NonNullable<ReturnType<typeof stepOf>>> = {},
+  ) => {
+    const now = new Date().toISOString()
     const s = stepOf(repoId, phase)
     if (s) {
       s.state = state
       s.detail = detail
+      Object.assign(s, result)
+      if (state === 'running') s.startedAt = now
+      if (state === 'done' || state === 'failed') s.finishedAt = now
     } else {
-      journal.steps.push({ seq: journal.steps.length + 1, repoId, phase, state, detail })
+      journal.steps.push({
+        seq: journal.steps.length + 1,
+        repoId,
+        phase,
+        state,
+        detail,
+        ...result,
+        ...(state === 'running' ? { startedAt: now } : {}),
+        ...(state === 'done' || state === 'failed' ? { finishedAt: now } : {}),
+      })
     }
     journalStore.save(journal)
     if (detail) emit('step', detail, repoId ? { repoId } : {})
@@ -432,9 +460,26 @@ export async function executePublish(
     }
   }
 
-  // ---- 2. 逐 changed 仓库（串行，try/catch 隔离） ----
+  // ---- 2. 逐 changed 仓库（串行，失败隔离） ----
   const repoRecords: ReleaseRecord[] = []
   const backupRefs: RepoBackupRef[] = []
+  if (resume) {
+    for (const planned of plan.changed) {
+      const step = stepOf(planned.repoId, 'record')
+      if (step?.state !== 'done') continue
+      const recordId = step.releaseId ?? store.nextReleaseId('repo', planned.repoId, planned.version)
+      const record = await store.readRecord(recordId)
+      if (!record) throw new Error(`恢复失败：已完成仓库记录不存在 ${recordId}`)
+      repoRecords.push(record)
+      for (const ref of record.backups ?? step.backupRefs ?? []) {
+        if (!backupRefs.some(existingRef => existingRef.releaseId === ref.releaseId && existingRef.repoId === ref.repoId)) {
+          backupRefs.push(ref)
+        }
+      }
+    }
+  }
+  const syncWarnings: string[] = []
+  const syncFailedRepos: string[] = []
   for (const planned of plan.changed) {
     if (resume && stepOf(planned.repoId, 'record')?.state === 'done') continue
     if (failedRepos.includes(planned.repoId)) continue
@@ -467,8 +512,8 @@ export async function executePublish(
 
       // 2.3 备份（R19：源码 bundle/快照 + 产物归档；失败策略 AppConfig.backup.onFailure）
       let repoBackup: RepoBackupRef | null = null
-      const wantSource = backupCfg.enabled && req.backupSource !== false
-      const wantArtifact = backupCfg.enabled && req.backupArtifacts !== false
+      const wantSource = backupCfg.enabled && req.backupSource === true
+      const wantArtifact = backupCfg.enabled && req.backupArtifacts === true
       if (wantSource || wantArtifact) {
         setStep(planned.repoId, 'backup', 'running')
         try {
@@ -492,7 +537,13 @@ export async function executePublish(
             await store.writeBackupMeta(repoBackup)
             backupRefs.push(repoBackup)
           }
-          setStep(planned.repoId, 'backup', 'done', repoBackup ? `${repoBackup.items.length} 类备份完成` : '无备份内容')
+          setStep(
+            planned.repoId,
+            'backup',
+            'done',
+            repoBackup ? `${repoBackup.items.length} 类备份完成` : '无备份内容',
+            repoBackup ? { backupRefs: [repoBackup], outputRefs: repoBackup.items.map(item => item.file) } : {},
+          )
         } catch (e) {
           if (backupCfg.onFailure === 'fail') throw e
           emit('log', `备份失败（降级为警告，发布继续）: ${(e as Error).message}`, { repoId: planned.repoId })
@@ -524,7 +575,7 @@ export async function executePublish(
       // 2.6 仓库记录（不可变落盘）+ 前移检测基准
       setStep(planned.repoId, 'record', 'running')
       const date = new Date().toISOString()
-      const stats = changelog.computeStats(planned.commits)
+      const stats = changelog.computeStats(planned.commits, planned.diffStat)
       const internal = changelog.renderInternal(planned.commits, {
         version: planned.version,
         baseVersion: plan.projectVersion,
@@ -569,7 +620,12 @@ export async function executePublish(
       }
       await store.writeRecord(record)
       repoRecords.push(record)
-      setStep(planned.repoId, 'record', 'done', record.id)
+      setStep(planned.repoId, 'record', 'done', record.id, {
+        releaseId: record.id,
+        targetCommit: planned.to,
+        recordPath: `releases/${record.scopeId}/${versionSafe(record.version)}/data.json`,
+        backupRefs: record.backups,
+      })
 
       repo.lastPublishCommit = planned.to ?? null
       await store.saveProject(project)
@@ -589,7 +645,9 @@ export async function executePublish(
       await syncUnchangedVersionFile(repo, plan.projectVersion)
       emit('log', `${s.name} 同步基版版本号 → ${plan.projectVersion}（未变动，无标签无记录）`)
     } catch (e) {
-      emit('log', `${s.name} 基版同步失败: ${(e as Error).message}`)
+      syncWarnings.push(`${s.name} 基版同步失败: ${(e as Error).message}`)
+      syncFailedRepos.push(s.repoId)
+      emit('log', syncWarnings.at(-1)!)
     }
   }
 
@@ -617,7 +675,11 @@ export async function executePublish(
     bump: plan.bump,
     date: new Date().toISOString(),
     commits: allCommits,
-    stats: changelog.computeStats(allCommits),
+    stats: changelog.computeStats(allCommits, repoRecords.reduce((sum, record) => ({
+      filesChanged: sum.filesChanged + record.stats.filesChanged,
+      insertions: sum.insertions + record.stats.insertions,
+      deletions: sum.deletions + record.stats.deletions,
+    }), { filesChanged: 0, insertions: 0, deletions: 0 })),
     logs: {
       internal: {
         state: internal === plan.internalDraft ? 'auto' : 'edited',
@@ -664,6 +726,8 @@ export async function executePublish(
     tags: { milestone: plan.milestoneTag },
     pushed: repoRecords.every(r => r.pushed),
     builtBy: APP_NAME,
+    status: failedRepos.length > 0 || syncFailedRepos.length > 0 ? 'partial' : 'completed',
+    warnings: [...plan.warnings, ...syncWarnings],
     backups: backupRefs.length > 0 ? backupRefs : undefined,
   }
   await store.writeRecord(projectRecord)
@@ -698,7 +762,12 @@ export async function executePublish(
   journalStore.save(journal)
   journalStore.cleanup()
   emit('done', `统一发布完成: ${plan.projectVersion}`, {
-    data: { releaseId: projectRecord.id, version: plan.projectVersion, failedRepos },
+    data: {
+      releaseId: projectRecord.id,
+      version: plan.projectVersion,
+      failedRepos,
+      syncFailedRepos: syncFailedRepos.length > 0 ? syncFailedRepos : undefined,
+    },
   })
   return { releaseId: projectRecord.id, failedRepos }
 }

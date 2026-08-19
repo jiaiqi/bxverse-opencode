@@ -199,6 +199,10 @@ export interface ReleaseRecord {
   tags: { build?: string; milestone?: string }
   pushed: boolean
   builtBy: string
+  /** 扩展：发布结果状态；partial 表示部分仓库或同步步骤失败 */
+  status?: 'completed' | 'partial' | 'failed'
+  /** 扩展：发布执行期间产生的非阻断/部分失败诊断 */
+  warnings?: string[]
   /** 扩展：R19 本次发布备份引用（源码 bundle/快照/产物） */
   backups?: RepoBackupRef[]
   /** 扩展：R24 发布废弃标记与原因 */
@@ -216,6 +220,10 @@ export interface PlannedRepo {
   to?: string
   commits: CommitInfo[]
   buildCommand?: string
+  /** 扩展：计划阶段的 Git 增删统计 */
+  diffStat?: DiffStat
+  /** 扩展：检测阶段诊断信息 */
+  warnings?: string[]
 }
 
 export interface PublishPlan {
@@ -258,6 +266,8 @@ export interface PublishRequest {
 }
 
 export interface PublishEvent {
+  /** 扩展：任务内单调递增序号，用于 SSE 重放去重 */
+  seq?: number
   type: 'log' | 'step' | 'repo-start' | 'repo-done' | 'repo-error' | 'done' | 'error'
   message: string
   repoId?: string
@@ -284,6 +294,10 @@ export interface RepoStatus {
   /** 相对上次统一发布是否有变动 */
   changed: boolean
   lastPublishCommit: string | null
+  /** 扩展：检测阶段诊断信息 */
+  warnings?: string[]
+  /** 扩展：提交列表是否因上限被截断 */
+  truncated?: boolean
   commits: CommitInfo[]
 }
 

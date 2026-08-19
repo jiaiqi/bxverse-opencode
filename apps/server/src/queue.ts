@@ -22,6 +22,8 @@ export interface TaskState {
 export class PublishQueue {
   current: TaskState | null = null
 
+  private nextSeq = 0
+
   constructor(private sse: SseHub) {}
 
   get running(): boolean {
@@ -50,13 +52,15 @@ export class PublishQueue {
       releaseId: null,
     }
     this.current = task
+    this.nextSeq = 0
     // 异步执行（不 await，避免阻塞 HTTP 响应）
     void this.run(task, req)
     return taskId
   }
 
   private async run(task: TaskState, req: PublishRequest): Promise<void> {
-    const push = (e: PublishEvent) => {
+    const push = (event: PublishEvent) => {
+      const e: PublishEvent = { ...event, seq: event.seq ?? ++this.nextSeq }
       if (task.events.length < MAX_BUFFERED) task.events.push(e)
       this.sse.broadcast(task.taskId, e)
       if (e.type === 'done') {

@@ -1,7 +1,7 @@
 // apps/server/src/api/config.ts
 // GET /api/config（免 token 引导）/ POST /api/config（部分更新）
 
-import type { AppConfig } from '@bxverse/shared'
+import type { AppConfig, BackupConfig } from '@bxverse/shared'
 import type { Ctx } from '../http/router'
 import { apiError, readJsonBody, sendJson } from '../http/json'
 import { ensureLegacyMigration } from './ai'
@@ -29,11 +29,11 @@ export function register(router: import('../http/router').Router, services: AppS
     })
   })
 
-  router.post('/api/config', async (ctx: Ctx) => {
+  const updateConfig = async (ctx: Ctx): Promise<void> => {
     const body = (await readJsonBody(ctx.req)) as Record<string, unknown>
     const cfg = await services.loadCfg()
 
-    const allowed = ['theme', 'themeStyle', 'pwa', 'pollInterval', 'ai']
+    const allowed = ['theme', 'themeStyle', 'pwa', 'pollInterval', 'ai', 'backup']
     for (const key of Object.keys(body)) {
       if (!allowed.includes(key)) {
         throw apiError(400, 'VALIDATION', `字段不支持在线修改: ${key}（仅支持 ${allowed.join('/')}）`)
@@ -66,24 +66,53 @@ export function register(router: import('../http/router').Router, services: AppS
       }
       cfg.pollInterval = v
     }
+    if (body.backup !== undefined) {
+      const backup = body.backup as Record<string, unknown>
+      if (typeof backup !== 'object' || backup === null) {
+        throw apiError(400, 'VALIDATION', 'backup 必须为对象')
+      }
+      if (backup.enabled !== undefined && typeof backup.enabled !== 'boolean') {
+        throw apiError(400, 'VALIDATION', 'backup.enabled 必须为布尔')
+      }
+      if (backup.dir !== undefined && backup.dir !== null && typeof backup.dir !== 'string') {
+        throw apiError(400, 'VALIDATION', 'backup.dir 必须为字符串')
+      }
+      if (backup.source !== undefined && !['both', 'bundle', 'archive'].includes(String(backup.source))) {
+        throw apiError(400, 'VALIDATION', 'backup.source 必须为 both/bundle/archive')
+      }
+      if (backup.onFailure !== undefined && !['warn', 'fail'].includes(String(backup.onFailure))) {
+        throw apiError(400, 'VALIDATION', 'backup.onFailure 必须为 warn/fail')
+      }
+      cfg.backup = {
+        enabled: typeof backup.enabled === 'boolean' ? backup.enabled : cfg.backup?.enabled ?? true,
+        dir: typeof backup.dir === 'string' ? backup.dir : cfg.backup?.dir,
+        source: (backup.source as BackupConfig['source'] | undefined) ?? cfg.backup?.source ?? 'both',
+        onFailure: (backup.onFailure as BackupConfig['onFailure'] | undefined) ?? cfg.backup?.onFailure ?? 'warn',
+      }
+    }
+
     if (body.ai !== undefined) {
       const ai = body.ai as Record<string, unknown>
       if (typeof ai !== 'object' || ai === null) {
         throw apiError(400, 'VALIDATION', 'ai 必须为对象')
       }
-      // 兼容旧调用方：baseUrl/model/apiKey 同步到生效供应商（无供应商时自动创建 legacy）
-      if (cfg.ai.providers?.length === 0 && (typeof ai.baseUrl === 'string' && ai.baseUrl)) {
+      // 兼容旧调用方：保留旧字段，同时把配置同步到生效供应商。
+      const baseUrl = typeof ai.baseUrl === 'string' ? ai.baseUrl.trim() : ''
+      const model = typeof ai.model === 'string' ? ai.model.trim() : ''
+      if (baseUrl) cfg.ai.baseUrl = baseUrl
+      if (model) cfg.ai.model = model
+      if (!(cfg.ai.providers?.length) && baseUrl) {
         cfg.ai.providers = [{
           id: 'legacy', name: '默认', kind: 'openai-compatible' as const,
-          baseUrl: ai.baseUrl, model: String(ai.model ?? '') || 'gpt-4o-mini', enabled: true,
+          baseUrl, model: model || 'gpt-4o-mini', enabled: true,
         }]
         cfg.ai.activeProviderId = 'legacy'
       }
       const active = cfg.ai.providers?.find(p => p.id === cfg.ai.activeProviderId && p.enabled)
         ?? cfg.ai.providers?.find(p => p.enabled)
       if (active) {
-        if (typeof ai.baseUrl === 'string' && ai.baseUrl.trim()) active.baseUrl = ai.baseUrl.trim()
-        if (typeof ai.model === 'string' && ai.model.trim()) active.model = ai.model.trim()
+        if (baseUrl) active.baseUrl = baseUrl
+        if (model) active.model = model
       }
       if (typeof ai.apiKey === 'string' && ai.apiKey.trim()) {
         // write-only：key 迁入 credentials.json.aiKeys，app.json 不存明文
@@ -113,5 +142,7 @@ export function register(router: import('../http/router').Router, services: AppS
 
     await services.saveCfg(cfg)
     sendJson(ctx.res, 200, { config: { ...cfg, projects: projectSummaries(cfg) } })
-  })
+  }
+  router.post('/api/config', updateConfig)
+  router.put('/api/config', updateConfig)
 }

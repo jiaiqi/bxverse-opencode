@@ -149,7 +149,7 @@ export function register(router: import('../http/router').Router, services: AiSe
   })
 
   // ---------- 设置 key（write-only） ----------
-  router.put('/api/ai/providers/:id/credential', async (ctx: Ctx) => {
+  const setCredential = async (ctx: Ctx): Promise<void> => {
     const cfg = await services.loadCfg()
     await ensureLegacyMigration(cfg, services)
     providerOf(cfg, ctx.params.id)
@@ -160,7 +160,10 @@ export function register(router: import('../http/router').Router, services: AiSe
     cred.aiKeys = { ...(cred.aiKeys ?? {}), [ctx.params.id]: apiKey }
     await store.saveCredentials(cred)
     sendJson(ctx.res, 200, { ok: true, hasKey: true })
-  })
+  }
+  router.put('/api/ai/providers/:id/credential', setCredential)
+  // Backward-compatible alias for older clients.
+  router.post('/api/ai/providers/:id/credential', setCredential)
 
   // ---------- 测试连接与测速（支持现有 providerId 或即时填写的 baseUrl/apiKey） ----------
   router.post('/api/ai/test', async (ctx: Ctx) => {

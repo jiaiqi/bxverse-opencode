@@ -40,7 +40,7 @@ export const usePublishStore = defineStore('publish', {
     taskId: null as string | null,
     phase: 'idle' as WizardPhase,
     events: [] as PublishEventLike[],
-    result: null as { releaseId: string | null; version: string; failedRepos: string[] } | null,
+    result: null as { releaseId: string | null; version: string; failedRepos: string[]; syncFailedRepos?: string[] } | null,
     error: '',
     /** 步骤 1 选择与生成 plan 时的集合是否一致（不一致需重新生成计划） */
     planDirty: false,
@@ -104,6 +104,10 @@ export const usePublishStore = defineStore('publish', {
           bump: this.bumpOverride,
           repoIds: this.selectedRepoIds,
           excludeCommits: this.excludedCommits,
+          offline: this.offline,
+          skipBuild: this.skipBuild,
+          backupSource: this.backupSource,
+          backupArtifacts: this.backupArtifacts,
           dryRun: true,
         }
         const plan = (await api.publish(req)) as PublishPlan
@@ -160,6 +164,8 @@ export const usePublishStore = defineStore('publish', {
         excludeCommits: this.excludedCommits,
         offline: this.offline,
         skipBuild: this.skipBuild,
+        backupSource: this.backupSource,
+        backupArtifacts: this.backupArtifacts,
         externalContent: extEdited ? this.logs.external.content : undefined,
         internalContent: intEdited ? this.logs.internal.content : undefined,
       }
@@ -173,11 +179,12 @@ export const usePublishStore = defineStore('publish', {
     pushEvent(e: PublishEventLike) {
       this.events.push(e)
       if (e.type === 'done') {
-        const data = (e.data ?? {}) as { releaseId?: string | null; version?: string; failedRepos?: string[] }
+        const data = (e.data ?? {}) as { releaseId?: string | null; version?: string; failedRepos?: string[]; syncFailedRepos?: string[] }
         this.result = {
           releaseId: data.releaseId ?? null,
           version: data.version ?? this.plan?.projectVersion ?? '',
           failedRepos: data.failedRepos ?? [],
+          syncFailedRepos: data.syncFailedRepos,
         }
         this.phase = 'done'
       } else if (e.type === 'error') {
