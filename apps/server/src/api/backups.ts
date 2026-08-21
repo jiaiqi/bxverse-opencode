@@ -14,6 +14,7 @@ import type { AppConfig, CompareResult, RepoBackupRef } from '@bxverse/shared'
 import { backup, compare, store } from '@bxverse/core'
 import type { Ctx } from '../http/router'
 import { apiError, readJsonBody, sendJson } from '../http/json'
+import { assertBackupCleanupBody, assertRestoreBody } from '../validate'
 
 const KIND_FILE: Record<string, string> = {
   'source-bundle': backup.SOURCE_BUNDLE,
@@ -179,6 +180,70 @@ export function register(
     }
     const result: CompareResult = { kind: 'verify', left: `${meta.version} 元数据`, right: dir, files, totals }
     sendJson(ctx.res, 200, result)
+  })
+
+  // ---------- 磁盘占用 ----------
+  router.get('/api/backups/usage', async (ctx: Ctx) => {
+    const ds = services.getDataStore()
+    const metas = await ds.listBackupMeta()
+    const projectId = ctx.query.get('projectId')?.trim() || undefined
+    const repoId = ctx.query.get('repoId')?.trim() || undefined
+    const filtered = metas.filter(m => (!projectId || m.projectId === projectId) && (!repoId || m.repoId === repoId))
+    const usage = backup.getBackupUsage(filtered)
+    sendJson(ctx.res, 200, usage)
+  })
+
+  // ---------- 保留策略清理 ----------
+  router.post('/api/backups/cleanup', async (ctx: Ctx) => {
+    const cfg = await services.loadCfg()
+    const ds = services.getDataStore()
+    const body = (await readJsonBody(ctx.req)) as Record<string, unknown>
+    assertBackupCleanupBody(body)
+    const retention = (body.retention as import('@bxverse/shared').BackupRetention | undefined) ?? cfg.backup?.retention
+    if (!retention || (retention.keepLast == null && retention.maxBytes == null && retention.keepDays == null)) {
+      throw apiError(400, 'VALIDATION', '未配置保留策略（keepLast / maxBytes / keepDays 至少一项）')
+    }
+    const projectId = body.projectId ? String(body.projectId) : undefined
+    const repoId = body.repoId ? String(body.repoId) : undefined
+    const dryRun = !!body.dryRun
+    const result = await backup.enforceRetention({
+      backupDir: resolveBackupRoot(cfg),
+      dataStore: ds,
+      retention,
+      projectId,
+      repoId,
+      dryRun,
+    })
+    sendJson(ctx.res, 200, result)
+  })
+
+  // ---------- 恢复 ----------
+  router.post('/api/backups/restore', async (ctx: Ctx) => {
+    const body = (await readJsonBody(ctx.req)) as Record<string, unknown>
+    assertRestoreBody(body)
+    const releaseId = String(body.releaseId ?? '').trim()
+    const repoId = String(body.repoId ?? '').trim()
+    const kind = String(body.kind ?? '').trim() as 'source-bundle' | 'source-archive' | 'artifact'
+    const targetDir = String(body.targetDir ?? '').trim()
+    const cfg = await services.loadCfg()
+    const meta = await services.getDataStore().readBackupMeta(releaseId, repoId)
+    if (!meta) throw apiError(404, 'NOT_FOUND', '备份元数据不存在')
+    const fileName = KIND_FILE[kind]
+    if (!fileName) throw apiError(400, 'VALIDATION', `不支持的 kind: ${kind}`)
+    // artifact-manifest 不可恢复，仅 artifact
+    if (kind === 'artifact' && !meta.items.some(i => i.kind === 'artifact')) throw apiError(404, 'NOT_FOUND', '该备份不含产物')
+    const srcFile = path.join(backupDirOf(cfg, meta), fileName)
+    if (!fs.existsSync(srcFile)) throw apiError(404, 'NOT_FOUND', `备份文件缺失: ${fileName}`)
+    try {
+      if (kind === 'source-bundle') {
+        await backup.restoreBundle(srcFile, targetDir)
+      } else {
+        await backup.restoreArchive(srcFile, targetDir)
+      }
+    } catch (e) {
+      throw apiError(500, 'RESTORE_FAILED', `恢复失败: ${(e as Error).message}`)
+    }
+    sendJson(ctx.res, 200, { ok: true, targetDir })
   })
 
   // ---------- 源码级对比 ----------

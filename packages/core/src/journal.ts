@@ -13,6 +13,7 @@ export type JournalPhase =
   | 'tag-build'
   | 'backup'
   | 'version-file'
+  | 'package-version'
   | 'push'
   | 'record'
   | 'project-record'

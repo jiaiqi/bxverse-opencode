@@ -17,6 +17,7 @@ const home = ensureDirs()
 export const APP_DIR: string = home.root
 
 export const DEFAULT_APP_CONFIG: AppConfig = {
+  schemaVersion: 2,
   port: APP_DEFAULT_PORT,
   host: '127.0.0.1',
   theme: 'system',
@@ -24,6 +25,7 @@ export const DEFAULT_APP_CONFIG: AppConfig = {
   dataDir: home.dataDir,
   pollInterval: 30_000,
   ai: { enabled: false, baseUrl: '', model: '', apiKey: '' },
+  backup: { enabled: true, source: 'both', onFailure: 'warn' },
   projects: [],
 }
 
@@ -34,13 +36,40 @@ function deepMergeDefault(raw: Partial<AppConfig>): AppConfig {
   return {
     ...DEFAULT_APP_CONFIG,
     ...raw,
+    schemaVersion: (raw as Record<string, unknown>).schemaVersion != null ? Number((raw as Record<string, unknown>).schemaVersion) : DEFAULT_APP_CONFIG.schemaVersion,
     pwa: { ...DEFAULT_APP_CONFIG.pwa, ...(raw.pwa ?? {}) },
     ai: { ...DEFAULT_APP_CONFIG.ai, ...(raw.ai ?? {}) },
+    backup: raw.backup ? { ...DEFAULT_APP_CONFIG.backup!, ...raw.backup, retention: raw.backup.retention ? { ...raw.backup.retention } : undefined } : DEFAULT_APP_CONFIG.backup,
     dataDir: raw.dataDir ?? DEFAULT_APP_CONFIG.dataDir,
   }
 }
 
-/** 读取 app.json；缺失时写默认值；深合并新字段兜底 */
+function projectsDirPath(): string {
+  return resolveHome().projectsDir
+}
+
+function readProjectsFromDir(): ProjectDef[] | null {
+  const dir = projectsDirPath()
+  if (!fs.existsSync(dir)) return null
+  const files = fs.readdirSync(dir).filter(f => f.endsWith('.json'))
+  if (files.length === 0) return null
+  const out: ProjectDef[] = []
+  for (const f of files) {
+    try {
+      const p = JSON.parse(fs.readFileSync(path.join(dir, f), 'utf8')) as ProjectDef
+      if (p?.id) out.push(p)
+    } catch { /* 跳过损坏文件 */ }
+  }
+  return out
+}
+
+function writeProjectToDir(p: ProjectDef): void {
+  const dir = projectsDirPath()
+  fs.mkdirSync(dir, { recursive: true })
+  atomicWrite(path.join(dir, `${p.id}.json`), JSON.stringify(p, null, 2))
+}
+
+/** 读取 app.json；缺失时写默认值；深合并新字段兜底；按需迁移 projects/ 目录 */
 export async function loadAppConfig(): Promise<AppConfig> {
   if (!fs.existsSync(APP_JSON)) {
     const cfg: AppConfig = { ...DEFAULT_APP_CONFIG, projects: [] }
@@ -53,11 +82,47 @@ export async function loadAppConfig(): Promise<AppConfig> {
   } catch (e) {
     throw new Error(`无法解析 app.json: ${(e as Error).message}`)
   }
-  return deepMergeDefault(raw as Partial<AppConfig>)
+  const cfg = deepMergeDefault(raw as Partial<AppConfig>)
+  // 迁移：旧版 app.json 内嵌 projects → projects/ 目录（幂等）
+  const dirProjects = readProjectsFromDir()
+  if (dirProjects) {
+    cfg.projects = dirProjects
+    // 同步 schemaVersion
+    if ((raw as Record<string, unknown>).schemaVersion == null) {
+      cfg.schemaVersion = 2
+      // 尽力写回，避免下次重复迁移
+      try { atomicWrite(APP_JSON, JSON.stringify({ ...raw as object, schemaVersion: 2 }, null, 2)) } catch { /* best-effort */ }
+    }
+  } else if (cfg.projects.length > 0) {
+    // 首次拆分：把内存中的 projects 落盘
+    for (const p of cfg.projects) {
+      try { writeProjectToDir(p) } catch { /* best-effort */ }
+    }
+    if ((raw as Record<string, unknown>).schemaVersion == null) {
+      try { atomicWrite(APP_JSON, JSON.stringify({ ...(raw as object), schemaVersion: 2 }, null, 2)) } catch { /* best-effort */ }
+      cfg.schemaVersion = 2
+    }
+  }
+  return cfg
 }
 
 export async function saveAppConfig(cfg: AppConfig): Promise<void> {
   atomicWrite(APP_JSON, JSON.stringify(cfg, null, 2))
+  // 同步 projects/ 目录（P0-3 拆分后权威源，保持与 app.json 一致）
+  try {
+    const dir = projectsDirPath()
+    fs.mkdirSync(dir, { recursive: true })
+    const wanted = new Set(cfg.projects.map(p => `${p.id}.json`))
+    for (const p of cfg.projects) {
+      try { writeProjectToDir(p) } catch { /* best-effort */ }
+    }
+    for (const f of fs.readdirSync(dir)) {
+      if (!f.endsWith('.json')) continue
+      if (!wanted.has(f)) {
+        try { fs.rmSync(path.join(dir, f), { force: true }) } catch { /* best-effort */ }
+      }
+    }
+  } catch { /* best-effort，目录同步失败不影响主流程 */ }
 }
 
 // ==================== 凭据 ====================
@@ -163,12 +228,14 @@ export class DataStore {
     if (idx === -1) cfg.projects.push(stamped)
     else cfg.projects[idx] = stamped
     await saveAppConfig(cfg)
+    try { writeProjectToDir(stamped) } catch { /* best-effort */ }
   }
 
   async deleteProject(id: string): Promise<void> {
     const cfg = await loadAppConfig()
     cfg.projects = cfg.projects.filter(p => p.id !== id)
     await saveAppConfig(cfg)
+    try { fs.rmSync(path.join(projectsDirPath(), `${id}.json`), { force: true }) } catch { /* best-effort */ }
   }
 
   // ---------- 发布记录（数据仓库） ----------

@@ -480,9 +480,18 @@ export async function executePublish(
   }
   const syncWarnings: string[] = []
   const syncFailedRepos: string[] = []
-  for (const planned of plan.changed) {
-    if (resume && stepOf(planned.repoId, 'record')?.state === 'done') continue
-    if (failedRepos.includes(planned.repoId)) continue
+  // 仓库级并行（默认串行 1，可通过 AppConfig.publish.concurrency 开启；隔离验证：每仓库独立路径，无共享写入，saveProject 合并批量落盘）
+  const concurrency = Math.min(Math.max(Number((cfg as unknown as { publish?: { concurrency?: number } }).publish?.concurrency ?? 1), 1), 5)
+  const toRun = plan.changed.filter(p => !(resume && stepOf(p.repoId, 'record')?.state === 'done') && !failedRepos.includes(p.repoId))
+  async function runWithPool<T>(items: T[], limit: number, fn: (item: T) => Promise<void>): Promise<void> {
+    if (limit <= 1) { for (const it of items) await fn(it); return }
+    const queue = [...items]
+    const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
+      while (queue.length > 0) { const it = queue.shift()!; await fn(it) }
+    })
+    await Promise.all(workers)
+  }
+  await runWithPool(toRun, concurrency, async (planned) => {
     const repo = repoDefOf(planned.repoId)
     const repoReleaseId = store.nextReleaseId('repo', repo.id, planned.version)
     emit('repo-start', `${planned.name} 开始发布 → ${planned.version}`, { repoId: planned.repoId })
@@ -572,7 +581,7 @@ export async function executePublish(
         }
       }
 
-      // 2.6 仓库记录（不可变落盘）+ 前移检测基准
+      // 2.6 仓库记录（不可变落盘）+ 前移检测基准（并发安全：先收敛内存，落盘在池外批量）
       setStep(planned.repoId, 'record', 'running')
       const date = new Date().toISOString()
       const stats = changelog.computeStats(planned.commits, planned.diffStat)
@@ -628,13 +637,30 @@ export async function executePublish(
       })
 
       repo.lastPublishCommit = planned.to ?? null
-      await store.saveProject(project)
 
       emit('repo-done', `${planned.name} → ${planned.version}`, { repoId: planned.repoId })
     } catch (e) {
       failCurrent(planned.repoId, (e as Error).message)
       emit('repo-error', `${planned.name} 发布失败: ${(e as Error).message}`, { repoId: planned.repoId })
       failedRepos.push(planned.repoId)
+    }
+  })
+  // 批量持久化项目 lastPublishCommit（避免并发 saveProject 竞态）
+  if (toRun.length > 0) await store.saveProject(project)
+
+  // ---- 2.5 备份保留策略自动清理（R19 扩展） ----
+  if (backupCfg.retention && (backupCfg.retention.keepLast != null || backupCfg.retention.maxBytes != null || backupCfg.retention.keepDays != null)) {
+    try {
+      const cr = await backup.enforceRetention({
+        backupDir: backupRoot,
+        dataStore: store,
+        retention: backupCfg.retention,
+        projectId: project.id,
+        log: msg => emit('log', msg),
+      })
+      if (cr.deleted.length > 0) emit('log', `保留策略已清理 ${cr.deleted.length} 份过期备份，释放 ${cr.freedBytes} 字节`)
+    } catch (e) {
+      emit('log', `保留策略执行失败: ${(e as Error).message}`)
     }
   }
 

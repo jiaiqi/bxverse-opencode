@@ -12,6 +12,7 @@ import EmptyState from '../components/EmptyState.vue'
 import AddRepoDialog from '../components/AddRepoDialog.vue'
 import AddProjectDialog from '../components/AddProjectDialog.vue'
 import VersionExportDropdown from '../components/VersionExportDropdown.vue'
+import BackupPanel from '../components/BackupPanel.vue'
 import { useDialog, useMessage } from 'naive-ui'
 import { formatDate } from '../utils/format'
 
@@ -104,6 +105,20 @@ const sortedRepos = computed(() => {
     return cb - ca
   })
 })
+
+const VALID_TABS = ['repos', 'releases', 'backups'] as const
+const tab = ref<'repos' | 'releases' | 'backups'>(
+  VALID_TABS.includes(route.query.tab as (typeof VALID_TABS)[number]) ? (route.query.tab as 'repos' | 'releases' | 'backups') : 'repos',
+)
+watch(tab, (t) => {
+  if (String(route.query.tab ?? '') !== t) void router.replace({ query: { ...route.query, tab: t } })
+})
+watch(
+  () => route.query.tab,
+  (v) => {
+    if (v && VALID_TABS.includes(v as (typeof VALID_TABS)[number]) && v !== tab.value) tab.value = v as 'repos' | 'releases' | 'backups'
+  },
+)
 
 const detailRelease = ref<ReleaseRecord | null>(null)
 const showDetail = ref(false)
@@ -269,104 +284,112 @@ usePolling(async () => {
         </div>
       </div>
 
-      <!-- 3. 关联 Git 仓库管理网格 (Repo Matrix) -->
-      <section class="space-y-3">
-        <div class="flex items-center justify-between">
-          <h2 class="section-title text-sm font-bold text-text-1 flex items-center gap-2">
-            <i aria-hidden="true" class="i-carbon-branch text-info" />
-            <span>关联 Git 仓库列表 ({{ project.repos.length }})</span>
-          </h2>
-          <button
-            class="text-xs font-mono text-info hover:underline flex items-center gap-1 bg-transparent border-0 cursor-pointer"
-            @click="showAddRepo = true"
-          >
-            <i aria-hidden="true" class="i-carbon-add text-12px" /> 接入新工程
-          </button>
-        </div>
+      <NTabs v-model:value="tab" type="line" animated class="mt-2">
+        <NTabPane name="repos" tab="仓库">
+          <section class="space-y-3 mt-4">
+            <div class="flex items-center justify-between">
+              <h2 class="section-title text-sm font-bold text-text-1 flex items-center gap-2">
+                <i aria-hidden="true" class="i-carbon-branch text-info" />
+                <span>关联 Git 仓库列表 ({{ project.repos.length }})</span>
+              </h2>
+              <button
+                class="text-xs font-mono text-info hover:underline flex items-center gap-1 bg-transparent border-0 cursor-pointer"
+                @click="showAddRepo = true"
+              >
+                <i aria-hidden="true" class="i-carbon-add text-12px" /> 接入新工程
+              </button>
+            </div>
 
-        <div v-if="project.repos.length === 0" class="card">
-          <EmptyState
-            title="还没有接入仓库"
-            description="支持两种方式：选择本地已有 git 仓库绝对路径，或输入 git 远程地址克隆。"
-            @action="showAddRepo = true"
-          />
-        </div>
-        <div v-else class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          <RepoCard
-            v-for="repo in sortedRepos"
-            :key="repo.id"
-            :repo="repo"
-            :status="statuses.get(repo.id)"
-            :loading="statusLoading.has(repo.id)"
-            @open="router.push(`/repo/${project.id}/${repo.id}`)"
-            @refresh="refreshRepo(repo.id)"
-          />
-        </div>
-      </section>
+            <div v-if="project.repos.length === 0" class="card">
+              <EmptyState
+                title="还没有接入仓库"
+                description="支持两种方式：选择本地已有 git 仓库绝对路径，或输入 git 远程地址克隆。"
+                @action="showAddRepo = true"
+              />
+            </div>
+            <div v-else class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              <RepoCard
+                v-for="repo in sortedRepos"
+                :key="repo.id"
+                :repo="repo"
+                :status="statuses.get(repo.id)"
+                :loading="statusLoading.has(repo.id)"
+                @open="router.push(`/repo/${project.id}/${repo.id}`)"
+                @refresh="refreshRepo(repo.id)"
+              />
+            </div>
+          </section>
+        </NTabPane>
+        <NTabPane name="releases" tab="发布历史">
+          <section class="glass-panel rounded-2xl p-5 space-y-3 mt-4">
+            <div class="flex items-center justify-between">
+              <h2 class="section-title text-sm font-bold text-text-1 flex items-center gap-2">
+                <i aria-hidden="true" class="i-carbon-history text-[#A855F7]" />
+                <span>历次发布审计记录 (Release Audit Trail)</span>
+              </h2>
+              <span class="text-xs font-mono text-text-3">历史数据由本地 Git 数据仓库自动审计存盘</span>
+            </div>
 
-      <!-- 4. 历次发布审计记录表格 (Release History Table) -->
-      <section class="glass-panel rounded-2xl p-5 space-y-3">
-        <div class="flex items-center justify-between">
-          <h2 class="section-title text-sm font-bold text-text-1 flex items-center gap-2">
-            <i aria-hidden="true" class="i-carbon-history text-[#A855F7]" />
-            <span>历次发布审计记录 (Release Audit Trail)</span>
-          </h2>
-          <span class="text-xs font-mono text-text-3">历史数据由本地 Git 数据仓库自动审计存盘</span>
-        </div>
-
-        <div v-if="releasesLoading" class="p-5 text-center text-text-3"><NSpin size="small" /></div>
-        <div v-else-if="releases.length === 0" class="p-5">
-          <EmptyState
-            title="暂无发布记录"
-            description="首次发布后，这里将展示统一版本与聚合改动点审计。"
-          />
-        </div>
-        <div v-else class="overflow-x-auto">
-          <table class="w-full text-left border-collapse text-xs font-mono">
-            <thead>
-              <tr class="text-text-3 border-b border-border text-[11px]">
-                <th class="py-2.5 px-3 font-medium">发布版本</th>
-                <th class="py-2.5 px-3 font-medium">发布时间</th>
-                <th class="py-2.5 px-3 font-medium">关联工程</th>
-                <th class="py-2.5 px-3 font-medium">状态 / 审计</th>
-                <th class="py-2.5 px-3 font-medium">归档备份</th>
-                <th class="py-2.5 px-3 font-medium text-right">操作与纠偏</th>
-              </tr>
-            </thead>
-            <tbody class="divide-y divide-border">
-              <tr v-for="r in releases" :key="r.id" class="hover:bg-surface-hover/50 transition-colors" :class="{ 'opacity-60': r.deprecated }">
-                <td class="py-2.5 px-3 font-bold" :class="r.deprecated ? 'line-through text-text-3' : 'text-info'">
-                  {{ r.version }}
-                </td>
-                <td class="py-2.5 px-3 text-text-3">{{ formatDate(r.date) }}</td>
-                <td class="py-2.5 px-3 text-text-2 truncate max-w-48">
-                  {{ (r.repos ?? []).map(x => x.repoName).join('、') || r.scopeName }}
-                </td>
-                <td class="py-2.5 px-3">
-                  <span v-if="r.deprecated" class="chip chip-error text-[10px]" :title="'废弃原因: ' + r.deprecateReason">
-                    ⚠️ 已废弃 ({{ r.deprecateReason || '人为撤销' }})
-                  </span>
-                  <span v-else class="chip chip-brand text-[10px]">
-                    ● 双轨已确认
-                  </span>
-                </td>
-                <td class="py-2.5 px-3 text-text-3">
-                  <span v-if="r.backups?.length" class="text-brand-500">Bundle+Manifest</span>
-                  <span v-else>快照已归档</span>
-                </td>
-                <td class="py-2.5 px-3 text-right space-x-2">
-                  <button class="text-brand-500 hover:underline bg-transparent border-0 cursor-pointer p-0" @click="openDetail(r)">查看日志</button>
-                  <button v-if="!r.deprecated" class="text-warning hover:underline bg-transparent border-0 cursor-pointer p-0" @click="openDeprecate(r)">标为废弃</button>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-          <div v-if="releases.length >= 5" class="pt-3 border-t border-border flex justify-center">
-            <button v-if="!releaseExpanded" class="link text-xs" @click="expandReleases">展开查看全部历史（最多 100 条）</button>
-            <button v-else class="link text-xs" @click="releaseExpanded = false; loadReleases()">收起</button>
+            <div v-if="releasesLoading" class="p-5 text-center text-text-3"><NSpin size="small" /></div>
+            <div v-else-if="releases.length === 0" class="p-5">
+              <EmptyState
+                title="暂无发布记录"
+                description="首次发布后，这里将展示统一版本与聚合改动点审计。"
+              />
+            </div>
+            <div v-else class="overflow-x-auto">
+              <table class="w-full text-left border-collapse text-xs font-mono">
+                <thead>
+                  <tr class="text-text-3 border-b border-border text-[11px]">
+                    <th class="py-2.5 px-3 font-medium">发布版本</th>
+                    <th class="py-2.5 px-3 font-medium">发布时间</th>
+                    <th class="py-2.5 px-3 font-medium">关联工程</th>
+                    <th class="py-2.5 px-3 font-medium">状态 / 审计</th>
+                    <th class="py-2.5 px-3 font-medium">归档备份</th>
+                    <th class="py-2.5 px-3 font-medium text-right">操作与纠偏</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-border">
+                  <tr v-for="r in releases" :key="r.id" class="hover:bg-surface-hover/50 transition-colors" :class="{ 'opacity-60': r.deprecated }">
+                    <td class="py-2.5 px-3 font-bold" :class="r.deprecated ? 'line-through text-text-3' : 'text-info'">
+                      {{ r.version }}
+                    </td>
+                    <td class="py-2.5 px-3 text-text-3">{{ formatDate(r.date) }}</td>
+                    <td class="py-2.5 px-3 text-text-2 truncate max-w-48">
+                      {{ (r.repos ?? []).map(x => x.repoName).join('、') || r.scopeName }}
+                    </td>
+                    <td class="py-2.5 px-3">
+                      <span v-if="r.deprecated" class="chip chip-error text-[10px]" :title="'废弃原因: ' + r.deprecateReason">
+                        ⚠️ 已废弃 ({{ r.deprecateReason || '人为撤销' }})
+                      </span>
+                      <span v-else class="chip chip-brand text-[10px]">
+                        ● 双轨已确认
+                      </span>
+                    </td>
+                    <td class="py-2.5 px-3 text-text-3">
+                      <span v-if="r.backups?.length" class="text-brand-500">Bundle+Manifest</span>
+                      <span v-else>快照已归档</span>
+                    </td>
+                    <td class="py-2.5 px-3 text-right space-x-2">
+                      <button class="text-brand-500 hover:underline bg-transparent border-0 cursor-pointer p-0" @click="openDetail(r)">查看日志</button>
+                      <button v-if="!r.deprecated" class="text-warning hover:underline bg-transparent border-0 cursor-pointer p-0" @click="openDeprecate(r)">标为废弃</button>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+              <div v-if="releases.length >= 5" class="pt-3 border-t border-border flex justify-center">
+                <button v-if="!releaseExpanded" class="link text-xs" @click="expandReleases">展开查看全部历史（最多 100 条）</button>
+                <button v-else class="link text-xs" @click="releaseExpanded = false; loadReleases()">收起</button>
+              </div>
+            </div>
+          </section>
+        </NTabPane>
+        <NTabPane name="backups" tab="备份与对比">
+          <div class="mt-4">
+            <BackupPanel :project-id="projectId" />
           </div>
-        </div>
-      </section>
+        </NTabPane>
+      </NTabs>
 
       <AddRepoDialog v-model:show="showAddRepo" :project-id="projectId" @added="loadStatuses" />
       <AddProjectDialog v-model:show="showEdit" :editing="project" @saved="projectsStore.load()" />

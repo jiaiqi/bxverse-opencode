@@ -41,7 +41,7 @@ export interface PublishEventLike {
 export const api = {
   // 配置
   config: () => http.get<ConfigPayload>('/config'),
-  saveConfig: (body: Partial<Pick<AppConfig, 'theme' | 'themeStyle' | 'pwa' | 'pollInterval' | 'ai'>>) =>
+  saveConfig: (body: Partial<Pick<AppConfig, 'theme' | 'themeStyle' | 'pwa' | 'pollInterval' | 'ai' | 'backup'>>) =>
     http.post<{ config: AppConfig }>('/config', body),
   health: () => http.get<{ ok: boolean; version: string }>('/health'),
 
@@ -65,7 +65,7 @@ export const api = {
     http.post<RepoDef>(`/projects/${projectId}/repos`, name ? { path, name } : { path }),
   addRepoByUrl: (projectId: string, body: CloneRequest) =>
     http.post<RepoDef>(`/projects/${projectId}/repos`, body),
-  updateRepo: (pid: string, rid: string, body: Partial<Pick<RepoDef, 'name' | 'displayName' | 'buildCommand' | 'outputDir' | 'writeVersionFile' | 'path' | 'artifactDir'>>) =>
+  updateRepo: (pid: string, rid: string, body: Partial<Pick<RepoDef, 'name' | 'displayName' | 'buildCommand' | 'outputDir' | 'writeVersionFile' | 'updatePackageVersion' | 'path' | 'artifactDir'>>) =>
     http.patch<RepoDef>(`/projects/${pid}/repos/${rid}`, body),
   deleteRepo: (pid: string, rid: string, purge = false) =>
     http.del<{ ok: boolean; purged: boolean }>(`/projects/${pid}/repos/${rid}?purge=${purge}`),
@@ -151,6 +151,17 @@ export const api = {
     http.post<CompareResult>('/backups/verify', { releaseId, repoId }),
   repoDiff: (pid: string, rid: string, from: string | null, to: string) =>
     http.get<CompareResult>(`/repos/${pid}/${rid}/diff?to=${encodeURIComponent(to)}${from ? `&from=${encodeURIComponent(from)}` : ''}`),
+  backupUsage: (params?: { projectId?: string; repoId?: string }) => {
+    const q = new URLSearchParams()
+    if (params?.projectId) q.set('projectId', params.projectId)
+    if (params?.repoId) q.set('repoId', params.repoId)
+    const qs = q.toString() ? `?${q.toString()}` : ''
+    return http.get<import('@bxverse/shared').BackupUsage>(`/backups/usage${qs}`)
+  },
+  backupCleanup: (body: { projectId?: string; repoId?: string; retention?: import('@bxverse/shared').BackupRetention; dryRun?: boolean }) =>
+    http.post<import('@bxverse/shared').BackupCleanupResult>('/backups/cleanup', body),
+  backupRestore: (body: { releaseId: string; repoId: string; kind: string; targetDir: string }) =>
+    http.post<{ ok: boolean; targetDir: string }>('/backups/restore', body),
 
   // SSE
   subscribePublish: (taskId: string, onEvent: (e: PublishEventLike) => void, onError: (e: Error) => void) =>

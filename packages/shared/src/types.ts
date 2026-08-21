@@ -59,10 +59,12 @@ export interface RepoDef {
   remote?: string
   /** 发版前执行的构建命令 */
   buildCommand?: string
-  /** version.json 输出目录（相对仓库根，默认 public） */
-  outputDir?: string
-  /** 是否在业务仓库内写 version.json / version-history.json（默认 true，零侵入可关） */
+  /** 兼容旧配置：历史版本文件写入开关；新发布流程不再写入业务仓库版本文件。 */
   writeVersionFile?: boolean
+  /** 兼容旧配置：历史版本文件输出目录；新发布流程不再使用。 */
+  outputDir?: string
+  /** 扩展：仅更新仓库根 package.json 的顶层 version 字段（不自动提交）。 */
+  updatePackageVersion?: boolean
   /** 扩展：R19 产物备份目录（相对仓库根；未配置则发布时跳过产物备份并提示） */
   artifactDir?: string
   /** 上次统一发布时的 commit（变更检测基准） */
@@ -88,6 +90,8 @@ export interface ProjectDef {
 }
 
 export interface AppConfig {
+  /** 配置 schema 版本（用于迁移；缺省 1） */
+  schemaVersion?: number
   port: number
   host: string
   theme: 'light' | 'dark' | 'system'
@@ -113,6 +117,8 @@ export interface AppConfig {
   }
   /** 扩展：R19 发布备份策略（默认 { enabled: true, source: 'both', onFailure: 'warn' }） */
   backup?: BackupConfig
+  /** 扩展：发布并发（默认 1 串行；设 2-3 可仓库级并行，需保证 saveProject 竞态安全） */
+  publish?: { concurrency?: number }
   projects: ProjectDef[]
 }
 
@@ -157,6 +163,15 @@ export interface RepoBackupRef {
   items: BackupItem[]
 }
 
+export interface BackupRetention {
+  /** 每仓库最多保留份数；缺省不限制 */
+  keepLast?: number
+  /** 每仓库最大占用字节；缺省不限制（0 表示不限） */
+  maxBytes?: number
+  /** 超过天数的备份自动清理；缺省不限制 */
+  keepDays?: number
+}
+
 export interface BackupConfig {
   enabled: boolean
   /** 备份大文件目录；缺省 ~/.bxverse/backups */
@@ -165,6 +180,8 @@ export interface BackupConfig {
   source: 'both' | 'bundle' | 'archive'
   /** 备份失败策略：warn（发布继续，记 warning）/ fail（该仓库发布中止） */
   onFailure: 'warn' | 'fail'
+  /** 扩展：备份保留策略（按仓库维度） */
+  retention?: BackupRetention
 }
 
 export interface RepoReleaseRef {
@@ -384,6 +401,19 @@ export interface CompareResult {
   right?: string
   files: FileCompareItem[]
   totals: { added: number; removed: number; modified: number; same: number }
+}
+
+export interface BackupUsage {
+  totalBytes: number
+  totalCount: number
+  byRepo: { repoId: string; repoName: string; projectId: string; count: number; bytes: number }[]
+}
+
+export interface BackupCleanupResult {
+  deleted: RepoBackupRef[]
+  freedBytes: number
+  remaining: number
+  dryRun: boolean
 }
 
 // 扩展：R22 仓库内 Git 面板（status / diff / 暂存 / 提交 / 推送 / 拉取 / AI 提交与变更解读）

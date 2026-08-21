@@ -83,12 +83,33 @@ export function register(router: import('../http/router').Router, services: AppS
       if (backup.onFailure !== undefined && !['warn', 'fail'].includes(String(backup.onFailure))) {
         throw apiError(400, 'VALIDATION', 'backup.onFailure 必须为 warn/fail')
       }
+      if (backup.retention !== undefined) {
+        if (backup.retention !== null && typeof backup.retention !== 'object') {
+          throw apiError(400, 'VALIDATION', 'backup.retention 必须为对象或 null')
+        }
+        const r = backup.retention as Record<string, unknown> | null
+        if (r) {
+          if (r.keepLast !== undefined && r.keepLast !== null && (!Number.isInteger(r.keepLast as number) || (r.keepLast as number) < 1)) {
+            throw apiError(400, 'VALIDATION', 'backup.retention.keepLast 必须为 >=1 的整数')
+          }
+          if (r.maxBytes !== undefined && r.maxBytes !== null && (!Number.isInteger(r.maxBytes as number) || (r.maxBytes as number) < 0)) {
+            throw apiError(400, 'VALIDATION', 'backup.retention.maxBytes 必须为 >=0 的整数')
+          }
+          if (r.keepDays !== undefined && r.keepDays !== null && (!Number.isInteger(r.keepDays as number) || (r.keepDays as number) < 1)) {
+            throw apiError(400, 'VALIDATION', 'backup.retention.keepDays 必须为 >=1 的整数')
+          }
+        }
+      }
       cfg.backup = {
         enabled: typeof backup.enabled === 'boolean' ? backup.enabled : cfg.backup?.enabled ?? true,
         dir: typeof backup.dir === 'string' ? backup.dir : cfg.backup?.dir,
         source: (backup.source as BackupConfig['source'] | undefined) ?? cfg.backup?.source ?? 'both',
         onFailure: (backup.onFailure as BackupConfig['onFailure'] | undefined) ?? cfg.backup?.onFailure ?? 'warn',
+        retention: (backup.retention as BackupConfig['retention'] | undefined) !== undefined
+          ? (backup.retention as BackupConfig['retention'])
+          : cfg.backup?.retention,
       }
+      if (cfg.backup.retention && Object.keys(cfg.backup.retention).length === 0) cfg.backup.retention = undefined
     }
 
     if (body.ai !== undefined) {

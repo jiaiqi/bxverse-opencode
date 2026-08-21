@@ -23,6 +23,8 @@ import { register as registerSync } from './api/sync'
 import { register as registerOverview } from './api/overview'
 import { register as registerVersions } from './api/versions'
 import { register as registerBackups } from './api/backups'
+import { register as registerMetrics } from './api/metrics'
+import { register as registerOpenApi } from './api/openapi'
 import { register as registerAi } from './api/ai'
 import { register as registerGit } from './api/git'
 
@@ -45,7 +47,6 @@ export interface App {
 
 export function createApp(opts: { token?: string } = {}): App {
   let token = opts.token ?? ''
-  let boundHost = '127.0.0.1'
   const ensureToken = async (): Promise<void> => {
     if (token) return
     const cred = await store.loadCredentials()
@@ -115,6 +116,8 @@ export function createApp(opts: { token?: string } = {}): App {
   registerOverview(router, registerOverviewServices)
   registerVersions(router, { loadCfg, poll })
   registerBackups(router, { loadCfg, getDataStore: () => dataStore as store.DataStore })
+  registerMetrics(router, { loadCfg, getDataStore: () => dataStore as store.DataStore })
+  registerOpenApi(router)
   registerAi(router, { loadCfg, saveCfg })
   registerGit(router, { loadCfg })
 
@@ -125,7 +128,8 @@ export function createApp(opts: { token?: string } = {}): App {
       await ensureToken()
       if (pathname.startsWith('/api/')) {
         const method = req.method ?? 'GET'
-        const skipToken = pathname === '/api/health' && method === 'GET'
+        const skipToken =
+          (pathname === '/api/health' && method === 'GET') || (pathname === '/api/openapi.json' && method === 'GET')
         // Config bootstrap is intentionally available before the browser has a token.
         // The server warns when bound beyond loopback; protected mutations still require the token.
         const allowBootstrap = pathname === '/api/config' && method === 'GET'
@@ -162,7 +166,6 @@ export function createApp(opts: { token?: string } = {}): App {
     },
     start: async (port: number, host: string) =>
       new Promise<number>((resolve, reject) => {
-        boundHost = host
         server.once('error', reject)
         server.listen(port, host, () => {
           server.off('error', reject)

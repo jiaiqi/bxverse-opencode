@@ -19,6 +19,8 @@ export interface HomeDirs {
   journalDir: string
   /** 备份大文件目录（R19；AppConfig.backup.dir 可覆盖） */
   backupsDir: string
+  /** 项目独立存储目录（P0-3 拆分后权威源，app.json 仅留索引兼容） */
+  projectsDir: string
   /** server 运行日志目录 */
   logsDir: string
   /** 原子写中转目录 */
@@ -33,13 +35,14 @@ export function resolveHome(root?: string): HomeDirs {
     reposDir: path.join(r, 'repos'),
     journalDir: path.join(r, 'journal'),
     backupsDir: path.join(r, 'backups'),
+    projectsDir: path.join(r, 'projects'),
     logsDir: path.join(r, 'logs'),
     tmpDir: path.join(r, 'tmp'),
   }
 }
 
 export function ensureDirs(home: HomeDirs = resolveHome()): HomeDirs {
-  for (const dir of [home.root, home.dataDir, home.reposDir, home.journalDir, home.backupsDir, home.logsDir, home.tmpDir]) {
+  for (const dir of [home.root, home.dataDir, home.reposDir, home.journalDir, home.backupsDir, home.projectsDir, home.logsDir, home.tmpDir]) {
     fs.mkdirSync(dir, { recursive: true })
   }
   return home

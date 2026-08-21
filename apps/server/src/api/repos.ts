@@ -61,8 +61,7 @@ export function register(router: import('../http/router').Router, services: Repo
         name: typeof body.name === 'string' && body.name.trim() ? String(body.name).trim() : path.basename(repoPath),
         path: repoPath,
         remote: remote || undefined,
-        outputDir: 'public',
-        writeVersionFile: true,
+        updatePackageVersion: false,
         lastPublishCommit: null,
         createdAt: new Date().toISOString(),
       }
@@ -121,7 +120,11 @@ export function register(router: import('../http/router').Router, services: Repo
       repo.displayName = displayName || undefined
     }
     if (body.buildCommand !== undefined) repo.buildCommand = String(body.buildCommand) || undefined
-    if (body.outputDir !== undefined) repo.outputDir = String(body.outputDir) || 'public'
+    if (body.outputDir !== undefined) repo.outputDir = String(body.outputDir) || undefined
+    if (body.updatePackageVersion !== undefined) {
+      if (typeof body.updatePackageVersion !== 'boolean') throw apiError(400, 'VALIDATION', 'updatePackageVersion 必须为布尔')
+      repo.updatePackageVersion = body.updatePackageVersion
+    }
     if (body.artifactDir !== undefined) {
       const dir = String(body.artifactDir).trim().replace(/\\/g, '/').replace(/^\/+/, '')
       if (dir.split('/').includes('..')) throw apiError(400, 'VALIDATION', 'artifactDir 必须是仓库内的相对目录（禁止 .. 越界）')
