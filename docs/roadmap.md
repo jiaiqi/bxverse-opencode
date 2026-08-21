@@ -35,6 +35,7 @@
 | M5 | 自动化/PWA/AI/收尾 | PWA 开关、AI 润色、初始数据、边界回归、文档 | ~12 | 生产形态交付、根三条命令全绿 |
 | M6 | 备份与一致性对比（R19） | 源码/产物自动备份、哈希清单、三层对比、备份管理页 | ~10 | fixture 全流程发布含备份 + 两次发布对比通过 |
 | M7 | 备份恢复（低优先级） | bundle 克隆恢复、产物解包到指定目录、恢复向导 | ~4 | 暂缓：M6 交付后再排期 |
+| M8 | 多项目看板与仓库治理 | 项目看板、本地路径/Git克隆双模式接入、产物目录与构建命令配置 | ~6 | 看板与双模式接入闭环 |
 
 合计约 107 人日（未计并行文档任务；M6 为 R19 新增，M7 暂缓不计入当前排期）。
 
@@ -336,6 +337,32 @@ architecture §3.2 全部路由可用且经 curl 验证；SSE 通道、单队列
 每次发布自动产出可审计、可校验、可对比的源码与产物备份；对比功能可支撑「本次归档包 vs 上次投产包」类核验场景；M7（恢复）暂缓排期。
 
 ---
+
+## 7.5 M8 多项目看板与仓库治理中枢（R2/R3 双模式接入 + 治理中枢）
+
+### 7.5.1 目标与范围
+
+- **目标**：项目级看板可多业务线并行管理，仓库接入支持本地路径/Git 克隆双模式，治理中枢可配置产物目录与构建命令并做接入校验与失败提示。
+- **在范围内**：`projects` 看板（卡片含版本/仓库数/变动数/末次发布）、接入弹窗两 Tab、仓库卡片治理（构建命令/产物目录 `artifactDir` 树选、启用开关）、接入校验与错误码映射、看板筛选与空状态。
+- **不在范围内**：分支巡检批量切分支（M9）、AI 场景路由（M10）、废弃审计（M11）。
+
+### 7.5.2 任务清单
+
+| 编号 | 标题 | 涉及文件 | 输入 → 输出 | 依赖 | 人日 |
+|---|---|---|---|---|---|
+| M8-01 | 看板 store 聚合 | `apps/web/src/stores/projects.ts`、`api/index.ts` | `GET /api/projects` + `overview` → 看板聚合（项目卡片数据、变动仓库计数、末次发布） | M3-06 | 0.5 |
+| M8-02 | 项目看板页 | `apps/web/src/views/ProjectBoard.vue`（或 `Dashboard.vue` 升级）、`components/ProjectCard.vue` | 看板数据 → 网格看板（卡片：版本/仓库数/变动数/末次发布、空状态引导、筛选） | M8-01 | 1 |
+| M8-03 | 双模式接入弹窗 | `apps/web/src/components/AddRepoDialog.vue`、`stores/projects.ts` | 本地路径（校验 `.git`）/ `CloneRequest{url,shallow,name}` → `POST /api/projects/:id/repos` 双 Tab，错误码 `REPO_INVALID/CLONE_FAILED` 映射 | M2-09 | 1 |
+| M8-04 | 仓库治理卡片 | `apps/web/src/views/ProjectDetail.vue`、`components/RepoCard.vue`、`components/DirPicker.vue` | `RepoDef{buildCommand,artifactDir,displayName}` → 构建命令输入 + 产物目录树选（复用 R18 选择器）、写版本文件开关 | M6-10 | 1 |
+| M8-05 | 接入校验与提示 | `apps/server/src/api/repos.ts`、`packages/core/src/git/clone.ts` | 路径/URL 校验（`..` 逃逸、协议白名单、`shallow` 超时 120s）→ 400 `VALIDATION` 明确修复提示 | M1-07 | 0.5 |
+| M8-06 | 看板联调与空状态 | `apps/web/src/views/*`、`stores/*` | 真实数据 → 端到端：新建项目→双模式接入→治理配置→看板刷新 | M8-02/03/04 | 1 |
+
+### 7.5.3 验收标准
+
+- [ ] 看板显示多项目卡片（版本/仓库数/变动数/末次发布）与变动仓库聚合
+- [ ] 本地路径接入校验 `.git`，Git 地址白名单 `https/ssh/git@` 且 `shallow` 可选，失败提示明确
+- [ ] 仓库卡片可配置 `buildCommand` 与 `artifactDir`（树选），未配置产物目录时备份跳过提示
+- [ ] `pnpm typecheck` / `pnpm build` 通过；`pnpm --filter @bxverse/server test` 接入用例全绿
 
 ## 8. 风险清单与缓解措施
 
