@@ -127,6 +127,11 @@
 | POST | `/api/backups/compare` | 产物级对比（R19） | `CompareResult` | `apps/server/src/api/backups.ts` |
 | POST | `/api/backups/verify` | 备份完整性校验（R19） | `CompareResult` | `apps/server/src/api/backups.ts` |
 | GET | `/api/repos/:pid/:rid/diff` | 源码级对比（R19） | `CompareResult` | `apps/server/src/api/backups.ts` |
+| GET | `/api/backups/usage` | 备份磁盘占用（按项目/仓库过滤） | `BackupUsage` | `apps/server/src/api/backups.ts` |
+| POST | `/api/backups/cleanup` | 按保留策略清理（dryRun 预览） | `BackupCleanupResult` | `apps/server/src/api/backups.ts` |
+| POST | `/api/backups/restore` | 恢复备份到目标目录（校验绝对路径+kind） | `{ok}` | `apps/server/src/api/backups.ts` |
+| GET | `/api/openapi.json` | OpenAPI 3.0 契约（免 token） | — | `apps/server/src/api/openapi.ts` |
+| GET | `/api/metrics` | 进程指标（免 token） | — | `apps/server/src/api/metrics.ts` |
 
 ---
 
@@ -999,6 +1004,17 @@ data: {"type":"done","message":"发布完成","data":{"releaseId":"rel_p_3f1_v1.
 
 `POST /api/publish` 请求新增可选字段：`backupSource?: boolean`（默认 true）、`backupArtifacts?: boolean`（默认 true，仓库未配置 `artifactDir` 时自动跳过并 warning）；`PATCH /api/projects/:id/repos/:rid` 新增可选 `artifactDir?: string | null`（相对仓库根，前端树选择器点选）。
 
+### 10.6 契约与可观测性
+
+- `GET /api/openapi.json`（免 token）：返回 `openApiSpec`（`apps/server/src/openapi.ts` 从 `shared/types` 派生，运行时经 `validate.ts` 校验备份 `retention`/`restore` 入参）。
+- `GET /api/metrics`（免 token）：进程指标与 `logger.ts` JSON 行日志（`logs/server-YYYY-MM-DD.log`）配套排查。
+
+### 10.7 备份增强端点
+
+- `GET /api/backups/usage?projectId=&repoId=`：`BackupUsage` 聚合（`getBackupUsage`）。
+- `POST /api/backups/cleanup`：`{ projectId?, repoId?, retention?, dryRun }` → `enforceRetention`；缺 `retention` 时取 `AppConfig.backup.retention`，三项全空 400 `VALIDATION`；`assertBackupCleanupBody` 校验 `keepLast>=1/maxBytes>=0/keepDays>=1`。
+- `POST /api/backups/restore`：`{ releaseId, repoId, kind, targetDir }` → `restoreBundle/restoreArchive`；`assertRestoreBody` 校验绝对路径且非根，`kind` ∈ `source-bundle/source-archive/artifact`。
+
 ---
 
 ## 11. 与 architecture.md §3.2 路由表的差异
@@ -1040,6 +1056,7 @@ data: {"type":"done","message":"发布完成","data":{"releaseId":"rel_p_3f1_v1.
 | 2026-08-13 | §8.1 补 `excludeCommits`（`Record<repoId, fullHash[]>`，提交级人工排除；引擎过滤后重算 `changed`，全部排除且无 dirty 的仓库自动降级 `syncedOnly`；warnings 记录排除数；非对象或值非字符串数组 → 400 `VALIDATION`） |
 | 2026-08-13 | §4.3 补 `items?: RepoVersionItem[]`（传入则直接写入该内容——发布历史快照导出用；缺省实时采集当前版本）；§7.2 示例 `repos` 补 `displayName` |
 | 2026-08-13 | 新增 §10.3 `GET /api/health`（免 token，响应 `{ok:true, version}`，实现于 `apps/server/src/app.ts`；§1.3/§3.1「唯一免 token 端点」表述同步修正） |
+| 2026-08-21 | §2 新增 `usage/cleanup/restore/openapi.json/metrics` 5 端点；§3.2 `POST /api/config` 校验 `backup.retention`；§10.6/10.7 契约与可观测性 + 备份增强（`retention` 零依赖校验+绝对路径校验） |
 | 2026-08-13 | §2 端点总览补齐：`/api/health`、`/api/projects/:id/versions`、`/api/projects/:id/versions/export`、`/api/releases/:id/versions`、`/api/repos/:pid/:rid/backups`、`/api/backups/*`（元数据/下载/删除/compare/verify）、`/api/repos/:pid/:rid/diff`；实现文件栏按实际源码路径填写 |
 | 2026-08-17 | 新增 §7.5 AI 供应商管理与能力：providers CRUD / credential（write-only）/ test / polish 升级多供应商；§7.5.3 阶段二 AI Git 助手与 `/api/repos/:pid/:rid/git/*` 路由（设计预留）；§3.1 `ai.apiKey` 语义改为永不回显（`hasKey` 布尔）；§3.2 `POST /api/config` 兼容旧 `ai.apiKey`（迁移到 credentials 后置空） |
 | 2026-08-17 | §7.5.3 阶段二落地：实现 `/api/repos/:pid/:rid/git/*`（status/diff/stage/unstage/commit/push/pull）与 `/api/ai/commit-message`、`/api/ai/explain-diff` 路由，更新请求/响应参数契约 |

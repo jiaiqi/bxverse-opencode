@@ -395,4 +395,5 @@ architecture §3.2 全部路由可用且经 curl 验证；SSE 通道、单队列
 | 2026-08-17 | R21 AI 多供应商体系落地：6 预设供应商支持、write-only 凭据隔离存储、旧单表单配置自动迁移、对外日志 AI 润色适配生效供应商 |
 | 2026-08-17 | R22 Git 面板与 AI 助手落地：仓库详情页新增 Git tab（分支/HEAD/ahead-behind/已暂存/未暂存/未追踪）、单文件与全部暂存/撤销、Conventional Commits 提交弹窗 + AI 生成标题/说明、单文件 Diff 侧栏 + AI 变更解读 |
 | 2026-08-17 | v1.0.0 正式定稿：发布里程碑 Tag `v1.0.0`，全面覆盖 R1–R22 基础规格；启动 v2 架构重构，规划 M8–M12 进阶里程碑（分支协同巡检、AI场景特化路由、发版废弃纠偏、多项目治理、三栏沉浸式仪表盘） |
+| 2026-08-21 | P1 优化收敛：`AppConfig.publish.concurrency` 仓库级并发（默认1，上限5，批量落盘竞态安全）、`openapi.json`/`validate.ts` 契约与运行时校验、`useBackup`/`usePublishPlan` 前端收敛、`BackupPanel` 复用、`enforceRetention`/`restore` 闭环 |
 

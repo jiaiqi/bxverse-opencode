@@ -84,6 +84,8 @@ AppConfig ─── 1:N ─── ProjectDef ─── 1:N ─── RepoDef
 | `dataDir` | `string` | 数据仓库绝对路径（`releases/` 所在 git 仓库根） | `{home}/data` |
 | `pollInterval` | `number` | 轮询检测周期（毫秒） | `30000` |
 | `ai` | `{ enabled, baseUrl, model, apiKey, providers?, activeProviderId? }` | 可选 AI 润色（多供应商）：`enabled=false` 整条链路短路；`providers` 为供应商列表（`AiProvider{ id, name, kind, baseUrl, model, enabled }`，kind 当前仅 `'openai-compatible'`，预留扩展）；`activeProviderId` 当前生效供应商；`baseUrl/model/apiKey` 为**兼容旧字段**——读取时若 `providers` 空且旧字段非空自动迁移为默认 provider（id `legacy`），`apiKey` 迁入 `credentials.json.aiKeys` 后置空，**app.json 永不存明文 key** | `{ enabled: false, baseUrl: 'https://api.openai.com/v1', model: 'gpt-4o-mini', apiKey: '', providers: [], activeProviderId: '' }` |
+| `backup` | `BackupConfig` | 备份策略：`enabled/source/onFailure/retention`；`retention={keepLast?,maxBytes?,keepDays?}` 按仓库维度自动清理（发布后触发，`enforceRetention`） | `{ enabled: true, source: 'both', onFailure: 'warn' }` |
+| `publish` | `{ concurrency?: number }` | 发布并发：仓库级并行数（默认1串行，1-5；并发时 `saveProject` 批量落盘避免竞态，`BX_HOME` 隔离验证） | `{ concurrency: 1 }` |
 | `projects` | `ProjectDef[]` | **全部项目定义内嵌于此**。项目/仓库 CRUD、`lastPublishCommit` 更新都改写本字段并整体原子写回 app.json | `[]`（首启后可引导创建「默认项目」并接入 R11 的 6 个工程） |
 
 写入时机：首次启动（生成默认）、`PUT /api/config`、项目/仓库 CRUD、每次发布完成后更新 `RepoDef.lastPublishCommit`。发布任务运行中配置写入返回 409。
@@ -760,3 +762,4 @@ export interface RepoBackupRef {
 | 2026-08-13 | §3.4/§3.5 `RepoReleaseRef` 补 `displayName` 快照语义（发布落盘时定格，旧记录缺省回退 `repoName`）；§5.2 `data.json` 示例同步 |
 | 2026-08-13 | 新增 §8.4 提交级排除（`PublishRequest.excludeCommits`：引擎过滤后重算 `changed`；全部排除且 dirty=0 → `syncedOnly`；warnings 记录排除数）；§3.5 `PublishRequest` 行同步 |
 | 2026-08-17 | §3.1 `AppConfig.ai` 扩展多供应商：新增可选 `providers[]`（`AiProvider{ id, name, kind, baseUrl, model, enabled }`，kind 当前仅 `openai-compatible` 预留扩展）与 `activeProviderId`；旧 `baseUrl/model/apiKey` 为兼容迁移载体（读取时自动迁移为默认 provider，key 迁入 `credentials.json.aiKeys` 后清空）；§4 凭据布局同步 `aiKeys`（write-only 不回显）；项目级发布记录 `repos` 全量快照语义（成功=发布版本 / 同步基版=项目版本 / 失败=仓库当前版本） |
+| 2026-08-21 | §3.1 补 `AppConfig.backup.retention`（`keepLast/maxBytes/keepDays`）与 `AppConfig.publish.concurrency`（默认1串行，上限5，批量 `saveProject` 竞态安全）；§4/§12 备份保留策略 `enforceRetention` 发布后自动清理；前端 `useBackup`/`usePublishPlan` 收敛与契约 `openapi.json` |
