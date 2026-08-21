@@ -30,7 +30,10 @@ export function register(
     if (!relPath.toLowerCase().endsWith('.json')) {
       throw apiError(400, 'VALIDATION', 'path 必须以 .json 结尾')
     }
-    if (path.isAbsolute(relPath) || relPath.split(/[\\/]/).includes('..')) {
+    // POSIX 下 path.isAbsolute 不识别 Windows 盘符（C:/）与 UNC（\\host），需显式拦截，
+    // 否则这些路径会被当作仓库内相对路径写入（跨平台一致性要求，见 api.md §4.3）
+    const hasDriveOrUnc = /^[A-Za-z]:[\\/]/.test(relPath) || relPath.startsWith('\\\\')
+    if (path.isAbsolute(relPath) || hasDriveOrUnc || relPath.split(/[\\/]/).includes('..')) {
       throw apiError(400, 'VALIDATION', 'path 必须是仓库内的相对路径（禁止绝对路径与 .. 越界）')
     }
 

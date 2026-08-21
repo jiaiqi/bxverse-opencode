@@ -1,33 +1,51 @@
 // apps/web/src/pwa/register.ts
-// PWA 运行时开关（M5-01）：按 AppConfig.pwa.enabled 动态注册 / 注销 Service Worker。
-// 手工注册 vite-plugin-pwa 产出的 sw.js（registerType: autoUpdate，SW 自带自动更新逻辑），
-// 不引入 workbox-window 依赖，也不依赖插件自动注册——dev 不注册且开关可运行时控制（AGENTS.md §5.6）。
+// PWA 运行时注册（M5-01，frontend.md §10）：插件构建期 injectRegister: false，
+// 注册/注销完全由 AppConfig.pwa.enabled 运行时控制，避免「关闭 PWA」形同虚设。
 
-/** vite-plugin-pwa 默认产物文件名（构建后位于站点根） */
-const SW_FILE = 'sw.js'
+const MANIFEST_HREF = '/manifest.webmanifest'
 
-/** 应用 PWA 开关：enabled → 注册 SW；disabled → 注销全部 SW 并清理缓存 */
-export async function applyPwa(enabled: boolean): Promise<void> {
-  if (!('serviceWorker' in navigator)) return
-
-  if (enabled) {
-    try {
-      // dev 形态默认不生成 sw.js，注册失败静默跳过（不影响主功能）
-      await navigator.serviceWorker.register(SW_FILE)
-    } catch {
-      // 忽略：生产构建外或受限环境下不可用
-    }
-    return
+/** 动态注入 <link rel="manifest">（vite-plugin-pwa 默认不自注入） */
+function injectManifestLink(): void {
+  if (!document.querySelector('link[rel="manifest"]')) {
+    const link = document.createElement('link')
+    link.rel = 'manifest'
+    link.href = MANIFEST_HREF
+    document.head.appendChild(link)
   }
+}
 
+function removeManifestLink(): void {
+  document.querySelectorAll('link[rel="manifest"]').forEach((el) => el.remove())
+}
+
+/** 注册 Service Worker（仅生产构建生效；dev 下 virtual 模块为 no-op stub） */
+export async function enablePWA(): Promise<void> {
+  if (!import.meta.env.PROD) return
   try {
-    const registrations = await navigator.serviceWorker.getRegistrations()
-    await Promise.all(registrations.map((r) => r.unregister()))
+    const { registerSW } = await import('virtual:pwa-register')
+    registerSW({ immediate: true })
+    injectManifestLink()
+  } catch (e) {
+    // 非 PWA 构建（无 SW 产物）时静默降级，不影响主流程
+    console.warn('[pwa] 注册失败:', e)
+  }
+}
+
+/** 注销 Service Worker、清空缓存并移除 manifest link（开关关闭即时生效） */
+export async function disablePWA(): Promise<void> {
+  try {
+    if ('serviceWorker' in navigator) {
+      const registrations = await navigator.serviceWorker.getRegistrations()
+      for (const reg of registrations) {
+        await reg.unregister()
+      }
+    }
     if ('caches' in window) {
       const keys = await caches.keys()
       await Promise.all(keys.map((k) => caches.delete(k)))
     }
-  } catch {
-    // 清理失败不影响主功能（下次开关仍可重试）
+    removeManifestLink()
+  } catch (e) {
+    console.warn('[pwa] 注销失败:', e)
   }
 }

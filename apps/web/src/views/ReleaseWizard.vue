@@ -497,7 +497,7 @@ const resultReleaseId = computed(() => store.result?.releaseId ?? '')
                       <NCheckbox
                         size="small"
                         :checked="commitIncluded(repo.id, c.fullHash)"
-                        @update:checked="v => store.toggleCommit(repo.id, c.fullHash, v)"
+                        @update:checked="(v: unknown) => store.toggleCommit(repo.id, c.fullHash, v as boolean)"
                       />
                       <span class="chip shrink-0 text-11px">{{ c.type }}</span>
                       <span class="flex-1 truncate text-sm" :class="{ 'opacity-50 line-through decoration-text-3': !commitIncluded(repo.id, c.fullHash) }">{{ c.subject }}</span>

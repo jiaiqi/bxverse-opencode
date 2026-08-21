@@ -86,7 +86,7 @@ async function submit() {
     preset="card"
     :title="editing ? '编辑项目' : '新建项目'"
     class="w-130 max-w-95vw"
-    @update:show="v => emit('update:show', v)"
+    @update:show="(v: boolean) => emit('update:show', v)"
   >
     <NForm label-placement="top">
       <NFormItem label="项目名称" required>

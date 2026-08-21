@@ -3,9 +3,30 @@
 
 import fs from 'node:fs'
 import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 import type { ServerResponse } from 'node:http'
 
-const WEB_DIST = path.resolve(process.cwd(), 'apps', 'web', 'dist')
+/**
+ * 定位前端构建产物目录，不依赖 cwd：
+ * pnpm start 的 cwd 是 apps/server（process.cwd() 指向错误位置），
+ * 从本模块所在目录与 cwd 向上查找含 apps/web/dist/index.html 的仓库根。
+ */
+function findWebDist(): string {
+  const starts = [path.dirname(fileURLToPath(import.meta.url)), process.cwd()]
+  for (const start of starts) {
+    let dir = path.resolve(start)
+    for (let i = 0; i < 8; i++) {
+      const candidate = path.join(dir, 'apps', 'web', 'dist', 'index.html')
+      if (fs.existsSync(candidate)) return path.dirname(candidate)
+      const parent = path.dirname(dir)
+      if (parent === dir) break
+      dir = parent
+    }
+  }
+  return ''
+}
+
+const WEB_DIST = findWebDist()
 
 const MIME: Record<string, string> = {
   '.html': 'text/html; charset=utf-8',

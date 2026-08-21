@@ -2,7 +2,7 @@
 // 服务端集成测试：鉴权 / CRUD / 仓库接入 / 文件 / 发布全链路 / SSE / 日志编辑
 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { commit, createClient, makeRepo } from './helpers'
+import { commit, createClient, makeDir, makeRepo } from './helpers'
 import type { ApiClient } from './helpers'
 import type { PublishEvent } from '@bxverse/shared'
 
@@ -114,8 +114,8 @@ describe('仓库接入 / 状态 / 文件（api.md §6）', () => {
     const again = await client.post(`/api/projects/${projectId}/repos`, { path: dir })
     expect(again.status).toBe(200)
     expect((again.body as { id: string }).id).toBe(repoId)
-    // 非 git 目录 → 400 REPO_INVALID
-    const bad = await client.post(`/api/projects/${projectId}/repos`, { path: process.env.TEMP ?? '.' })
+    // 非 git 目录 → 400 REPO_INVALID（mkdtemp 保证跨平台成立，不依赖 Windows TEMP 环境变量）
+    const bad = await client.post(`/api/projects/${projectId}/repos`, { path: makeDir() })
     expect(bad.status).toBe(400)
     expect((bad.body as { code: string }).code).toBe('REPO_INVALID')
   })
