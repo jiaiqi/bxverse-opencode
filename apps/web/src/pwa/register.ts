@@ -49,3 +49,9 @@ export async function disablePWA(): Promise<void> {
     console.warn('[pwa] 注销失败:', e)
   }
 }
+
+/** 兼容旧调用点：App.vue 的 applyPwa(enabled) */
+export async function applyPwa(enabled: boolean): Promise<void> {
+  if (enabled) await enablePWA()
+  else await disablePWA()
+}
