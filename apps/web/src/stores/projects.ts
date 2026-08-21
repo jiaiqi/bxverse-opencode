@@ -27,6 +27,12 @@ export const useProjectsStore = defineStore('projects', {
       const project = s.items.find(p => p.id === pid)
       return { project, repo: project?.repos.find(r => r.id === rid) }
     },
+    /** M8 看板聚合：overview 项目与本地 items 联动，优先取 overview 的统计，回退本地 */
+    boardItems: s => {
+      const ov = s.overview
+      if (!ov) return s.items.map(p => ({ id: p.id, name: p.name, version: p.version, repoCount: p.repos.length, changedRepoCount: 0, lastRelease: null as OverviewData['projects'][number]['lastRelease'] }))
+      return ov.projects
+    },
   },
   actions: {
     async load(): Promise<void> {

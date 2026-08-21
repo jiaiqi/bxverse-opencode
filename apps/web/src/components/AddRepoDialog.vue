@@ -126,6 +126,7 @@ async function submitUrl() {
                 :input-props="{ autocomplete: 'off', spellcheck: false }"
                 @keydown.enter="submitUrl"
               />
+              <div class="text-xs text-text-3 mt-1">仅允许 https://、ssh://、git@ 前缀；克隆超时 120s，大仓库建议浅克隆</div>
             </NFormItem>
             <NFormItem label="名称（可选，默认取地址）">
               <NInput v-model:value="name" placeholder="如：l-pc-front…" :input-props="{ autocomplete: 'off', spellcheck: false }" />
@@ -133,7 +134,7 @@ async function submitUrl() {
             <NFormItem label="中文名（可选，版本清单导出用）">
               <NInput v-model:value="displayName" placeholder="如：PC 前端…" :input-props="{ autocomplete: 'off', spellcheck: false }" />
             </NFormItem>
-            <NFormItem label="浅克隆（--depth 1，大仓库建议开启）">
+            <NFormItem label="浅克隆（--depth 1，大仓库建议开启，120s 超时）">
               <NSwitch v-model:value="shallow" />
             </NFormItem>
           </NForm>

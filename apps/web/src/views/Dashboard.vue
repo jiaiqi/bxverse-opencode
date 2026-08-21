@@ -21,6 +21,15 @@ const now = useNow()
 const showAddProject = ref(false)
 
 const overview = computed(() => projectsStore.overview)
+const boardFilter = ref('')
+
+const boardProjects = computed(() => {
+  const list = projectsStore.overview?.projects ?? []
+  const q = boardFilter.value.trim().toLowerCase()
+  if (!q) return list
+  return list.filter(p => p.name.toLowerCase().includes(q) || p.id.toLowerCase().includes(q))
+})
+const emptyBoard = computed(() => !projectsStore.overviewLoading && boardProjects.value.length === 0 && (projectsStore.overview?.projects.length ?? 0) > 0)
 
 function groupByProject(repos: OverviewData['changedRepos']): { projectId: string; projectName: string; repos: OverviewData['changedRepos'] }[] {
   const map = new Map<string, { projectId: string; projectName: string; repos: OverviewData['changedRepos'] }>()
@@ -98,18 +107,23 @@ usePolling(refresh, computed(() => appStore.pollInterval).value || 30_000)
       />
     </div>
 
-    <!-- 业务项目看板网格 -->
+    <!-- 业务项目看板网格（M8） -->
     <section class="space-y-3">
-      <div class="flex items-center justify-between">
+      <div class="flex items-center justify-between gap-3 flex-wrap">
         <h2 class="section-title">
           <i aria-hidden="true" class="i-carbon-catalog text-brand-500" /> 业务项目总览与治理
         </h2>
-        <button
-          class="text-xs font-mono text-brand-500 hover:underline flex items-center gap-1 bg-transparent border-0 cursor-pointer"
-          @click="showAddProject = true"
-        >
-          <i aria-hidden="true" class="i-carbon-add text-12px" /> 新建业务项目
-        </button>
+        <div class="flex items-center gap-2">
+          <NInput v-model:value="boardFilter" placeholder="筛选项目名/ID…" clearable size="small" style="width: 220px" :input-props="{ autocomplete: 'off', spellcheck: false }">
+            <template #prefix><i aria-hidden="true" class="i-carbon-search text-text-3" /></template>
+          </NInput>
+          <button
+            class="text-xs font-mono text-brand-500 hover:underline flex items-center gap-1 bg-transparent border-0 cursor-pointer"
+            @click="showAddProject = true"
+          >
+            <i aria-hidden="true" class="i-carbon-add text-12px" /> 新建业务项目
+          </button>
+        </div>
       </div>
 
       <div v-if="overview && overview.projects.length === 0" class="card">
@@ -119,10 +133,11 @@ usePolling(refresh, computed(() => appStore.pollInterval).value || 30_000)
           @action="showAddProject = true"
         />
       </div>
+      <div v-else-if="emptyBoard" class="card p-8 text-center text-sm text-text-3">无匹配项目，试试其他关键词</div>
       <div v-else class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
         <template v-if="overview">
           <ProjectCard
-            v-for="p in overview.projects"
+            v-for="p in boardProjects"
             :key="p.id"
             :project="p"
             @open="id => router.push(`/project/${id}`)"

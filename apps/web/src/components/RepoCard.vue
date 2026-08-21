@@ -79,10 +79,13 @@ const emit = defineEmits<{ open: []; refresh: [] }>()
       <!-- 底部操作栏 -->
       <div class="mt-3 pt-2.5 border-t border-border flex items-center justify-between text-xs font-mono">
         <div class="flex items-center gap-2 text-text-3 truncate text-[11px]">
+          <span v-if="repo.buildCommand" class="truncate code-text" :title="'构建: ' + repo.buildCommand">
+            构建: {{ repo.buildCommand }}
+          </span>
           <span v-if="repo.artifactDir" class="truncate" :title="'产物目录: ' + repo.artifactDir">
             产物: {{ repo.artifactDir }}
           </span>
-          <span v-else>产物: dist</span>
+          <span v-else-if="!repo.buildCommand">未配置构建</span>
         </div>
 
         <span class="text-brand-500 group-hover:underline text-xs flex items-center gap-1 font-medium">
