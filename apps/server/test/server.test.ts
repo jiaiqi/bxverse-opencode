@@ -157,6 +157,12 @@ describe('仓库接入 / 状态 / 文件（api.md §6）', () => {
     expect(again.status).toBe(201)
     repoId = (again.body as { id: string }).id
   })
+
+  it('M8 克隆 URL 协议白名单校验 → 400 VALIDATION', async () => {
+    const bad = await client.post(`/api/projects/${projectId}/repos`, { url: 'ftp://evil.com/repo.git' })
+    expect(bad.status).toBe(400)
+    expect((bad.body as { code: string }).code).toBe('VALIDATION')
+  })
 })
 
 describe('发布全链路（api.md §8）', () => {

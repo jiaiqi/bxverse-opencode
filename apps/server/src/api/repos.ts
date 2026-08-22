@@ -71,9 +71,13 @@ export function register(router: import('../http/router').Router, services: Repo
       return
     }
 
-    // 方式 B：git 地址克隆
+    // 方式 B：git 地址克隆（M8 校验 + 120s 超时由 core git.clone 保证）
+    const rawUrl = String(body.url).trim()
+    if (!/^(https:\/\/|ssh:\/\/|git@)/.test(rawUrl)) {
+      throw apiError(400, 'VALIDATION', 'url 仅允许 https://、ssh:// 或 git@ 前缀')
+    }
     const cloneReq: CloneRequest = {
-      url: String(body.url),
+      url: rawUrl,
       name: typeof body.name === 'string' ? String(body.name).trim() : undefined,
       shallow: body.shallow === true,
     }
