@@ -15,3 +15,11 @@ apps/web/components.d.ts
 design/*.html
 design/*.webp
 docs/bxverse-redevelopment-requirements.md
+docs/optimization-plan.md
+
+# 本地工具与自动生成
+.workbuddy/
+.zcode/
+apps/web/auto-imports.d.ts
+tmp_*.py
+tmp_fix_*.py

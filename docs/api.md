@@ -350,7 +350,7 @@
 { "name": "主产品线", "description": "PC/小程序前端矩阵" }
 ```
 
-服务端默认值：`id = "p_" + base36(3位随机)`、`version = "v0.1.0"`、`bump = "auto"`、`repoVersionScheme = "hybrid"`、`externalExclude = DEFAULT_EXTERNAL_EXCLUDE`、`repos = []`。
+服务端默认值：`id = "p_" + base36(3位随机)`、`version = "v0.1.0"`、`bump = "auto"`、`repoVersionScheme = "hybrid"`、`repoVersionFormat = "X.Y.Z"`（R26，双格式 `X.Y.Z`/`VYYMMDDHHmm`，优先于 `repoVersionScheme`）、`externalExclude = DEFAULT_EXTERNAL_EXCLUDE`、`repos = []`。
 
 响应 `201`：完整 `ProjectDef`（结构同 5.1）。
 
@@ -370,7 +370,7 @@
 }
 ```
 
-- 允许字段：`name / description / bump / repoVersionScheme / externalExclude`。**`version` 不可直接改**（只随发布 bump）；`repos` 的增删改走 §6。
+- 允许字段：`name / description / bump / repoVersionScheme / repoVersionFormat / manifestTarget / externalExclude`。**`version` 不可直接改**（只随发布 bump）；`repos` 的增删改走 §6。`repoVersionFormat` 枚举 `X.Y.Z`/`VYYMMDDHHmm`；`manifestTarget` 为 `{ repoId, path }`（仓库内相对 `.json` 路径）。
 - `externalExclude` 必须为 `CommitType` 子集。
 
 响应 `200`：更新后的完整 `ProjectDef`。
@@ -446,11 +446,17 @@
   "buildCommand": "pnpm build",
   "outputDir": "public",
   "writeVersionFile": false,
+  "versionSource": "packageJson",
+  "packageManager": "pnpm",
+  "installCommand": "pnpm install --frozen-lockfile",
+  "preBuildCommand": "pnpm update",
+  "buildTimeoutMs": 600000,
+  "versionSyncCommit": "package",
   "path": "E:\\bx-gitee\\l-pc-front-v2"
 }
 ```
 
-- 允许字段：`name / buildCommand / outputDir / writeVersionFile / path`。`path` 变更时重新校验 `.git`；`id/remote/lastPublishCommit` 不可改。
+- 允许字段：`name / displayName / buildCommand / outputDir / writeVersionFile / path / artifactDir / versionSource / packageManager / installCommand / preBuildCommand / buildTimeoutMs / versionSyncCommit`（R26 新增后 6 字段）。`path` 变更时重新校验 `.git`；`id/remote/lastPublishCommit` 不可改。
 
 响应 `200`：更新后的 `RepoDef`。
 
@@ -778,7 +784,7 @@ state 状态机（`auto → edited → confirmed`）：
 ```
 
 - `changed` 只含有变动的仓库（提交或版本需要推进）；`syncedOnly` 为未变动、仅同步基版 version.json 的仓库。
-- `changed.version` 按项目 `repoVersionScheme` 生成：`hybrid` → `v1.2.0.26081315`；`timestamp` → `v26081315`。
+- `changed.version` 按项目 `repoVersionFormat` 生成（优先于 `repoVersionScheme`）：`X.Y.Z` → `1.2.0`；`VYYMMDDHHmm` → `V2608241530`；旧 `hybrid` → `v1.2.0.26081315`、`timestamp` → `v26081315` 保留兼容。
 - dry-run 可能耗时数秒（含 git 查询），无副作用（不建任务、不写 journal、不打标签）。
 
 **模式二：执行（`dryRun` 缺省或 `false`）** —— 立即创建任务并入队，响应 `202`：

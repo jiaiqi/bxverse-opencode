@@ -167,7 +167,7 @@ export const wenxiThemeOverrides: GlobalThemeOverrides = {
 - 契约：`AppConfig.themeStyle?: 'indigo' | 'wenxi'`（shared 扩展字段，可选；server POST /api/config 白名单支持，校验 indigo/wenxi）。
 - CSS 变量：`tokens.css` 中 `html.theme-wenxi` 覆盖全部 `--bx-*`（翠绿品牌、近纯黑基底、半透明玻璃面、`--bx-radius-card: 18px`、`--bx-nav-indicator` 激活指示条）+ 背景氛围光 + `.card/.n-card` 玻璃配方（`backdrop-filter: blur(18px) saturate(140%)`）+ 顶栏/侧栏玻璃化。
 - 交互：设置页「外观与体验」双卡选择（点击即时预览，持久化 app.json）；侧栏/顶栏主题按钮在 wenxi 下点击切回 indigo（保留 mode 语义），indigo 下循环 亮/暗/系统；wenxi 强制深色（`appStore.applyTheme()` 处理 `html.theme-wenxi` class）。
-- 布局：AppLayout 新增顶栏（页标题 / 命令面板搜索 / RuntimeStatus chip / 主题切换 / 同步数据 / 新建项目）；Dashboard 页头同步/新建按钮上移顶栏去重。
+- 布局：AppLayout 新增顶栏（页标题 / 命令面板搜索 / RuntimeStatus（R26 新增 RepoDetail（R26 6 字段流水线） 流水线6字段 + AddProjectDialog 格式选择 + DirPicker 复用 manifestTarget） chip / 主题切换 / 同步数据 / 新建项目）；Dashboard 页头同步/新建按钮上移顶栏去重。
 
 ### 1.10 R21 精密仪器视觉语言（UI 重设计落地）
 
@@ -179,7 +179,7 @@ export const wenxiThemeOverrides: GlobalThemeOverrides = {
 - **组件类**：`.ph-ic/.stat-ic` 图标容器（品牌软底方块）、`.status-pill` 服务状态 pill（发光 pulse 动画）、`.release-row::before` 发布行左缘指示条、`.sb-logo-mark` 品牌方块 logo、`.sb-kbd` 快捷键、`.empty-wrap .e-ic` 空态图标容器。
 - **UnoCSS shortcuts**：`card-hover`（hover 抬升 + 深阴影）、`btn-primary`（翠绿实心 + 深色字 + `active:scale-97` 按压）、`chip-*` 语义色胶囊（brand/info/warn/error）、`stat-value`（26px mono 加粗读数）、`skeleton`（shimmer 渐变）、`console-wrap`（固定深底终端窗，亮暗主题一致）。
 - **Naive overrides**：`theme.ts` 三套统一翠绿主色与 6/10/14 圆角；wenxi 与 dark 同色值，玻璃差异全在 tokens.css。
-- **可达性修复（随本次落地）**：卡片/发布行/日志行 `role`+`tabindex`+Enter/Space 键盘；icon-only 按钮 aria-label；装饰图标 aria-hidden；`EmptyState` 按钮 `v-if="$attrs.onAction"`（无 @action 不再渲染无效按钮）；RepoDetail `back-to` 补冒号绑定（原为字面量字符串跳 404）；Dashboard/BackupManage 日期走 Intl 工具。
+- **可达性修复（随本次落地）**：卡片/发布行/日志行 `role`+`tabindex`+Enter/Space 键盘；icon-only 按钮 aria-label；装饰图标 aria-hidden；`EmptyState` 按钮 `v-if="$attrs.onAction"`（无 @action 不再渲染无效按钮）；RepoDetail（R26 6 字段流水线） `back-to` 补冒号绑定（原为字面量字符串跳 404）；Dashboard/BackupManage 日期走 Intl 工具。
 - **侧栏**：logo 品牌方块 + 副标；底部三按钮统一左对齐（`<button>` 默认居中已显式 `text-left`）；激活项品牌软底 + 左指示条。
 
 ### 1.8 UnoCSS 配置（uno.config.ts）
@@ -355,7 +355,7 @@ NConfigProvider(theme + themeOverrides)
 
 **交互**：删除项目（发布进行中 409 → toast 后端 `error` 文案）；编辑项目复用 AddProjectDialog（编辑模式预填 ProjectDef）。
 
-### 3.3 仓库详情 `/repo/:pid/:rid`（RepoDetail.vue）
+### 3.3 仓库详情 `/repo/:pid/:rid`（RepoDetail（R26 6 字段流水线）.vue）
 
 **数据来源**：仓库定义从 `projectsStore.byId(pid)?.repos` 取（无则 `GET /api/projects/:pid`）；状态 `GET /api/projects/:pid/repos/:rid/status`。
 
@@ -564,11 +564,11 @@ emits: { finished: [result: { releaseId: string; version: string; failedRepos: s
 订阅 `api.subscribePublish`（§6）；行渲染规则：`log`→text-2 前缀 `$`、`step`→brand 加粗前缀 `▸`、`repo-start`→info 前缀 `▶`、`repo-done`→success `✓`、`repo-error`→error `✗`、`done`→success 横幅、`error`→error 横幅；`repoId` 非空时行首 chip 显示仓库名（从 plan 映射）。
 交互：自动滚动（新行到达且「跟随」开 → `scrollTop=scrollHeight`，用户上滚 200px 即暂停跟随，按钮恢复）；断线时顶部 NAlert「连接断开，正在重连（第 N 次）…」；`done` → `emits('finished')` 并关闭连接。
 
-### 4.16 RuntimeStatus
+### 4.16 RuntimeStatus（R26 新增 RepoDetail（R26 6 字段流水线） 流水线6字段 + AddProjectDialog 格式选择 + DirPicker 复用 manifestTarget）
 
 服务连接状态 chip（挂载于侧栏底部，借鉴 repoverse）：
 ```ts
-无 props/emits；自持 useRuntimeStatus()
+无 props/emits；自持 useRuntimeStatus（R26 新增 RepoDetail（R26 6 字段流水线） 流水线6字段 + AddProjectDialog 格式选择 + DirPicker 复用 manifestTarget）()
 ```
 - 三态：`checking`（「检测本地服务…」，`i-carbon-renew` 旋转）/ `connected`（「本地服务已连接」，`i-carbon-checkmark-filled`，title 显示 `bxverse v{version}`）/ `unavailable`（「本地服务未连接」，`i-carbon-warning-alt`，title 显示错误信息）。
 - 检测：挂载即查 `GET /api/health`，每 30s 轮询一次（onScopeDispose 清理定时器）；chip 本身是 `<button>`，点击立即重试（`check()`）；三态分别映射 success/warning/neutral 软底 + `focus-ring`。
@@ -603,7 +603,7 @@ props: {
 
 ### 4.19 GitTab / 仓库内 Git 面板与 AI 助手（R22 已实现）
 
-位于 `apps/web/src/components/GitTab.vue`（由 `RepoDetail.vue` 的 `git` TabPane 承载）：
+位于 `apps/web/src/components/GitTab.vue`（由 `RepoDetail（R26 6 字段流水线）.vue` 的 `git` TabPane 承载）：
 - **双栏布局**：
   - **左侧状态区（7 栏）**：头部显示分支名（`i-carbon-branch`）、HEAD 短 hash、ahead/behind 读数（如 `↑1 ↓0`）、顶部操作按钮（拉取 `--ff-only`、推送、提交）；状态统计栏（已暂存 / 未暂存 / 未追踪）；变动文件列表区分徽章（`chip-success` 已暂存、`chip-warning` 未暂存、`chip-info` 未追踪/新增）；每行提供暂存（`+`）与撤销暂存（`-`）按钮，支持一键全部暂存与全部撤销。
   - **右侧 Diff 与解读区（5 栏）**：展示选中文件的 patch 差异（等宽字体、滚动预览、截断保护提示）；右上角提供「AI 解读」按钮（`i-carbon-sparkle`），点击触发 `api.aiExplainDiff`，以卡片形式呈现变更意图、关键变更列表与潜在风险预警。
@@ -753,7 +753,7 @@ actions: {
 | 模块 | 职责 |
 |---|---|
 | `composables/usePolling.ts` | 可见性感知轮询：挂载即 tick + setInterval；`document.hidden` 时跳过，`visibilitychange` 回前台立即刷新一次；失败静默下轮重试；返回 `{ refresh }` |
-| `composables/useRuntimeStatus.ts` | 本地服务状态：`checking/connected/unavailable` 三态 + `version` + `errorMessage`；`check()` 调 `GET /api/health`；30s 轮询；供 RuntimeStatus chip 使用 |
+| `composables/useRuntimeStatus（R26 新增 RepoDetail（R26 6 字段流水线） 流水线6字段 + AddProjectDialog 格式选择 + DirPicker 复用 manifestTarget）.ts` | 本地服务状态：`checking/connected/unavailable` 三态 + `version` + `errorMessage`；`check()` 调 `GET /api/health`；30s 轮询；供 RuntimeStatus（R26 新增 RepoDetail（R26 6 字段流水线） 流水线6字段 + AddProjectDialog 格式选择 + DirPicker 复用 manifestTarget） chip 使用 |
 | `composables/useFsAccess.ts` | File System Access API 封装（三种导出方式的底层）：`saveTextFile`（原生另存为，返回 `'native'/'fallback'/'cancelled'`，不支持或失败回退 anchor 下载）、`pickDirectory`（原生目录选择器，取消返回 null）、`writeToDirectory`（目录句柄直写） |
 | `composables/useNow.ts` | 当前时间 `Ref<Date>`，分钟级刷新（页头日期展示） |
 | `utils/format.ts` | `formatDate` / `formatDateTime`（Intl.DateTimeFormat('zh-CN')，ISO → 2026-08-13 / 2026-08-13 15:30，无效输入原样返回）、`formatSize`（Intl.NumberFormat，B/KB/MB/GB）——日期/大小统一走 Intl，禁硬编码格式 |
@@ -800,7 +800,7 @@ const routes = [
   { path: '/project/:id',       name: 'project-detail',component: ProjectDetail.vue },
   { path: '/project/:id/release', name: 'release-wizard', component: ReleaseWizard.vue },
   { path: '/project/:id/backups', name: 'backups', component: BackupManage.vue },
-  { path: '/repo/:pid/:rid',    name: 'repo-detail',   component: RepoDetail.vue },
+  { path: '/repo/:pid/:rid',    name: 'repo-detail',   component: RepoDetail（R26 6 字段流水线）.vue },
   { path: '/settings',          name: 'settings',      component: Settings.vue },
   { path: '/:pathMatch(.*)*',   name: 'not-found',     component: NotFound.vue },
 ]
@@ -1011,7 +1011,7 @@ const routes = [
 6. **日期/数字必须 `Intl`**：日期展示一律走 `utils/format.ts` 的 `formatDate/formatDateTime`；文件大小用 `Intl.NumberFormat`；禁止手拼 `YYYY-MM-DD`。
 7. **placeholder 以 `…` 结尾**：输入框占位文案统一省略号结尾（如「选择目录…」「如：l-pc-front…」）。
 8. **路径/标识类输入 `autocomplete="off"` + `spellcheck="false"`**（NInput 用 `:input-props` 传入），禁止浏览器自动填充与拼写检查干扰。
-9. **Tab/步骤状态同步 URL query**：RepoDetail 的 `?tab=`、发布向导的 `?step=` 双向同步（`router.replace` 写入、初始化读取校验），保证刷新/分享可恢复。
+9. **Tab/步骤状态同步 URL query**：RepoDetail（R26 6 字段流水线） 的 `?tab=`、发布向导的 `?step=` 双向同步（`router.replace` 写入、初始化读取校验），保证刷新/分享可恢复。
 
 ---
 
@@ -1046,6 +1046,6 @@ const routes = [
 | 日期 | 变更 |
 |---|---|
 | 2026-08-13 | 首版：设计系统、页面规格、组件清单、状态管理、路由、向导状态机、日志编辑器、PWA、无障碍 |
-| 2026-08-13 | 补 R18/R19 落地：BackupManage 备份管理页（§3.6）、RuntimeStatus / VersionExportDropdown / DirPicker 组件（§4.16–4.18）、composables 与 format.ts（§5.5）、提交级排除与 URL 同步 / beforeunload 守卫（§8）、WIG 合规约定（§12） |
+| 2026-08-13 | 补 R18/R19 落地：BackupManage 备份管理页（§3.6）、RuntimeStatus（R26 新增 RepoDetail（R26 6 字段流水线） 流水线6字段 + AddProjectDialog 格式选择 + DirPicker 复用 manifestTarget） / VersionExportDropdown / DirPicker 组件（§4.16–4.18）、composables 与 format.ts（§5.5）、提交级排除与 URL 同步 / beforeunload 守卫（§8）、WIG 合规约定（§12） |
 | 2026-08-17 | 新增 §4.18 Settings AI 供应商管理（多供应商：预设 DeepSeek/OpenAI/Ollama/Kimi coding plan/小米 MiMo/MiniMax coding plan/自定义，write-only 凭据，热更新，旧配置迁移）与 §4.19 AI Git 助手（阶段二设计预留：Git 面板 + AI 提交信息/变更解读/预检失败分析）；§3.4 Settings 表单表与 §4.14 LogEditor AI 润色描述同步为多供应商语义；章节编号顺延（原 §4.18 DirPicker 编号保留，其他小组件→§4.20） |
-| 2026-08-17 | §4.19 GitTab 落地：双栏布局、状态摘要统计、单文件与全部暂存/撤销、Conventional Commits 提交弹窗（AI 生成标题/说明）、单文件 Diff 侧栏 + AI 变更解读，RepoDetail 接入 `git` TabPane |
+| 2026-08-17 | §4.19 GitTab 落地：双栏布局、状态摘要统计、单文件与全部暂存/撤销、Conventional Commits 提交弹窗（AI 生成标题/说明）、单文件 Diff 侧栏 + AI 变更解读，RepoDetail（R26 6 字段流水线） 接入 `git` TabPane |

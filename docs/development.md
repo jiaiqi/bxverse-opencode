@@ -43,7 +43,7 @@ pnpm dev
 | `pnpm dev` | 并行启动 server(8899, watch) 与 web(5173, Vite dev) | 日常开发入口；server watch 工具统一用 `tsx watch` |
 | `pnpm build` | 顺序构建 shared → core → server → cli → web | web 产物 `apps/web/dist` 供 server 生产托管；交付前必跑 |
 | `pnpm typecheck` | `pnpm -r typecheck`，全包 `tsc --noEmit` | 质量门禁第一道 |
-| `pnpm test` | 仅 `@bxverse/core` 测试（vitest） | web 无单测任务时以手动页面清单代替（§7） |
+| `pnpm test（`pnpm -r test`，core 84 + server 27）` | 仅 `@bxverse/core` 测试（vitest） | web 无单测任务时以手动页面清单代替（§7） |
 | `pnpm start` | 生产启动 server（需先 build） | 验证生产形态：静态托管 + SPA fallback |
 | `pnpm --filter @bxverse/web dev` | 仅前端热更 | 后端不涉及改动时使用 |
 | `pnpm --filter @bxverse/core test` | 仅 core 测试 | 引擎改动快速反馈 |
@@ -131,7 +131,7 @@ apps/web/
 |---|---|---|
 | 类型检查 | `pnpm typecheck` | 全包 0 error |
 | 构建 | `pnpm build` | 五包顺序构建成功，`apps/web/dist` 产出 |
-| 单元测试 | `pnpm test` | core 测试全过（引擎改动必须补测试） |
+| 单元测试 | `pnpm test（`pnpm -r test`，core 84 + server 27）` | core 测试全过（引擎改动必须补测试） |
 | 前端手动清单 | 浏览器过一遍受影响页面 | 见下 |
 
 **前端手动验收清单**（每次前端改动勾选受影响项）：

@@ -41,7 +41,7 @@ export { JournalStore } from './journal'
 |---|---|---|
 | `index.ts` | 汇总导出八模块 + diff/journal 辅助导出 | — |
 | `git.ts` | git 子进程封装与解析 | 14 个函数（§2）；阶段二扩展：`worktreeStatus/diff/commitFiles/stash/stashPop/pushBranch/pushTags/pullFF/deleteTag`（同上 spawn 数组模式，零依赖） |
-| `version.ts` | 版本号计算 | 5 个函数（§3） |
+| `version.ts` | 版本号计算（R26 双格式 X.Y.Z / VYYMMDDHHmm） | 11 个函数（§3，含 `V_STAMP_RE`/`SEMVER_TOLERANT_RE`/`parseVersionTolerant`/`formatRepoVersion`/`buildStampMinute`/`semverCore`/`compareVersion`） |
 | `changelog.ts` | 提交分类/统计/双轨日志渲染 | 5 个函数（§4） |
 | `store.ts` | 数据目录、app.json、credentials、发布记录、备份元数据、数据仓库 | `APP_DIR`/`DEFAULT_APP_CONFIG`/`versionSafe`/`tokenMatches` + 配置与凭据函数 + `DataStore` 类（§5）；re-export `resolveHome` |
 | `engine.ts` | 变动检测、发布计划、发布编排 | 6 个函数 + `ExecuteResult` 类型（§6） |
@@ -56,6 +56,7 @@ export { JournalStore } from './journal'
 | `preflight.ts` | 预检阻塞项（引擎内部使用） | `runPreflight`（§6.4，私有） |
 | `home.ts` | BX_HOME 解析、目录确保（store 内部使用） | `resolveHome/ensureDirs/atomicWrite`（私有） |
 | `ai.ts` | 可选 AI 能力（多供应商，OpenAI 兼容）：日志润色、测试连接、阶段二提交信息/变更解读 | `chatCompletion(provider, key, system, user, opts)`（私有）→ `polishLog` / `testConnection` / `commitMessage` / `explainDiff`；未启用/缺凭据短路 |
+| `repo-policy.ts` | 受控写入策略（R26）：`package.json` 版本来源、包管理器探测、受控提交白名单 | `detectPackageManager`/`getDefaultInstallCommand`/`resolveInstallCommand`/`commitVersionFiles`/`readPackageVersion`/`updatePackageVersion`（§3.5） |
 | `diff.ts` | autoDraft 与 content 的行级 LCS diff | `diffLines`/`DiffLine`（经 index.ts 公开导出，供 API 层与前端 DiffView 消费） |
 
 私有类型（不跨进程，无需进 shared）：
@@ -74,7 +75,7 @@ interface Journal {
 interface JournalStep {
   seq: number
   repoId: string | null      // null = 项目级步骤
-  phase: 'preflight' | 'build' | 'tag-milestone' | 'tag-build' | 'backup' | 'version-file' | 'record' | 'push' | 'project-record' | 'data-commit'
+  phase: 'preflight' | 'version-sync' | 'install' | 'pre-build' | 'build' | 'tag-milestone' | 'tag-build' | 'backup' | 'version-file' | 'record' | 'push' | 'project-record' | 'data-commit'
   state: 'pending' | 'running' | 'done' | 'failed'
   detail: string
 }

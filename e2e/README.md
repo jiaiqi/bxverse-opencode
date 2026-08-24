@@ -31,3 +31,5 @@ node e2e/resume.mjs
 ```
 
 注意：运行前确保端口未被占用；截图输出至 `%TEMP%\opencode\bxverse-shots\`。
+
+> R26 流水线回归：fixture 含 package.json 仓库 → 向导选择 X.Y.Z/VYYMMDDHHmm → 验证清单落盘与受控提交

@@ -64,13 +64,13 @@
 
 ```
 packages/shared/src/{types.ts,constants.ts,index.ts}  已定稿，勿动（见规则 7）
-packages/core/src/{home.ts, git/*, version/*, logs/*, publish/*, store/*, detect/*, ai/*, backup/*, compare/*}
+packages/core/src/{home.ts, git.ts, version.ts, changelog.ts, store.ts, engine.ts, files.ts, journal.ts, preflight.ts, ai.ts, diff.ts, repo-policy.ts, backup/*, compare/*}
 apps/server/src/{index.ts, http/*, api/*（含 backups.ts）, queue.ts, sse.ts}
-apps/web/src/{main.ts, App.vue, api/*, stores/*, router/, views/（含 BackupManage.vue）, components/, composables/, pwa/}
+apps/web/src/{main.ts, App.vue, api/*, stores/*, router/, views/（含 BackupManage.vue、RepoDetail.vue）, components/, composables/, pwa/}
 apps/cli/src/index.ts
 scripts/{seed.mjs, gen-pwa-icons.cjs}
 e2e/{prepare-fixture.mjs, wizard-flow.py, resume.mjs, README.md}
-docs/*.md   设计文档
+docs/{requirements.md, architecture.md, data-model.md, core-engine.md, api.md, frontend.md, development.md, roadmap.md, r26-build-pipeline.md}  设计文档
 verse/      参考原型，不在 workspace，不参与构建
 ```
 
@@ -92,11 +92,12 @@ apps/@bxverse/cli ──────┘
 - server 默认 `127.0.0.1:8899`（`APP_DEFAULT_PORT`）；非回环 host 启动必须打印安全警告。
 - 开发形态 web 在 `5173`，`/api` 代理到 8899（`vite.config.ts`）。
 
-### 4.5 版本与标签格式
+### 4.5 版本与标签格式（R26 双格式）
 
-- 项目版本：`vX.Y.Z`（semver）。
-- 仓库版本：`vX.Y.Z.YYMMDDHH`（hybrid，默认）/ `vYYMMDDHH`（timestamp，可配 `repoVersionScheme`）。
-- 标签：里程碑 `vX.Y.Z`、构建 `build/vX.Y.Z.YYMMDDHH`（撞名追加序号）；tag 创建幂等（同名同 commit 跳过）。
+- 项目版本：`X.Y.Z`（R26 主推，无前缀；旧数据 `vX.Y.Z` 容错解析）。
+- 仓库版本：`X.Y.Z`（标准语义） / `VYYMMDDHHmm`（纯时间戳，大写 V + 10 位 `YYMMDDHHmm`，撞名追加序号至 12 位，可配 `repoVersionFormat`；旧 `vX.Y.Z.YYMMDDHH`/`vYYMMDDHH` 保留兼容，`repoVersionScheme` 未设新格式时 fallback）。
+- 常量：`V_STAMP_RE=/^V(\d{10,12})$/`、`SEMVER_TOLERANT_RE=/^v?(\d+)\.(\d+)\.(\d+)(?:\.(\d{6,12}))?$/`、`buildStampMinute()`（10 位）；`formatRepoVersion()` 统一渲染矩阵。
+- 标签：里程碑 `X.Y.Z`（新）/`vX.Y.Z`（旧）、构建 `build/{格式化串}`（如 `build/V2608241530`）；tag 创建幂等（同名同 commit 跳过）。
 - bump 建议：breaking→major / feat→minor / fix→patch；`ProjectDef.bump='manual'` 时默认 patch。
 
 ### 4.6 日志双轨规则
@@ -150,14 +151,15 @@ apps/@bxverse/cli ──────┘
 
 | 文档 | 用途 | 阅读时机 |
 |---|---|---|
-| `docs/requirements.md` | 原始需求 + 澄清结论（R1–R17，唯一需求依据） | 任何任务开工前；需求有疑问时 |
+| `docs/requirements.md` | 原始需求 + 澄清结论（R1–R17/R26，唯一需求依据） | 任何任务开工前；需求有疑问时 |
 | `docs/architecture.md` | 总体架构：进程模型、路由表、SSE、安全/可靠性、§7 文件级蓝图 | 任何跨包/结构性任务开工前 |
-| `docs/roadmap.md` | 里程碑 M1–M5 任务分解、验收标准、风险、需求追溯矩阵 | 领取任务、做验收时 |
-| `docs/data-model.md` | 数据模型与存储（app.json、数据仓库、records、journal、version.json） | 写 core store/publish 相关代码前 |
-| `docs/core-engine.md` | core 引擎细节（git 封装、版本计算、日志流水线、发布编排） | 写 core 模块前 |
-| `docs/api.md` | REST/SSE 协议细节 | 写 server 路由或 web api 层前 |
-| `docs/frontend.md` | 前端页面/组件/状态/交互设计（§3.6 备份管理、§4.16–4.18 RuntimeStatus/VersionExportDropdown/DirPicker、§5.5 composables、§8 提交级排除/URL 同步/beforeunload、§12 WIG 合规约定） | 写 web 页面组件前 |
+| `docs/roadmap.md` | 里程碑 M1–M5/M13 任务分解、验收标准、风险、需求追溯矩阵 | 领取任务、做验收时 |
+| `docs/data-model.md` | 数据模型与存储（app.json、数据仓库、records、journal、version.json、R26 双格式） | 写 core store/publish 相关代码前 |
+| `docs/core-engine.md` | core 引擎细节（git 封装、版本计算、日志流水线、发布编排、R26 repo-policy） | 写 core 模块前 |
+| `docs/api.md` | REST/SSE 协议细节（R26 仓库流水线字段） | 写 server 路由或 web api 层前 |
+| `docs/frontend.md` | 前端页面/组件/状态/交互设计（§3.6 备份管理、§4.16–4.18 RuntimeStatus/VersionExportDropdown/DirPicker、§5.5 composables、§8 提交级排除/URL 同步/beforeunload、§12 WIG 合规约定、R26 RepoDetail 流水线） | 写 web 页面组件前 |
 | `docs/development.md` | 开发环境、调试、故障排查（§3 seed/icons/e2e、§6 WIG 与 URL 同步/构建顺序、§8 端口冲突/server 重启） | 环境搭建与排障时 |
+| `docs/r26-build-pipeline.md` | R26 仓库级构建流水线与双格式权威方案 | R26 相关任务必读 |
 
 > 注：除 requirements.md、architecture.md、roadmap.md 外，其余文档由并行任务撰写，可能暂缺——缺失时以 requirements + shared/types.ts + architecture.md 为准，并在实现注释中标注「依赖待补：docs/xxx.md」。
 

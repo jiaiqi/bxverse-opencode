@@ -135,7 +135,7 @@ apps/@bxverse/cli ──────┘
 | GET | `/api/projects/:id/repos/:repoId/file?path=` | 文件内容（超限/二进制置 `truncated`/`binary`） | `FileContent` |
 | POST | `/api/projects/:id/plan` | 生成发布计划（含 dry-run 预览数据） | 请求 `PublishRequest` → 响应 `PublishPlan` |
 | POST | `/api/projects/:id/publish` | 提交发布任务，返回 `{ "taskId": string }`；队列忙返回 409 | `PublishRequest` |
-| GET | `/api/publish/stream` | SSE 通道（全局单通道，单队列所以无需 taskId 过滤） | `PublishEvent` |
+| GET | `/api/events?task=` | SSE 通道（全局单通道，单队列所以无需 taskId 过滤） | `PublishEvent` |
 | GET | `/api/projects/:id/releases` | 项目发布历史 | `ReleaseRecord[]` |
 | GET | `/api/releases/:id` | 单条发布记录 | `ReleaseRecord` |
 | POST | `/api/system/sync` | 手动触发数据仓库 pull/push | — |
@@ -199,10 +199,10 @@ Vite 代理原生支持流式转发，SSE 可直通，无需 ws。开发时浏�
    ▼
 [3] 向导六步（apps/web Publish.vue + stores/publish.ts）
    ① 检测变更：实时 status 聚合展示（提交列表、diff stat）
-   ② 版本号：POST /api/projects/:id/plan → PublishPlan
+   ② 版本号：POST /api/publish (dryRun) → PublishPlan
        suggestedBump（feat→minor / breaking→major / fix→patch）
-       projectVersion（vX.Y.Z 目标）、buildStamp（YYMMDDHH）、milestoneTag
-       每仓库版本 v{projectVersion}.{buildStamp}（hybrid）或 vYYMMDDHH（timestamp）
+       projectVersion（X.Y.Z 目标，R26 主推无前缀；旧 vX.Y.Z 容错）、buildStamp（YYMMDDHHmm 10 位，R26）、milestoneTag
+       每仓库版本 X.Y.Z（repoVersionFormat=X.Y.Z）或 VYYMMDDHHmm（repoVersionFormat=VYYMMDDHHmm）；旧 hybrid vX.Y.Z.YYMMDDHH/timestamp vYYMMDDHH 保留兼容
    ③ 日志编辑：internalDraft / externalDraft 载入 LogEditor
        状态机 auto → edited → confirmed（两侧各自独立）
    ④ dry-run 预览：计划渲染为「将执行的命令清单」（build 命令/标签/文件写入/记录/推送）

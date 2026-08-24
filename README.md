@@ -6,6 +6,8 @@
 
 ## 功能特性
 
+> R26：仓库级构建流水线（versionSource/packageManager/installCommand/preBuildCommand/buildTimeoutMs/versionSyncCommit）+ 双格式 X.Y.Z/VYYMMDDHHmm + manifestTarget 自动落盘（`docs/r26-build-pipeline.md`）
+
 - 项目/仓库两级版本与双轨更新日志（对内全量 / 对外分节）统一管理，发布数据存于 git 数据仓库（历史即审计）
 - 发布向导六步（检测→版本→日志确认→预览→执行→完成）+ 提交级排除（人工甄别哪些提交进版本）
 - R19 备份与一致性对比：发布时可备份源码/产物（bundle + 快照 + 产物归档；向导开关，默认关闭），备份列表/下载/校验/删除，两次发布的产物与源码对比 + 校验报告导出
