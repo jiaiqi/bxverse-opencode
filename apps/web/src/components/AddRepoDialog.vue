@@ -36,19 +36,20 @@ watch(
   },
 )
 
-async function submitPath() {
-  if (!path.value.trim()) return
+type SubmitPayload = { path: string; name?: string } | { url: string; name?: string; shallow?: boolean }
+
+async function submit(payload: SubmitPayload): Promise<void> {
+  const isPath = 'path' in payload
+  if (isPath && !payload.path.trim()) return
+  if (!isPath && !payload.url.trim()) return
   cloning.value = true
   try {
-    const repo = await projectsStore.addRepo(props.projectId, {
-      path: path.value.trim(),
-      name: name.value.trim() || undefined,
-    })
+    const repo = await projectsStore.addRepo(props.projectId, payload)
     if (displayName.value.trim()) {
       await projectsStore.updateRepo(props.projectId, repo.id, { displayName: displayName.value.trim() })
       repo.displayName = displayName.value.trim()
     }
-    message.success('仓库已接入')
+    message.success(isPath ? '仓库已接入' : '仓库已克隆并接入')
     emit('added', repo)
     emit('update:show', false)
   } catch (e) {
@@ -58,27 +59,11 @@ async function submitPath() {
   }
 }
 
-async function submitUrl() {
-  if (!url.value.trim()) return
-  cloning.value = true
-  try {
-    const repo = await projectsStore.addRepo(props.projectId, {
-      url: url.value.trim(),
-      name: name.value.trim() || undefined,
-      shallow: shallow.value,
-    })
-    if (displayName.value.trim()) {
-      await projectsStore.updateRepo(props.projectId, repo.id, { displayName: displayName.value.trim() })
-      repo.displayName = displayName.value.trim()
-    }
-    message.success('仓库已克隆并接入')
-    emit('added', repo)
-    emit('update:show', false)
-  } catch (e) {
-    message.error((e as Error).message)
-  } finally {
-    cloning.value = false
+function buildPayload(): SubmitPayload {
+  if (tab.value === 'path') {
+    return { path: path.value.trim(), name: name.value.trim() || undefined }
   }
+  return { url: url.value.trim(), name: name.value.trim() || undefined, shallow: shallow.value }
 }
 </script>
 
@@ -99,7 +84,7 @@ async function submitUrl() {
                 v-model:value="path"
                 placeholder="如：E:\bx-gitee\l-pc-front…"
                 :input-props="{ autocomplete: 'off', spellcheck: false }"
-                @keydown.enter="submitPath"
+                @keydown.enter="submit(buildPayload())"
               />
             </NFormItem>
             <NFormItem label="中文名（可选，版本清单导出用）">
@@ -124,7 +109,7 @@ async function submitUrl() {
                 v-model:value="url"
                 placeholder="https://gitee.com/xxx/yyy.git 或 git@gitee.com:xxx/yyy.git…"
                 :input-props="{ autocomplete: 'off', spellcheck: false }"
-                @keydown.enter="submitUrl"
+                @keydown.enter="submit(buildPayload())"
               />
               <div class="text-xs text-text-3 mt-1">仅允许 https://、ssh://、git@ 前缀；克隆超时 120s，大仓库建议浅克隆</div>
             </NFormItem>
@@ -152,7 +137,7 @@ async function submitUrl() {
           type="primary"
           :loading="cloning"
           :disabled="tab === 'path' ? !path.trim() : !url.trim()"
-          @click="tab === 'path' ? submitPath() : submitUrl()"
+          @click="submit(buildPayload())"
         >
           {{ cloning ? '处理中…' : '接入' }}
         </NButton>

@@ -69,47 +69,26 @@ async function selectFile(path: string) {
   }
 }
 
-async function stage(paths: string[]) {
+async function runStage(op: 'stage' | 'unstage', payload: { all?: boolean; paths?: string[] }): Promise<void> {
+  const isStage = op === 'stage'
+  const apiFn = isStage ? api.gitStage : api.gitUnstage
   try {
-    await api.gitStage(props.projectId, props.repoId, { paths })
-    message.success('已暂存')
+    await apiFn(props.projectId, props.repoId, payload)
+    if (payload.all) {
+      message.success(isStage ? '已暂存全部' : '已撤销暂存')
+    } else {
+      message.success(isStage ? '已暂存' : '已撤销暂存')
+    }
     await loadStatus()
-    if (selectedPath.value && paths.includes(selectedPath.value)) await selectFile(selectedPath.value)
+    if (payload.paths && selectedPath.value && payload.paths.includes(selectedPath.value)) {
+      await selectFile(selectedPath.value)
+    }
   } catch (e) {
     message.error((e as Error).message)
   }
 }
 
-async function unstage(paths: string[]) {
-  try {
-    await api.gitUnstage(props.projectId, props.repoId, { paths })
-    message.success('已撤销暂存')
-    await loadStatus()
-    if (selectedPath.value && paths.includes(selectedPath.value)) await selectFile(selectedPath.value)
-  } catch (e) {
-    message.error((e as Error).message)
-  }
-}
 
-async function stageAll() {
-  try {
-    await api.gitStage(props.projectId, props.repoId, { all: true })
-    message.success('已暂存全部')
-    await loadStatus()
-  } catch (e) {
-    message.error((e as Error).message)
-  }
-}
-
-async function unstageAll() {
-  try {
-    await api.gitUnstage(props.projectId, props.repoId, { all: true })
-    message.success('已撤销暂存')
-    await loadStatus()
-  } catch (e) {
-    message.error((e as Error).message)
-  }
-}
 
 async function doPush() {
   try {
@@ -274,10 +253,10 @@ onMounted(loadStatus)
       </div>
       <div v-else>
         <div v-if="status.summary.staged > 0 || status.summary.unstaged > 0" class="flex items-center gap-2 mb-2">
-          <NButton size="tiny" quaternary @click="stageAll" title="暂存全部">
+          <NButton size="tiny" quaternary @click="runStage('stage', { all: true })" title="暂存全部">
             <i aria-hidden="true" class="i-carbon-add" /> 全部暂存
           </NButton>
-          <NButton size="tiny" quaternary v-if="status.summary.staged > 0" @click="unstageAll" title="撤销全部暂存">
+          <NButton size="tiny" quaternary v-if="status.summary.staged > 0" @click="runStage('unstage', { all: true })" title="撤销全部暂存">
             <i aria-hidden="true" class="i-carbon-subtract" /> 全部撤销
           </NButton>
         </div>
@@ -292,6 +271,7 @@ onMounted(loadStatus)
             :aria-label="`查看 ${f.path} 变更`"
             @click="selectFile(f.path)"
             @keydown.enter="selectFile(f.path)"
+            @keydown.space.prevent="selectFile(f.path)"
           >
             <span :class="statusClass(f)" class="shrink-0 text-11px">{{ statusLabel(f) }}</span>
             <span class="code-text text-13px truncate flex-1" :title="f.path">{{ f.path }}</span>
@@ -300,7 +280,7 @@ onMounted(loadStatus)
               size="tiny"
               quaternary
               title="撤销暂存"
-              @click.stop="unstage([f.path])"
+              @click.stop="runStage('unstage', { paths: [f.path] })"
             >
               <template #icon><i aria-hidden="true" class="i-carbon-subtract" /></template>
             </NButton>
@@ -309,7 +289,7 @@ onMounted(loadStatus)
               size="tiny"
               quaternary
               title="暂存"
-              @click.stop="stage([f.path])"
+              @click.stop="runStage('stage', { paths: [f.path] })"
             >
               <template #icon><i aria-hidden="true" class="i-carbon-add" /></template>
             </NButton>

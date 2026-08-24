@@ -12,7 +12,7 @@ const emit = defineEmits<{ open: [id: string]; release: [id: string] }>()
 
 <template>
   <div
-    class="p-5 rounded-2xl border border-border bg-surface hover:border-border-strong transition-all duration-200 flex flex-col justify-between group shadow-sm hover:shadow-md cursor-pointer"
+    class="p-5 rounded-2xl border border-border bg-surface hover:border-border-strong transition-[border-color,box-shadow,background-color,transform] duration-200 flex flex-col justify-between group shadow-sm hover:shadow-md cursor-pointer"
     role="link"
     tabindex="0"
     @click="emit('open', project.id)"

@@ -59,8 +59,12 @@ async function load() {
 
 async function copyContent() {
   if (!content.value) return
-  await navigator.clipboard.writeText(content.value)
-  message.success('已复制到剪贴板')
+  try {
+    await navigator.clipboard.writeText(content.value)
+    message.success('已复制到剪贴板')
+  } catch (e) {
+    message.error(`复制失败: ${(e as Error).message}`)
+  }
 }
 
 /** 原生另存为下载当前文件（File System Access API，不支持时回退浏览器下载） */

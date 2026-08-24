@@ -102,20 +102,27 @@ async function confirmEdit() {
   }
 }
 
-async function resetEdit() {
+function resetEdit() {
   if (!selectedRelease.value) return
-  if (!window.confirm('恢复为自动草稿将丢弃当前人工编辑，确定继续？')) return
-  editSaving.value = true
-  try {
-    const updated = await api.editLog(selectedRelease.value.id, { track: logTrack.value, action: 'reset' })
-    applyUpdated(updated)
-    editText.value = updated.logs[logTrack.value].content
-    editing.value = false
-  } catch (e) {
-    message.error((e as Error).message)
-  } finally {
-    editSaving.value = false
-  }
+  dialog.warning({
+    title: '恢复自动草稿',
+    content: '恢复为自动草稿将丢弃当前人工编辑，确定继续？',
+    positiveText: '确定',
+    negativeText: '取消',
+    onPositiveClick: async () => {
+      editSaving.value = true
+      try {
+        const updated = await api.editLog(selectedRelease.value!.id, { track: logTrack.value, action: 'reset' })
+        applyUpdated(updated)
+        editText.value = updated.logs[logTrack.value].content
+        editing.value = false
+      } catch (e) {
+        message.error((e as Error).message)
+      } finally {
+        editSaving.value = false
+      }
+    },
+  })
 }
 
 // 编辑中切换内外轨 → 丢弃编辑态（内容按新轨重新可编辑）
@@ -272,7 +279,7 @@ watch(tab, (t) => {
               { id: 'settings', label: '仓库独立设置', icon: 'i-carbon-settings' }
             ]"
             :key="st.id"
-            class="px-3 py-1.5 rounded-lg text-xs font-mono font-medium flex items-center gap-1.5 transition-all cursor-pointer border-0"
+            class="px-3 py-1.5 rounded-lg text-xs font-mono font-medium flex items-center gap-1.5 transition-[background-color,border-color,color,box-shadow] cursor-pointer border-0"
             :class="tab === st.id ? 'bg-surface text-brand-600 font-bold border border-border shadow-xs' : 'text-text-3 hover:text-text-1 bg-transparent'"
             @click="tab = st.id as any"
           >

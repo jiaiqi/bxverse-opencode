@@ -3,9 +3,8 @@
 // S4: 事件持久化到 journal 旁挂 .events.jsonl，重启后可重放；缓冲上限 5000，标注 truncated
 
 import type { PublishEvent, PublishRequest } from '@bxverse/shared'
-import { engine } from '@bxverse/core'
+import { CoreError, CORE_ERROR_CODES, engine } from '@bxverse/core'
 import { JournalStore } from '@bxverse/core'
-import { apiError } from './http/json'
 import type { SseHub } from './sse'
 
 const MAX_BUFFERED = 5000
@@ -163,7 +162,7 @@ export class PublishQueue {
   /** 提交任务：忙 → 409 TASK_BUSY；空闲 → 立即异步执行并返回 taskId */
   async submit(req: PublishRequest): Promise<string> {
     if (this.running) {
-      throw apiError(409, 'TASK_BUSY', '已有发布任务在执行，请稍后再试')
+      throw new CoreError(CORE_ERROR_CODES.TASK_BUSY, '已有发布任务在执行，请稍后再试')
     }
     const taskId = `t_${stamp()}_${Math.random().toString(36).slice(2, 6)}`
     const task: TaskState = {

@@ -241,7 +241,7 @@ function triggerFastRelease() {
       <div class="flex-1 max-w-md mx-4">
         <button
           @click="uiStore.togglePalette(true)"
-          class="w-full flex items-center justify-between px-3 py-1 rounded-md bg-surface-alt hover:bg-surface-hover border border-border text-text-3 text-xs transition-all cursor-pointer"
+          class="w-full flex items-center justify-between px-3 py-1 rounded-md bg-surface-alt hover:bg-surface-hover border border-border text-text-3 text-xs transition-[background-color,border-color,color] cursor-pointer"
         >
           <div class="flex items-center gap-2">
             <i aria-hidden="true" class="i-carbon-search text-text-3" />
@@ -312,7 +312,7 @@ function triggerFastRelease() {
             v-for="nav in navItems"
             :key="nav.id"
             :to="nav.to"
-            class="w-10 h-10 rounded-xl flex flex-col items-center justify-center transition-all group relative no-underline text-inherit cursor-pointer"
+            class="w-10 h-10 rounded-xl flex flex-col items-center justify-center transition-[background-color,border-color,color,box-shadow,transform] group relative no-underline text-inherit cursor-pointer"
             :class="(route.path === nav.to || (nav.id === 'project' && route.path.startsWith('/project/') && !route.path.includes('/release') && !route.path.includes('/backups')) || (nav.id === 'release' && route.path.includes('/release')) || (nav.id === 'backups' && route.path.includes('/backups'))) ? 'bg-brand-soft text-brand-600 border border-brand-200 font-semibold' : 'text-text-3 hover:bg-surface-hover hover:text-text-1 border border-transparent'"
             :title="nav.label"
           >

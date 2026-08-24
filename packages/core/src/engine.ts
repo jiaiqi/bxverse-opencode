@@ -27,6 +27,7 @@ import { DataStore, loadAppConfig, versionSafe } from './store'
 import * as version from './version'
 import * as policy from './repo-policy'
 import { runWithPool } from './pool'
+import { CoreError, CORE_ERROR_CODES } from './errors'
 
 // ==================== 变更检测 ====================
 
@@ -131,10 +132,10 @@ function repoStampFor(project: ProjectDef, usedStamps: Set<string>): string {
 export async function planPublish(req: PublishRequest): Promise<PublishPlan> {
   const cfg = await loadAppConfig()
   const project = cfg.projects.find(p => p.id === req.projectId)
-  if (!project) throw new Error(`项目不存在: ${req.projectId}`)
+  if (!project) throw new CoreError(CORE_ERROR_CODES.NOT_FOUND, `项目不存在: ${req.projectId}`, { projectId: req.projectId })
   const candidateIds = req.repoIds ?? project.repos.map(r => r.id)
   const invalid = candidateIds.filter(id => !project.repos.some(r => r.id === id))
-  if (invalid.length) throw new Error(`工作区中不存在的仓库: ${invalid.join(', ')}`)
+  if (invalid.length) throw new CoreError(CORE_ERROR_CODES.REPO_NOT_FOUND, `工作区中不存在的仓库: ${invalid.join(', ')}`, { invalid })
 
   const warnings: string[] = []
   const statuses: Record<string, RepoStatus> = {}
@@ -359,7 +360,7 @@ export async function writeVersionFiles(
     }
     if (existing && existing.version === data.version && existing.build === data.build) return
     if (!existing || (prevRecordVersion && existing.version !== prevRecordVersion)) {
-      throw new Error(`version.json 与计划不一致（可能被外部修改）: ${vfPath}`)
+      throw new CoreError(CORE_ERROR_CODES.RECORD_IMMUTABLE, `version.json 与计划不一致（可能被外部修改）: ${vfPath}`, { vfPath })
     }
   }
   atomicWrite(vfPath, JSON.stringify(data, null, 2))
@@ -411,7 +412,7 @@ export async function executePublish(
 
   const cfg = await loadAppConfig()
   const project = cfg.projects.find(p => p.id === req.projectId)
-  if (!project) throw new Error(`项目不存在: ${req.projectId}`)
+  if (!project) throw new CoreError(CORE_ERROR_CODES.NOT_FOUND, `项目不存在: ${req.projectId}`, { projectId: req.projectId })
   const store = new DataStore({ dataDir: cfg.dataDir })
   const journalStore = new JournalStore()
 
@@ -481,7 +482,7 @@ export async function executePublish(
 
   const repoDefOf = (id: string): RepoDef => {
     const r = project.repos.find(x => x.id === id)
-    if (!r) throw new Error(`仓库不存在: ${id}`)
+    if (!r) throw new CoreError(CORE_ERROR_CODES.REPO_NOT_FOUND, `仓库不存在: ${id}`, { repoId: id })
     return r
   }
 
@@ -509,7 +510,7 @@ export async function executePublish(
       if (step?.state !== 'done') continue
       const recordId = step.releaseId ?? store.nextReleaseId('repo', planned.repoId, planned.version)
       const record = await store.readRecord(recordId)
-      if (!record) throw new Error(`恢复失败：已完成仓库记录不存在 ${recordId}`)
+      if (!record) throw new CoreError(CORE_ERROR_CODES.RECORD_NOT_FOUND, `恢复失败：已完成仓库记录不存在 ${recordId}`, { recordId })
       repoRecords.push(record)
       for (const ref of record.backups ?? step.backupRefs ?? []) {
         if (!backupRefs.some(existingRef => existingRef.releaseId === ref.releaseId && existingRef.repoId === ref.repoId)) {
@@ -554,7 +555,8 @@ export async function executePublish(
           }
           setStep(planned.repoId, 'version-sync', 'done')
         } catch (e) {
-          throw new Error(`版本同步失败: ${(e as Error).message}`)
+          if (e instanceof CoreError) throw e
+          throw new CoreError(CORE_ERROR_CODES.BUILD_FAILED, `版本同步失败: ${(e as Error).message}`, { repoId: planned.repoId, cause: (e as Error).message })
         }
       } else if (repo.versionSource === 'packageJson' && effectiveMode === 'downgraded') {
         emit('log', '未找到 package.json，跳过版本同步（已降级为派生模式）', { repoId: planned.repoId })
@@ -566,7 +568,7 @@ export async function executePublish(
         setStep(planned.repoId, 'install', 'running')
         emit('log', `安装依赖: ${installCmd}`, { repoId: planned.repoId })
         const im = await git.runShell(installCmd, repo.path, line => emit('log', line, { repoId: planned.repoId }), repo.buildTimeoutMs ?? 600_000)
-        if (!im.ok) throw new Error(`依赖安装失败: ${im.stderr.split('\n')[0] || `退出码 ${im.code}`}`)
+        if (!im.ok) throw new CoreError(CORE_ERROR_CODES.INSTALL_FAILED, `依赖安装失败: ${im.stderr.split('\n')[0] || `退出码 ${im.code}`}`, { repoId: planned.repoId, code: im.code, stderr: im.stderr })
         setStep(planned.repoId, 'install', 'done')
       }
 
@@ -575,7 +577,7 @@ export async function executePublish(
         setStep(planned.repoId, 'pre-build', 'running')
         emit('log', `前置命令: ${repo.preBuildCommand}`, { repoId: planned.repoId })
         const pr = await git.runShell(repo.preBuildCommand, repo.path, line => emit('log', line, { repoId: planned.repoId }), repo.buildTimeoutMs ?? 600_000)
-        if (!pr.ok) throw new Error(`前置命令失败: ${pr.stderr.split('\n')[0] || `退出码 ${pr.code}`}`)
+        if (!pr.ok) throw new CoreError(CORE_ERROR_CODES.BUILD_FAILED, `前置命令失败: ${pr.stderr.split('\n')[0] || `退出码 ${pr.code}`}`, { repoId: planned.repoId, code: pr.code, stderr: pr.stderr })
         setStep(planned.repoId, 'pre-build', 'done')
       }
 
@@ -584,7 +586,7 @@ export async function executePublish(
         setStep(planned.repoId, 'build', 'running')
         emit('log', `执行构建: ${repo.buildCommand}`, { repoId: planned.repoId })
         const r = await git.runShell(repo.buildCommand, repo.path, line => emit('log', line, { repoId: planned.repoId }), repo.buildTimeoutMs ?? 600_000)
-        if (!r.ok) throw new Error(`构建失败: ${r.stderr.split('\n')[0] || `退出码 ${r.code}`}`)
+        if (!r.ok) throw new CoreError(CORE_ERROR_CODES.BUILD_FAILED, `构建失败: ${r.stderr.split('\n')[0] || `退出码 ${r.code}`}`, { repoId: planned.repoId, code: r.code, stderr: r.stderr })
         setStep(planned.repoId, 'build', 'done')
       } else if (repo.buildCommand && req.skipBuild) {
         emit('log', '跳过构建（--skip-build）', { repoId: planned.repoId })
@@ -862,14 +864,14 @@ export async function executePublish(
   if (project.manifestTarget?.repoId && project.manifestTarget?.path) {
     try {
       const targetRepo = project.repos.find(r => r.id === project.manifestTarget!.repoId)
-      if (!targetRepo) throw new Error(`目标仓库不存在: ${project.manifestTarget.repoId}`)
+      if (!targetRepo) throw new CoreError(CORE_ERROR_CODES.VALIDATION, `目标仓库不存在: ${project.manifestTarget.repoId}`, { repoId: project.manifestTarget.repoId })
       const relPath = project.manifestTarget.path.trim()
-      if (!relPath.toLowerCase().endsWith('.json')) throw new Error('manifestTarget.path 必须以 .json 结尾')
-      if (path.isAbsolute(relPath) || relPath.split(/[\\/]/).includes('..')) throw new Error('manifestTarget.path 必须是仓库内的相对路径')
-      if (!fs.existsSync(targetRepo.path)) throw new Error(`目标仓库路径不存在: ${targetRepo.path}`)
+      if (!relPath.toLowerCase().endsWith('.json')) throw new CoreError(CORE_ERROR_CODES.VALIDATION, 'manifestTarget.path 必须以 .json 结尾', { path: project.manifestTarget.path })
+      if (path.isAbsolute(relPath) || relPath.split(/[\\/]/).includes('..')) throw new CoreError(CORE_ERROR_CODES.VALIDATION, 'manifestTarget.path 必须是仓库内的相对路径', { path: project.manifestTarget.path })
+      if (!fs.existsSync(targetRepo.path)) throw new CoreError(CORE_ERROR_CODES.VALIDATION, `目标仓库路径不存在: ${targetRepo.path}`, { repoPath: targetRepo.path })
       const absTarget = path.resolve(targetRepo.path, relPath)
       const repoRoot = path.resolve(targetRepo.path)
-      if (absTarget !== repoRoot && !absTarget.startsWith(repoRoot + path.sep)) throw new Error('manifestTarget.path 越界')
+      if (absTarget !== repoRoot && !absTarget.startsWith(repoRoot + path.sep)) throw new CoreError(CORE_ERROR_CODES.VALIDATION, 'manifestTarget.path 越界', { path: project.manifestTarget.path })
       const items = (projectRecord.repos ?? []).map(r => ({
         app: r.repoName,
         name: r.displayName || r.repoName,

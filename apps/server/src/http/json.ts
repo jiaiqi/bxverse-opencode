@@ -3,7 +3,8 @@
 
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import zlib from 'node:zlib'
-import { logger } from '@bxverse/core'
+import { CoreError, logger } from '@bxverse/core'
+import { statusForCode } from './errors'
 
 const MAX_BODY = 32 * 1024 * 1024
 
@@ -106,10 +107,24 @@ export function sendJsonGzip(res: ServerResponse, status: number, data: unknown,
 
 /** 统一错误响应 { error, code }（api.md §1.2） */
 export function sendError(res: ServerResponse, err: unknown): void {
-  const e = err as Partial<ApiError> & Error
-  const status = e.status ?? 500
-  const code = e.code ?? 'INTERNAL'
-  const message = e.message ?? '未预期错误'
+  let status: number
+  let code: string
+  let message: string
+  let detail: Record<string, unknown> | undefined
+  if (err instanceof CoreError) {
+    status = statusForCode(err.code)
+    // 若 CoreError 携带显式 status（如 apiError 转 CoreError），优先使用 detail.status
+    const maybeStatus = (err.detail as { status?: number } | undefined)?.status
+    if (typeof maybeStatus === 'number') status = maybeStatus
+    code = err.code
+    message = err.message
+    detail = err.detail
+  } else {
+    const e = err as Partial<ApiError> & Error
+    status = e.status ?? 500
+    code = e.code ?? 'INTERNAL'
+    message = e.message ?? '未预期错误'
+  }
   const req = (res as unknown as { req?: IncomingMessage }).req
   const method = req?.method ?? '-'
   let path = '-'
@@ -120,7 +135,10 @@ export function sendError(res: ServerResponse, err: unknown): void {
     path = req?.url ?? '-'
   }
   try {
-    logger.structuredLog('error', message, { method, path, status, code, message })
+    const fields: Record<string, unknown> = { method, path, status, code, message }
+    if (detail) fields.detail = detail
+    if (err instanceof CoreError) fields.coreCode = code
+    logger.structuredLog('error', message, fields)
   } catch {
     // ignore logger failure
   }

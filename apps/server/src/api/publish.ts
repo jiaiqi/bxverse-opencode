@@ -20,29 +20,13 @@ export function register(
     if (!project) throw apiError(404, 'NOT_FOUND', `项目不存在: ${req.projectId}`)
 
     if (req.dryRun) {
-      try {
-        const plan = await engine.planPublish(req)
-        sendJsonGzip(ctx.res, 200, plan, ctx.req)
-      } catch (e) {
-        const msg = (e as Error).message
-        // TODO(A1): 字符串嗅探分类待 CoreError 体系收敛（F2 范围内不改，仅加注释）
-        if (msg.includes('仓库')) throw apiError(400, 'VALIDATION', msg)
-        throw apiError(500, 'GIT_FAILED', `计划生成失败: ${msg}`)
-      }
+      const plan = await engine.planPublish(req)
+      sendJsonGzip(ctx.res, 200, plan, ctx.req)
       return
     }
 
-    try {
-      const taskId = await services.queue.submit(req)
-      sendJson(ctx.res, 202, { taskId, queued: true })
-    } catch (e) {
-      const err = e as { status?: number; code?: string; message?: string }
-      if (err.status === 409) {
-        sendJson(ctx.res, 409, { error: err.message, code: 'TASK_BUSY', queueLength: 1 })
-        return
-      }
-      throw e
-    }
+    const taskId = await services.queue.submit(req)
+    sendJson(ctx.res, 202, { taskId, queued: true })
   })
 
   router.get('/api/publish/current', async (ctx: Ctx) => {

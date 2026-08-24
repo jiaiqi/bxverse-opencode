@@ -137,7 +137,7 @@ function rotateToken() {
               @click="pickStyle('wenxi')"
             >
               <span class="w-9 h-9 rounded-md border border-border shrink-0 flex items-center justify-center overflow-hidden bg-[#050507]">
-                <span class="w-4 h-4 rounded-sm bg-brand-500 shrink-0" style="box-shadow: 0 0 8px rgba(0,201,110,.5)" />
+                <span class="w-4 h-4 rounded-sm bg-brand-500 shrink-0" style="box-shadow: 0 0 8px var(--bx-brand-ring)" />
               </span>
               <span class="min-w-0">
                 <span class="block text-sm font-medium text-text-1">WenXi 深色玻璃</span>

@@ -58,7 +58,7 @@ function onKeydown(e: KeyboardEvent) {
       :aria-expanded="isDir ? isExpanded : undefined"
       :aria-label="isDir ? `目录 ${entry.name}` : `文件 ${entry.name}`"
       :style="{ paddingLeft: `${10 + depth * 14}px` }"
-      :class="{ 'tree-row-selected': !isDir && selectedPath === fullPath }"
+      :class="{ 'tree-row-active': !isDir && selectedPath === fullPath }"
       @click="isDir ? emit('toggle', fullPath) : emit('open-file', fullPath, entry)"
       @keydown="onKeydown"
     >
@@ -106,31 +106,4 @@ function onKeydown(e: KeyboardEvent) {
   </div>
 </template>
 
-<style scoped>
-.tree-row {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding-top: 5px;
-  padding-bottom: 5px;
-  padding-right: 10px;
-  font-size: 13px;
-  color: var(--bx-text-2);
-  cursor: pointer;
-  transition: background-color var(--bx-dur-fast) var(--bx-ease);
-  border-left: 2px solid transparent;
-}
-.tree-row:focus-visible {
-  outline: 2px solid var(--bx-brand-500);
-  outline-offset: -2px;
-}
-.tree-row:hover {
-  background: var(--bx-surface-hover);
-  color: var(--bx-text-1);
-}
-.tree-row-selected {
-  background: var(--bx-brand-soft);
-  border-left-color: var(--bx-brand-500);
-  color: var(--bx-brand-600);
-}
-</style>
+

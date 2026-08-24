@@ -143,15 +143,23 @@ const flatActive = (groupIdx: number, itemIdx: number): number => {
           placeholder="搜索命令、项目、仓库…"
           autocomplete="off"
           spellcheck="false"
+          role="combobox"
+          aria-autocomplete="list"
+          aria-controls="palette-listbox"
+          :aria-expanded="true"
+          :aria-activedescendant="filtered.length ? `cmd-${activeIndex}` : undefined"
           @keydown="onKeydown"
         />
         <span class="text-xs text-text-3 border border-border rounded-sm px-1 py-0.5">Esc</span>
       </div>
-      <div class="max-h-96 overflow-y-auto py-2">
+      <div id="palette-listbox" class="max-h-96 overflow-y-auto py-2" role="listbox" aria-label="搜索结果">
         <template v-for="(group, gi) in grouped" :key="group[0]">
-          <div class="px-4 pt-2 pb-1 text-xs text-text-3">{{ group[0] }}</div>
+           <div class="px-4 pt-2 pb-1 text-xs text-text-3" role="presentation">{{ group[0] }}</div>
           <template v-for="(cmd, ii) in group[1]" :key="cmd.title">
             <button
+              :id="`cmd-${flatActive(gi, ii)}`"
+              role="option"
+              :aria-selected="flatActive(gi, ii) === activeIndex ? 'true' : 'false'"
               class="w-full flex items-center gap-2.5 mx-2 px-3 h-9 rounded-md cursor-pointer transition-colors duration-100 focus-ring"
               :class="flatActive(gi, ii) === activeIndex ? 'bg-brand-soft text-brand-600' : 'text-text-2 hover:bg-surface-hover'"
               @mouseenter="activeIndex = flatActive(gi, ii)"

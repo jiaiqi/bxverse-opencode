@@ -34,6 +34,11 @@ export async function bootstrap(): Promise<boolean> {
   }
 }
 
+/** 抽取：统一的 401 后 bootstrap 重试触发器（供 request / download 复用） */
+async function ensureToken(): Promise<boolean> {
+  return bootstrap()
+}
+
 interface RequestOptions {
   body?: unknown
   skipRetry?: boolean
@@ -46,7 +51,7 @@ async function request<T>(method: string, path: string, opts: RequestOptions = {
   const payload = opts.body === undefined ? undefined : JSON.stringify(opts.body)
   const res = await fetch(`/api${path}`, { method, headers, body: payload, cache: 'no-store' })
   if (res.status === 401 && !opts.skipRetry) {
-    if (await bootstrap()) return request<T>(method, path, { ...opts, skipRetry: true })
+    if (await ensureToken()) return request<T>(method, path, { ...opts, skipRetry: true })
     throw new ApiError('UNAUTHORIZED', 401, '会话失效，请刷新页面重试')
   }
   if (!res.ok) {
@@ -66,8 +71,12 @@ export const http = {
   del: <T>(path: string) => request<T>('DELETE', path),
 }
 
-export async function download(path: string): Promise<{ blob: Blob; filename: string }> {
+export async function download(path: string, _retried = false): Promise<{ blob: Blob; filename: string }> {
   const res = await fetch(`/api${path}`, { headers: token ? { 'X-BX-Token': token } : {}, cache: 'no-store' })
+  if (res.status === 401 && !_retried) {
+    if (await ensureToken()) return download(path, true)
+    throw new ApiError('UNAUTHORIZED', 401, '会话失效，请刷新页面重试')
+  }
   if (!res.ok) throw new ApiError('DOWNLOAD_FAILED', res.status, `下载失败（${res.status}）`)
   const cd = res.headers.get('Content-Disposition') ?? ''
   const star = /filename\*=UTF-8''([^;]+)/i.exec(cd)

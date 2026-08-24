@@ -205,10 +205,10 @@ watch(projectId, async (id) => {
   await Promise.all([loadStatuses(), loadReleases(), checkBranchAlignment()])
 }, { immediate: true })
 
-// 状态轮询（30s 或配置周期）
+// 状态轮询（30s 或配置周期）— interval 响应式
 usePolling(async () => {
   if (project.value) await Promise.all([loadStatuses(), loadReleases(), checkBranchAlignment()])
-}, appStore.pollInterval || 30_000)
+}, () => appStore.pollInterval || 30_000)
 </script>
 
 <template>
@@ -324,7 +324,7 @@ usePolling(async () => {
           <section class="glass-panel rounded-2xl p-5 space-y-3 mt-4">
             <div class="flex items-center justify-between">
               <h2 class="section-title text-sm font-bold text-text-1 flex items-center gap-2">
-                <i aria-hidden="true" class="i-carbon-history text-[#A855F7]" />
+                <i aria-hidden="true" class="i-carbon-history text-[var(--bx-accent-purple)]" />
                 <span>历次发布审计记录 (Release Audit Trail)</span>
               </h2>
               <span class="text-xs font-mono text-text-3">历史数据由本地 Git 数据仓库自动审计存盘</span>
@@ -339,14 +339,15 @@ usePolling(async () => {
             </div>
             <div v-else class="overflow-x-auto">
               <table class="w-full text-left border-collapse text-xs font-mono">
+                <caption class="sr-only">历次发布审计记录</caption>
                 <thead>
                   <tr class="text-text-3 border-b border-border text-[11px]">
-                    <th class="py-2.5 px-3 font-medium">发布版本</th>
-                    <th class="py-2.5 px-3 font-medium">发布时间</th>
-                    <th class="py-2.5 px-3 font-medium">关联工程</th>
-                    <th class="py-2.5 px-3 font-medium">状态 / 审计</th>
-                    <th class="py-2.5 px-3 font-medium">归档备份</th>
-                    <th class="py-2.5 px-3 font-medium text-right">操作与纠偏</th>
+                    <th scope="col" class="py-2.5 px-3 font-medium">发布版本</th>
+                    <th scope="col" class="py-2.5 px-3 font-medium">发布时间</th>
+                    <th scope="col" class="py-2.5 px-3 font-medium">关联工程</th>
+                    <th scope="col" class="py-2.5 px-3 font-medium">状态 / 审计</th>
+                    <th scope="col" class="py-2.5 px-3 font-medium">归档备份</th>
+                    <th scope="col" class="py-2.5 px-3 font-medium text-right">操作与纠偏</th>
                   </tr>
                 </thead>
                 <tbody class="divide-y divide-border">
@@ -360,7 +361,7 @@ usePolling(async () => {
                     </td>
                     <td class="py-2.5 px-3">
                       <span v-if="r.deprecated" class="chip chip-error text-[10px]" :title="'废弃原因: ' + r.deprecateReason">
-                        ⚠️ 已废弃 ({{ r.deprecateReason || '人为撤销' }})
+                        <i aria-hidden="true" class="i-carbon-warning-filled text-warning mr-1 align-[-0.125em]" />已废弃 ({{ r.deprecateReason || '人为撤销' }})
                       </span>
                       <span v-else class="chip chip-brand text-[10px]">
                         ● 双轨已确认

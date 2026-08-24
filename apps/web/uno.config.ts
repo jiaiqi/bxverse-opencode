@@ -72,5 +72,7 @@ export default defineConfig({
     ['log-line', 'font-mono text-13px leading-6 break-all'],
     ['console-wrap', 'bg-[#0A0C0F] border border-border rounded-[var(--bx-radius-lg)] p-4 overflow-auto font-mono text-13px leading-6 text-[#B7C1CD]'],
     ['focus-ring', 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:ring-offset-bg'],
+    ['tree-row', 'flex items-center gap-[6px] py-[5px] pr-[10px] text-[13px] text-text-2 cursor-pointer transition-colors duration-150 border-l-2 border-transparent hover:bg-surface-hover hover:text-text-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500'],
+    ['tree-row-active', 'bg-brand-soft !border-l-brand-500 text-brand-600'],
   ],
 })

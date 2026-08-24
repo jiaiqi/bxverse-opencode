@@ -1,10 +1,10 @@
 <script setup lang="ts">
 // FileTree.vue —— 懒加载目录树（递归节点 FileTreeNode）
 
-import type { FileEntry, TreeNode } from '@bxverse/shared'
-import { api } from '../api'
+import type { FileEntry } from '@bxverse/shared'
 import { useMessage } from 'naive-ui'
 import FileTreeNode from './FileTreeNode.vue'
+import { useLazyTree } from '../composables/useLazyTree'
 
 const props = defineProps<{
   pid: string
@@ -14,51 +14,23 @@ const props = defineProps<{
 const emit = defineEmits<{ select: [path: string, entry: FileEntry] }>()
 
 const message = useMessage()
-const root = ref<TreeNode | null>(null)
-const childrenMap = ref<Map<string, TreeNode>>(new Map())
-const expanded = ref<Set<string>>(new Set())
-const loadingSet = ref<Set<string>>(new Set())
+const { root, childrenMap, expanded, loadingSet, rootLoading, loadRoot, toggleDir, reset } = useLazyTree(() => props.pid, () => props.rid)
 const selectedPath = ref('')
-const rootLoading = ref(false)
 
-async function loadRoot() {
-  rootLoading.value = true
+async function wrappedLoadRoot(): Promise<void> {
   try {
-    root.value = await api.tree(props.pid, props.rid, '')
+    await loadRoot()
   } catch (e) {
     message.error((e as Error).message)
-  } finally {
-    rootLoading.value = false
   }
 }
 
-async function loadChildren(dir: string): Promise<void> {
-  if (childrenMap.value.has(dir)) return
-  const next = new Set(loadingSet.value)
-  next.add(dir)
-  loadingSet.value = next
+async function wrappedToggleDir(dir: string): Promise<void> {
   try {
-    childrenMap.value.set(dir, await api.tree(props.pid, props.rid, dir))
+    await toggleDir(dir)
   } catch (e) {
     message.error((e as Error).message)
-  } finally {
-    const done = new Set(loadingSet.value)
-    done.delete(dir)
-    loadingSet.value = done
   }
-}
-
-async function toggleDir(dir: string) {
-  if (expanded.value.has(dir)) {
-    const next = new Set(expanded.value)
-    next.delete(dir)
-    expanded.value = next
-    return
-  }
-  const next = new Set(expanded.value)
-  next.add(dir)
-  expanded.value = next
-  await loadChildren(dir)
 }
 
 function selectFile(path: string, entry: FileEntry) {
@@ -66,13 +38,11 @@ function selectFile(path: string, entry: FileEntry) {
   emit('select', path, entry)
 }
 
-onMounted(loadRoot)
+onMounted(wrappedLoadRoot)
 watch(() => props.rid, () => {
-  root.value = null
-  childrenMap.value = new Map()
-  expanded.value = new Set()
+  reset()
   selectedPath.value = ''
-  void loadRoot()
+  void wrappedLoadRoot()
 })
 </script>
 
@@ -94,7 +64,7 @@ watch(() => props.rid, () => {
         :children-map="childrenMap"
         :loading-set="loadingSet"
         :selected-path="selectedPath"
-        @toggle="toggleDir"
+        @toggle="wrappedToggleDir"
         @open-file="selectFile"
       />
       <div v-if="root.truncated" class="px-3 py-1 text-xs text-text-3">目录过大，已截断显示</div>

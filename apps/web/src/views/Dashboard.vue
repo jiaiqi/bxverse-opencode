@@ -54,8 +54,8 @@ onMounted(() => {
   void refresh()
 })
 
-// 页面可见时按配置周期自动刷新（总览/项目/仓库状态）
-usePolling(refresh, computed(() => appStore.pollInterval).value || 30_000)
+// 页面可见时按配置周期自动刷新（总览/项目/仓库状态）— interval 响应式
+usePolling(refresh, () => appStore.pollInterval || 30_000)
 </script>
 
 <template>

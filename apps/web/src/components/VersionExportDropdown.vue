@@ -192,8 +192,12 @@ async function openPreview() {
 
 async function copyPreview() {
   if (!previewContent.value) return
-  await navigator.clipboard.writeText(previewContent.value)
-  message.success('已复制到剪贴板')
+  try {
+    await navigator.clipboard.writeText(previewContent.value)
+    message.success('已复制到剪贴板')
+  } catch (e) {
+    message.error(`复制失败: ${(e as Error).message}`)
+  }
 }
 
 async function downloadPreview() {

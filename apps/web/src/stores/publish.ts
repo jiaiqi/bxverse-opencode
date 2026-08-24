@@ -54,6 +54,9 @@ export const usePublishStore = defineStore('publish', {
     changedRepos: (s) => s.plan?.changed ?? [],
     syncedOnly: (s) => s.plan?.syncedOnly ?? [],
   },
+  // 导航门禁（编排壳统一收口）：running 禁跳、step6 需 result、planDirty 前进拦截
+  // 供 ReleaseWizard timeline/底部栏/守卫复用，避免散落的 store.step = n 绕过校验
+
   actions: {
     reset(projectId: string) {
       this.$patch({
@@ -191,6 +194,21 @@ export const usePublishStore = defineStore('publish', {
         this.error = e.message
         this.phase = 'error'
       }
+    },
+
+    canGoTo(target: number): boolean {
+      if (target < 1 || target > 6) return false
+      if (this.phase === 'running') return false
+      if (target === 6 && !this.result) return false
+      // planDirty 前进拦截：步骤 1→2 是生成计划本身，允许 dirty 前进；其余前进需先重建计划
+      if (target > this.step && this.planDirty && !(this.step === 1 && target === 2)) return false
+      return true
+    },
+
+    goTo(target: number): boolean {
+      if (!this.canGoTo(target)) return false
+      this.step = target
+      return true
     },
   },
 })

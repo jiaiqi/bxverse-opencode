@@ -8,19 +8,39 @@ import fs from 'node:fs'
 import path from 'node:path'
 import type { CommitInfo, DiffStat, BranchAlignmentItem, BranchAlignmentResult } from '@bxverse/shared'
 import { classifyCommit } from './changelog'
+import { CoreError, CORE_ERROR_CODES } from './errors'
+import type { CoreErrorCode } from './errors'
 
 export type GitResult =
   | { ok: true; stdout: string; stderr: string }
   | { ok: false; code: number | string; stderr: string }
 
-export class GitError extends Error {
-  code: number | string
+function mapGitCodeToCoreError(code: number | string, _stderr: string): CoreErrorCode {
+  const s = String(code)
+  if (s === 'TIMEOUT') return CORE_ERROR_CODES.GIT_TIMEOUT
+  if (s === 'TAG_CONFLICT') return CORE_ERROR_CODES.TAG_CONFLICT
+  if (s === 'TAG_EXISTS_DIFFERENT') return CORE_ERROR_CODES.TAG_EXISTS_DIFFERENT
+  if (s === 'EMPTY_REPO') return CORE_ERROR_CODES.REPO_NOT_FOUND
+  if (s === 'BASE_UNREACHABLE') return CORE_ERROR_CODES.BASE_UNREACHABLE
+  if (s === 'NO_REMOTE') return CORE_ERROR_CODES.VALIDATION
+  if (s === 'BAD_URL') return CORE_ERROR_CODES.VALIDATION
+  if (s === 'TARGET_EXISTS') return CORE_ERROR_CODES.VALIDATION
+  if (s === 'PATH_OUT_OF_REPO') return CORE_ERROR_CODES.VALIDATION
+  if (s === 'EMPTY_SUBJECT' || s === 'BAD_SUBJECT' || s === 'BAD_BRANCH' || s === 'BAD_TAG') return CORE_ERROR_CODES.VALIDATION
+  if (s === 'BUFFER' || s === 'SPAWN') return CORE_ERROR_CODES.GIT_FAILED
+  // 数字退出码统一归为 GIT_FAILED（可通过 detail.gitCode 区分）
+  return CORE_ERROR_CODES.GIT_FAILED
+}
+
+export class GitError extends CoreError {
+  gitCode: number | string
   stderr: string
   constructor(code: number | string, stderr: string) {
+    const mapped = mapGitCodeToCoreError(code, stderr)
     const first = stderr.split('\n')[0] || `git 执行失败（code=${code}）`
-    super(`[${code}] ${first}`)
+    super(mapped, `[${code}] ${first}`, { gitCode: code, stderr })
     this.name = 'GitError'
-    this.code = code
+    this.gitCode = code
     this.stderr = stderr
   }
 }
@@ -97,7 +117,7 @@ export function git(args: string[], opts: GitOpts = {}): Promise<GitResult> {
   })
 }
 
-/** 成功则返回 stdout，失败抛 GitError */
+/** 成功则返回 stdout，失败抛 CoreError（GitError 子类，携带 code） */
 export function ensureOk(result: GitResult): string {
   if (result.ok) return result.stdout
   throw new GitError(result.code, result.stderr)

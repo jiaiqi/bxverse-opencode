@@ -45,13 +45,13 @@ function onKeydown(e: KeyboardEvent) {
 <template>
   <div>
     <div
-      class="picker-row"
+      class="tree-row"
       role="button"
       tabindex="0"
       :aria-expanded="isExpanded"
       :aria-label="`目录 ${entry.name}`"
       :style="{ paddingLeft: `${10 + depth * 14}px` }"
-      :class="{ 'picker-row-active': selectedPath === fullPath }"
+      :class="{ 'tree-row-active': selectedPath === fullPath }"
       @keydown="onKeydown"
     >
       <i aria-hidden="true" class="i-carbon-chevron-right text-12px text-text-3 transition-transform duration-150 shrink-0 cursor-pointer hover:text-brand-500"
@@ -89,31 +89,4 @@ function onKeydown(e: KeyboardEvent) {
   </div>
 </template>
 
-<style scoped>
-.picker-row {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding-top: 5px;
-  padding-bottom: 5px;
-  padding-right: 10px;
-  font-size: 13px;
-  color: var(--bx-text-2);
-  cursor: pointer;
-  transition: background-color var(--bx-dur-fast) var(--bx-ease);
-  border-left: 2px solid transparent;
-}
-.picker-row:focus-visible {
-  outline: 2px solid var(--bx-brand-500);
-  outline-offset: -2px;
-}
-.picker-row:hover {
-  background: var(--bx-surface-hover);
-  color: var(--bx-text-1);
-}
-.picker-row-active {
-  background: var(--bx-brand-soft);
-  border-left-color: var(--bx-brand-500);
-  color: var(--bx-brand-600);
-}
-</style>
+

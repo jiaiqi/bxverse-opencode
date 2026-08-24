@@ -16,11 +16,11 @@ withDefaults(defineProps<{
 
 <template>
   <div
-    class="p-4 rounded-xl border transition-all duration-150 relative overflow-hidden bg-surface hover:border-border-strong group"
+    class="p-4 rounded-xl border transition-[border-color,background-color,box-shadow] duration-150 relative overflow-hidden bg-surface hover:border-border-strong group"
     :class="[
       color === 'cyan' ? 'border-l-[3px] border-l-info' :
       color === 'amber' ? 'border-l-[3px] border-l-warning' :
-      color === 'purple' ? 'border-l-[3px] border-l-[#A855F7]' :
+      color === 'purple' ? 'border-l-[3px] border-l-[var(--bx-accent-purple)]' :
       'border-l-[3px] border-l-brand-500',
       'border-border'
     ]"
@@ -32,7 +32,7 @@ withDefaults(defineProps<{
         :class="[
           color === 'cyan' ? 'bg-info-soft text-info' :
           color === 'amber' ? 'bg-warning-soft text-warning' :
-          color === 'purple' ? 'bg-[#A855F7]/15 text-[#A855F7]' :
+          color === 'purple' ? 'bg-[var(--bx-accent-purple-soft)] text-[var(--bx-accent-purple)]' :
           'bg-brand-soft text-brand-500'
         ]"
       >

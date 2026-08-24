@@ -9,6 +9,7 @@ import { DataStore, versionSafe } from '../store'
 import { backupArtifact, ARTIFACT_TAR } from './artifact'
 import { hashFile } from './manifest'
 import { createArchiveGz, createBundle } from './source'
+import { CoreError, CORE_ERROR_CODES } from '../errors'
 
 export { backupArtifact, ARTIFACT_MANIFEST, ARTIFACT_TAR } from './artifact'
 export { buildManifest, readManifest, hashFile } from './manifest'
@@ -18,7 +19,12 @@ export const SOURCE_BUNDLE = 'source.bundle'
 export const SOURCE_ARCHIVE = 'source.tar.gz'
 export const SOURCE_SHA256 = 'source.sha256'
 
-export class BackupError extends Error {}
+export class BackupError extends CoreError {
+  constructor(message: string, detail?: Record<string, unknown>) {
+    super(CORE_ERROR_CODES.BACKUP_FAILED, message, detail)
+    this.name = 'BackupError'
+  }
+}
 
 export interface BackupRepoOptions {
   projectId: string
