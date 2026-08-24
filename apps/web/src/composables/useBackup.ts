@@ -59,14 +59,19 @@ export function useBackup(pid: () => string) {
     } catch { /* ignore */ }
   }
 
+  function buildRetentionFromForm(): Record<string, number> | undefined {
+    const retention: Record<string, number> = {}
+    if (retentionForm.keepLast != null) retention.keepLast = retentionForm.keepLast
+    if (retentionForm.maxBytesMB != null) retention.maxBytes = retentionForm.maxBytesMB * 1024 * 1024
+    if (retentionForm.keepDays != null) retention.keepDays = retentionForm.keepDays
+    return Object.keys(retention).length ? retention : undefined
+  }
+
   async function saveRetention(): Promise<void> {
     retentionSaving.value = true
     try {
-      const retention: Record<string, number> = {}
-      if (retentionForm.keepLast != null) retention.keepLast = retentionForm.keepLast
-      if (retentionForm.maxBytesMB != null) retention.maxBytes = retentionForm.maxBytesMB * 1024 * 1024
-      if (retentionForm.keepDays != null) retention.keepDays = retentionForm.keepDays
-      await api.saveConfig({ backup: { retention: Object.keys(retention).length ? retention : undefined } as never })
+      const retention = buildRetentionFromForm()
+      await api.saveConfig({ backup: { retention } as never })
     } finally {
       retentionSaving.value = false
     }
@@ -75,12 +80,9 @@ export function useBackup(pid: () => string) {
   async function doCleanup(dryRun: boolean): Promise<import('@bxverse/shared').BackupCleanupResult> {
     cleanupLoading.value = true
     try {
-      const retention: Record<string, number> = {}
-      if (retentionForm.keepLast != null) retention.keepLast = retentionForm.keepLast
-      if (retentionForm.maxBytesMB != null) retention.maxBytes = retentionForm.maxBytesMB * 1024 * 1024
-      if (retentionForm.keepDays != null) retention.keepDays = retentionForm.keepDays
+      const retention = buildRetentionFromForm()
       const body: Record<string, unknown> = { projectId: pid(), dryRun }
-      if (Object.keys(retention).length) body.retention = retention
+      if (retention) body.retention = retention
       return await api.backupCleanup(body as never)
     } finally {
       cleanupLoading.value = false
@@ -100,17 +102,5 @@ export function useBackup(pid: () => string) {
     loadRetention,
     saveRetention,
     doCleanup,
-  }
-}
-
-// 辅助：通过 File System Access API 让用户选本地目录（恢复目标）
-export async function pickLocalDirectory(): Promise<string | null> {
-  try {
-    const handle = await (window as unknown as { showDirectoryPicker: () => Promise<{ name: string }> }).showDirectoryPicker()
-    // 仅能拿到句柄名，真实绝对路径无法获取（浏览器安全限制），返回句柄名提示用户手输
-    return handle.name
-  } catch (e) {
-    if ((e as DOMException)?.name === 'AbortError') return null
-    return null
   }
 }

@@ -300,11 +300,6 @@ function insertTemplate(key: string) {
         </div>
       </div>
     </template>
-    <template v-else-if="showDiff">
-      <div class="p-3">
-        <DiffView :before="autoDraft" :after="content" />
-      </div>
-    </template>
     <template v-else>
       <div class="grid grid-cols-2 divide-x divide-border h-90">
         <div class="min-w-0">

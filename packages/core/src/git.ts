@@ -27,6 +27,24 @@ export class GitError extends Error {
 
 const MAX_BUFFER = 50 * 1024 * 1024
 
+/** 私有：跨平台进程树终止（Windows 递归杀树，POSIX 单进程 SIGKILL） */
+function killTree(pid: number | undefined): void {
+  if (pid == null) return
+  if (process.platform === 'win32') {
+    try {
+      const killer = spawn('taskkill', ['/pid', String(pid), '/T', '/F'], {
+        windowsHide: true,
+        stdio: 'ignore',
+      })
+      killer.on('error', () => {})
+    } catch {}
+  } else {
+    try {
+      process.kill(pid, 'SIGKILL')
+    } catch {}
+  }
+}
+
 export interface GitOpts {
   cwd?: string
   timeoutMs?: number
@@ -53,13 +71,13 @@ export function git(args: string[], opts: GitOpts = {}): Promise<GitResult> {
     let overLimit = false
     const timer = setTimeout(() => {
       killed = true
-      child.kill('SIGKILL')
+      killTree(child.pid)
     }, timeoutMs)
     child.stdout.on('data', (d: Buffer) => {
       stdout += d.toString('utf8')
       if (stdout.length > MAX_BUFFER) {
         overLimit = true
-        child.kill('SIGKILL')
+        killTree(child.pid)
       }
     })
     child.stderr.on('data', (d: Buffer) => {
@@ -98,7 +116,7 @@ export async function runShell(
     let killed = false
     const timer = setTimeout(() => {
       killed = true
-      child.kill('SIGKILL')
+      killTree(child.pid)
     }, timeoutMs)
     let buf = ''
     child.stdout.on('data', (d: Buffer) => {

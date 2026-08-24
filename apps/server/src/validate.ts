@@ -1,6 +1,8 @@
 // apps/server/src/validate.ts
 // 运行时校验（P1 OpenAPI）：基于 openApiSpec 的最小可用校验，零依赖
 
+import path from 'node:path'
+import { store } from '@bxverse/core'
 import { apiError } from './http/json'
 
 export function assertBackupRetention(obj: unknown, field = 'retention'): asserts obj is import('@bxverse/shared').BackupRetention {
@@ -40,4 +42,9 @@ export function assertRestoreBody(body: Record<string, unknown>): void {
   const isAbsolute = /^[a-zA-Z]:[\\/]/.test(targetDir) || targetDir.startsWith('/')
   if (!isAbsolute) throw apiError(400, 'VALIDATION', 'targetDir 必须为绝对路径')
   if (/^\/?$/.test(targetDir) || /^[a-zA-Z]:[\\/]?$/.test(targetDir)) throw apiError(400, 'VALIDATION', 'targetDir 不能为根目录')
+  // 白名单：必须位于 BX_HOME 及其子目录内（S6 收紧）
+  const resolvedTarget = path.resolve(targetDir)
+  const homeRoot = path.resolve(store.resolveHome().root)
+  const inside = resolvedTarget === homeRoot || resolvedTarget.startsWith(homeRoot + path.sep)
+  if (!inside) throw apiError(400, 'VALIDATION', `targetDir 必须位于 BX_HOME 目录下（仅允许 ${homeRoot} 及其子目录）`)
 }

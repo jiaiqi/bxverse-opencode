@@ -1,7 +1,7 @@
 // apps/server/src/index.ts
 // 进程入口：启动序列 + 轮询定时器 + SIGINT/SIGTERM 优雅退出
 
-import { store } from '@bxverse/core'
+import { logger, store } from '@bxverse/core'
 import { JournalStore } from '@bxverse/core'
 import { createApp } from './app'
 
@@ -54,6 +54,17 @@ async function main(): Promise<void> {
   }
   process.on('SIGINT', () => void shutdown('SIGINT'))
   process.on('SIGTERM', () => void shutdown('SIGTERM'))
+
+  // 未处理的 Promise 拒绝：记日志不退出（S1）
+  process.on('unhandledRejection', (reason) => {
+    const msg = reason instanceof Error ? reason.message : String(reason)
+    try {
+      logger.structuredLog('error', `unhandledRejection: ${msg}`, { reason: String(reason) })
+    } catch {
+      // ignore logger failure
+    }
+    console.error('[bxverse] unhandledRejection:', reason)
+  })
 
   // 端口占用等启动错误提示
   process.on('uncaughtException', (e) => {

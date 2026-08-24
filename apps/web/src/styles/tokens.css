@@ -233,23 +233,6 @@ pre,
   overscroll-behavior: contain;
 }
 
-/* 顶栏 / 侧栏半透明分层（精密仪器：轻量 blur，非大面积玻璃） */.topbar {
-  background: rgba(13, 16, 21, 0.6);
-  backdrop-filter: blur(14px) saturate(130%);
-  -webkit-backdrop-filter: blur(14px) saturate(130%);
-}
-html:not(.dark) .topbar {
-  background: rgba(255, 255, 255, 0.72);
-}
-.sidebar {
-  background: rgba(16, 19, 25, 0.78);
-  backdrop-filter: blur(14px) saturate(130%);
-  -webkit-backdrop-filter: blur(14px) saturate(130%);
-}
-html:not(.dark) .sidebar {
-  background: rgba(255, 255, 255, 0.82);
-}
-
 /* 侧栏 logo 方块 */
 .sb-logo-mark {
   width: 26px;

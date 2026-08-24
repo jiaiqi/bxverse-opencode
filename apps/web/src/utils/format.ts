@@ -27,6 +27,7 @@ export function formatDateTime(iso: string | Date): string {
 
 /** 文件大小可读化（Intl.NumberFormat） */
 export function formatSize(bytes: number): string {
+  if (!Number.isFinite(bytes) || bytes <= 0) return '—'
   if (bytes < 1024) return `${bytes} B`
   const units = ['KB', 'MB', 'GB']
   const nf = new Intl.NumberFormat('zh-CN', { maximumFractionDigits: 1 })

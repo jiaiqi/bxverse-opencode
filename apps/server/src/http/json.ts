@@ -3,6 +3,7 @@
 
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import zlib from 'node:zlib'
+import { logger } from '@bxverse/core'
 
 const MAX_BODY = 32 * 1024 * 1024
 
@@ -75,13 +76,16 @@ export function sendJson(res: ServerResponse, status: number, data: unknown): vo
 
 /**
  * gzip 版 sendJson：客户端支持 gzip 且响应体 > 4KB 时自动压缩。
- * 用于大响应（如发布计划 13MB→~1.5MB），其余小响应走 sendJson 即可。
+ * 大响应（>256KB，如发布计划 13MB）在本地回环带宽不是瓶颈，跳过同步压缩
+ * 以避免 gzipSync 阻塞事件循环数百 ms 导致 SSE 心跳停摆。
  */
+const GZIP_THRESHOLD = 256 * 1024
+
 export function sendJsonGzip(res: ServerResponse, status: number, data: unknown, req?: IncomingMessage): void {
   const body = JSON.stringify(data)
   const byteLen = Buffer.byteLength(body)
   const accept = (req?.headers['accept-encoding'] as string) ?? ''
-  if (byteLen > 4096 && accept.includes('gzip')) {
+  if (byteLen > 4096 && byteLen < GZIP_THRESHOLD && accept.includes('gzip')) {
     const compressed = zlib.gzipSync(body, { level: 6 })
     res.writeHead(status, {
       'Content-Type': 'application/json; charset=utf-8',
@@ -106,5 +110,28 @@ export function sendError(res: ServerResponse, err: unknown): void {
   const status = e.status ?? 500
   const code = e.code ?? 'INTERNAL'
   const message = e.message ?? '未预期错误'
-  sendJson(res, status, { error: message, code })
+  const req = (res as unknown as { req?: IncomingMessage }).req
+  const method = req?.method ?? '-'
+  let path = '-'
+  try {
+    const rawUrl = req?.url ?? ''
+    path = rawUrl ? new URL(rawUrl, 'http://127.0.0.1').pathname : '-'
+  } catch {
+    path = req?.url ?? '-'
+  }
+  try {
+    logger.structuredLog('error', message, { method, path, status, code, message })
+  } catch {
+    // ignore logger failure
+  }
+  if (res.headersSent || res.writableEnded) return
+  try {
+    sendJson(res, status, { error: message, code })
+  } catch {
+    try {
+      res.destroy()
+    } catch {
+      // ignore
+    }
+  }
 }

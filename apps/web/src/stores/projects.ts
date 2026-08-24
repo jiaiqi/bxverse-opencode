@@ -19,7 +19,6 @@ export const useProjectsStore = defineStore('projects', {
     overview: null as OverviewData | null,
     loading: false,
     overviewLoading: false,
-    statusCache: new Map<string, RepoStatus>(),
   }),
   getters: {
     byId: s => (id: string): ProjectDef | undefined => s.items.find(p => p.id === id),
@@ -85,12 +84,9 @@ export const useProjectsStore = defineStore('projects', {
       await api.deleteRepo(pid, rid, purge)
       const project = this.byId(pid)
       if (project) project.repos = project.repos.filter(r => r.id !== rid)
-      this.statusCache.delete(rid)
     },
     async repoStatus(pid: string, rid: string, fresh = false): Promise<RepoStatus> {
-      const status = await api.repoStatus(pid, rid, fresh)
-      this.statusCache.set(rid, status)
-      return status
+      return api.repoStatus(pid, rid, fresh)
     },
     async projectReleases(pid: string, n = 20): Promise<ReleaseRecord[]> {
       return api.projectReleases(pid, n)

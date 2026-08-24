@@ -4,8 +4,10 @@
 import type {
   AiTestResult,
   AppConfig,
+  BackupCleanupResult,
+  BackupRetention,
+  BackupUsage,
   BranchAlignmentResult,
-  BumpType,
   CloneRequest,
   CommitType,
   CompareResult,
@@ -98,8 +100,6 @@ export const api = {
 
   // 发布
   publish: (body: PublishRequest) => http.post<PublishPlan | { taskId: string; queued: boolean }>('/publish', body),
-  plan: (projectId: string, bump: BumpType | 'auto' = 'auto') =>
-    http.post<PublishPlan>('/publish', { projectId, bump, dryRun: true }),
   publishCurrent: () => http.get<{ taskId: string | null; status?: string; projectId?: string }>('/publish/current'),
 
   // 同步
@@ -156,10 +156,10 @@ export const api = {
     if (params?.projectId) q.set('projectId', params.projectId)
     if (params?.repoId) q.set('repoId', params.repoId)
     const qs = q.toString() ? `?${q.toString()}` : ''
-    return http.get<import('@bxverse/shared').BackupUsage>(`/backups/usage${qs}`)
+    return http.get<BackupUsage>(`/backups/usage${qs}`)
   },
-  backupCleanup: (body: { projectId?: string; repoId?: string; retention?: import('@bxverse/shared').BackupRetention; dryRun?: boolean }) =>
-    http.post<import('@bxverse/shared').BackupCleanupResult>('/backups/cleanup', body),
+  backupCleanup: (body: { projectId?: string; repoId?: string; retention?: BackupRetention; dryRun?: boolean }) =>
+    http.post<BackupCleanupResult>('/backups/cleanup', body),
   backupRestore: (body: { releaseId: string; repoId: string; kind: string; targetDir: string }) =>
     http.post<{ ok: boolean; targetDir: string }>('/backups/restore', body),
 

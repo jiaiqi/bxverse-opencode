@@ -3,8 +3,10 @@
 
 import fs from 'node:fs'
 import path from 'node:path'
-import type { PublishPlan, PublishRequest, RepoBackupRef } from '@bxverse/shared'
+import type { PublishEvent, PublishPlan, PublishRequest, RepoBackupRef } from '@bxverse/shared'
 import { atomicWrite, resolveHome } from './home'
+
+export const MAX_JOURNAL_EVENTS = 5000
 
 export type JournalPhase =
   | 'preflight'
@@ -59,8 +61,78 @@ export class JournalStore {
     fs.mkdirSync(this.dir, { recursive: true })
   }
 
+  get journalDir(): string {
+    return this.dir
+  }
+
   private file(taskId: string): string {
     return path.join(this.dir, `${taskId}.json`)
+  }
+
+  eventsFile(taskId: string): string {
+    return path.join(this.dir, `${taskId}.events.jsonl`)
+  }
+
+  appendEvent(taskId: string, event: PublishEvent): void {
+    try {
+      fs.mkdirSync(this.dir, { recursive: true })
+      fs.appendFileSync(this.eventsFile(taskId), `${JSON.stringify(event)}\n`, 'utf8')
+    } catch {
+      // ignore persistence failure (in-process flush best effort)
+    }
+  }
+
+  loadEvents(taskId: string): { events: PublishEvent[]; truncated: boolean } {
+    const file = this.eventsFile(taskId)
+    if (!fs.existsSync(file)) return { events: [], truncated: false }
+    let content: string
+    try {
+      content = fs.readFileSync(file, 'utf8')
+    } catch {
+      return { events: [], truncated: false }
+    }
+    const lines = content.split('\n').filter(l => l.trim().length > 0)
+    let truncated = false
+    if (lines.length > MAX_JOURNAL_EVENTS) truncated = true
+    const slice = lines.length > MAX_JOURNAL_EVENTS ? lines.slice(-MAX_JOURNAL_EVENTS) : lines
+    const events: PublishEvent[] = []
+    for (const line of slice) {
+      try {
+        events.push(JSON.parse(line) as PublishEvent)
+      } catch {
+        truncated = true
+      }
+    }
+    // seq continuity check
+    for (let i = 1; i < events.length; i++) {
+      const prev = events[i - 1].seq
+      const cur = events[i].seq
+      if (typeof prev === 'number' && typeof cur === 'number' && cur !== prev + 1) {
+        truncated = true
+        break
+      }
+    }
+    if (!truncated && events.length > 0 && typeof events[0].seq === 'number' && events[0].seq !== 1) {
+      truncated = true
+    }
+    return { events, truncated }
+  }
+
+  /** 列出所有 journal（供 queue 恢复事件流） */
+  listAll(): Journal[] {
+    const out: Journal[] = []
+    let files: string[] = []
+    try {
+      files = fs.readdirSync(this.dir)
+    } catch {
+      return out
+    }
+    for (const f of files) {
+      if (!f.endsWith('.json')) continue
+      const j = this.load(f.replace(/\.json$/, ''))
+      if (j) out.push(j)
+    }
+    return out
   }
 
   load(taskId: string): Journal | null {
@@ -112,6 +184,12 @@ export class JournalStore {
         fs.unlinkSync(path.join(this.dir, f))
       } catch {
         // ignore
+      }
+      const taskId = f.replace(/\.json$/, '')
+      try {
+        fs.unlinkSync(this.eventsFile(taskId))
+      } catch {
+        // ignore missing events file
       }
     }
   }

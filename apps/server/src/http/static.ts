@@ -5,6 +5,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { ServerResponse } from 'node:http'
+import { sendError } from './json'
 
 /**
  * 定位前端构建产物目录，不依赖 cwd：
@@ -89,5 +90,17 @@ export function serveStatic(res: ServerResponse, pathname: string): void {
     'Content-Length': fs.statSync(file).size,
     'Cache-Control': cache,
   })
-  fs.createReadStream(file).pipe(res)
+  const stream = fs.createReadStream(file)
+  stream.on('error', () => {
+    if (!res.headersSent) {
+      sendError(res, Object.assign(new Error('文件读取失败'), { status: 500, code: 'READ_FAILED' }))
+    } else {
+      try {
+        res.destroy()
+      } catch {
+        // ignore
+      }
+    }
+  })
+  stream.pipe(res)
 }

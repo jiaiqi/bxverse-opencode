@@ -13,7 +13,7 @@ import path from 'node:path'
 import type { AppConfig, CompareResult, RepoBackupRef } from '@bxverse/shared'
 import { backup, compare, store } from '@bxverse/core'
 import type { Ctx } from '../http/router'
-import { apiError, readJsonBody, sendJson } from '../http/json'
+import { apiError, readJsonBody, sendError, sendJson } from '../http/json'
 import { assertBackupCleanupBody, assertRestoreBody } from '../validate'
 
 const KIND_FILE: Record<string, string> = {
@@ -84,7 +84,19 @@ export function register(
       'Content-Disposition': `attachment; filename="${itemFile}"; filename*=UTF-8''${encodeURIComponent(itemFile)}`,
       'Cache-Control': 'no-store',
     })
-    fs.createReadStream(file).pipe(ctx.res)
+    const stream = fs.createReadStream(file)
+    stream.on('error', () => {
+      if (!ctx.res.headersSent) {
+        sendError(ctx.res, Object.assign(new Error('文件读取失败'), { status: 500, code: 'READ_FAILED' }))
+      } else {
+        try {
+          ctx.res.destroy()
+        } catch {
+          // ignore
+        }
+      }
+    })
+    stream.pipe(ctx.res)
   })
 
   // ---------- 删除 ----------
@@ -234,6 +246,29 @@ export function register(
     if (kind === 'artifact' && !meta.items.some(i => i.kind === 'artifact')) throw apiError(404, 'NOT_FOUND', '该备份不含产物')
     const srcFile = path.join(backupDirOf(cfg, meta), fileName)
     if (!fs.existsSync(srcFile)) throw apiError(404, 'NOT_FOUND', `备份文件缺失: ${fileName}`)
+    // S6 收紧：白名单 + 空目录校验（400 明确失败，不落入 500）
+    const resolvedTarget = path.resolve(targetDir)
+    const homeRoot = path.resolve(store.resolveHome().root)
+    if (resolvedTarget !== homeRoot && !resolvedTarget.startsWith(homeRoot + path.sep)) {
+      throw apiError(400, 'VALIDATION', `targetDir 必须位于 BX_HOME 目录下（仅允许 ${homeRoot} 及其子目录）`)
+    }
+    if (fs.existsSync(resolvedTarget)) {
+      let stat: fs.Stats
+      try {
+        stat = fs.statSync(resolvedTarget)
+      } catch (e) {
+        throw apiError(400, 'VALIDATION', `targetDir 无法访问: ${(e as Error).message}`)
+      }
+      if (!stat.isDirectory()) throw apiError(400, 'VALIDATION', 'targetDir 已存在且不是目录')
+      const entries = fs.readdirSync(resolvedTarget)
+      if (entries.length > 0) throw apiError(400, 'VALIDATION', `targetDir 必须为空目录: ${targetDir}（请先清空或另选路径）`)
+    } else {
+      try {
+        fs.mkdirSync(resolvedTarget, { recursive: true })
+      } catch (e) {
+        throw apiError(400, 'VALIDATION', `targetDir 创建失败: ${(e as Error).message}`)
+      }
+    }
     try {
       if (kind === 'source-bundle') {
         await backup.restoreBundle(srcFile, targetDir)
@@ -241,7 +276,13 @@ export function register(
         await backup.restoreArchive(srcFile, targetDir)
       }
     } catch (e) {
-      throw apiError(500, 'RESTORE_FAILED', `恢复失败: ${(e as Error).message}`)
+      // 透传已分类的 400（如目录非空），其余归 500
+      if ((e as { status?: number })?.status === 400) throw e
+      const msg = (e as Error).message ?? ''
+      if (msg.includes('目标目录非空') || msg.includes('必须为空目录')) {
+        throw apiError(400, 'VALIDATION', msg)
+      }
+      throw apiError(500, 'RESTORE_FAILED', `恢复失败: ${msg}`)
     }
     sendJson(ctx.res, 200, { ok: true, targetDir })
   })

@@ -19,6 +19,9 @@ const showAddProject = ref(false)
 const showAddRepo = ref(false)
 const showProjectMenu = ref(false)
 const syncing = ref(false)
+const projectTriggerEl = ref<HTMLElement | null>(null)
+const projectMenuEl = ref<HTMLElement | null>(null)
+const focusedIdx = ref(-1)
 
 // 优先读取 route.params.pid（仓库详情页 /repo/:pid/:rid），其次 route.params.id（项目详情页 /project/:id），最后回退到首个项目
 const currentProjectId = computed(() => String(route.params.pid || route.params.id || projectsStore.items[0]?.id || ''))
@@ -33,8 +36,92 @@ const navItems = computed(() => [
 ])
 function selectProject(id: string) {
   showProjectMenu.value = false
+  focusedIdx.value = -1
   router.push(`/project/${id}`)
+  // 将焦点还给触发按钮，便于键盘继续操作
+  nextTick(() => projectTriggerEl.value?.focus())
 }
+
+function focusMenuItem(idx: number) {
+  const el = projectMenuEl.value?.querySelectorAll<HTMLElement>('[role="menuitem"]')[idx]
+  el?.focus()
+}
+
+function openProjectMenu() {
+  showProjectMenu.value = true
+  nextTick(() => {
+    const items = projectsStore.items
+    let start = items.findIndex(p => p.id === currentProject.value?.id)
+    if (start < 0) start = 0
+    focusedIdx.value = start
+    focusMenuItem(start)
+  })
+}
+
+function closeProjectMenu(returnFocus = true) {
+  showProjectMenu.value = false
+  focusedIdx.value = -1
+  if (returnFocus) nextTick(() => projectTriggerEl.value?.focus())
+}
+
+function onTriggerKeydown(e: KeyboardEvent) {
+  if (e.key === 'Escape' && showProjectMenu.value) {
+    e.preventDefault()
+    closeProjectMenu(true)
+    return
+  }
+  if (e.key === 'ArrowDown' || e.key === 'Enter' || e.key === ' ') {
+    e.preventDefault()
+    if (!showProjectMenu.value) openProjectMenu()
+    else {
+      const idx = focusedIdx.value >= 0 ? focusedIdx.value : 0
+      focusMenuItem(idx)
+    }
+  } else if (e.key === 'ArrowUp') {
+    e.preventDefault()
+    if (!showProjectMenu.value) openProjectMenu()
+  }
+}
+
+function onMenuKeydown(e: KeyboardEvent) {
+  const len = projectsStore.items.length
+  if (len === 0) return
+  if (e.key === 'ArrowDown') {
+    e.preventDefault()
+    focusedIdx.value = (focusedIdx.value + 1) % len
+    focusMenuItem(focusedIdx.value)
+  } else if (e.key === 'ArrowUp') {
+    e.preventDefault()
+    focusedIdx.value = (focusedIdx.value - 1 + len) % len
+    focusMenuItem(focusedIdx.value)
+  } else if (e.key === 'Home') {
+    e.preventDefault()
+    focusedIdx.value = 0
+    focusMenuItem(0)
+  } else if (e.key === 'End') {
+    e.preventDefault()
+    focusedIdx.value = len - 1
+    focusMenuItem(len - 1)
+  } else if (e.key === 'Escape') {
+    e.preventDefault()
+    closeProjectMenu(true)
+  } else if (e.key === 'Tab') {
+    closeProjectMenu(false)
+  }
+}
+
+watch(showProjectMenu, (open) => {
+  if (open) {
+    nextTick(() => {
+      const items = projectsStore.items
+      let start = items.findIndex(p => p.id === currentProject.value?.id)
+      if (start < 0) start = 0
+      focusedIdx.value = start
+    })
+  } else {
+    focusedIdx.value = -1
+  }
+})
 
 async function syncData(action: 'pull' | 'push') {
   syncing.value = true
@@ -74,41 +161,70 @@ function triggerFastRelease() {
 
         <div class="h-4 w-px bg-border"></div>
 
-        <!-- 项目选择器下拉 -->
-        <div class="relative">
-          <button
-            @click="showProjectMenu = !showProjectMenu"
-            class="flex items-center gap-2 px-2.5 py-1 rounded-md bg-surface-hover hover:bg-surface-alt border border-border text-xs transition-colors cursor-pointer text-text-1"
-          >
-            <span class="w-2 h-2 rounded-full bg-brand-500"></span>
-            <span class="font-medium text-text-1">{{ currentProject ? currentProject.name : '请创建项目' }}</span>
-            <span v-if="currentProject" class="font-mono text-text-3 text-[10px]">{{ currentProject.version }}</span>
-            <i aria-hidden="true" class="i-carbon-chevron-down text-text-3 text-12px" />
-          </button>
-
-          <!-- 下拉菜单 -->
+        <!-- 项目选择器下拉：NPopover 接管外点/Esc 关闭，内部自绘保留视觉并补齐 a11y 与键盘循环 -->
+        <NPopover
+          v-model:show="showProjectMenu"
+          trigger="click"
+          placement="bottom-start"
+          :show-arrow="false"
+          :to="false"
+          style="padding: 0; background: transparent; border: 0; box-shadow: none"
+          content-style="padding: 0"
+          :keep-alive-on-hover="false"
+        >
+          <template #trigger>
+            <button
+              ref="projectTriggerEl"
+              :aria-expanded="showProjectMenu ? 'true' : 'false'"
+              aria-haspopup="menu"
+              aria-controls="project-menu"
+              :aria-label="currentProject ? `当前项目 ${currentProject.name}，点击切换项目` : '请选择项目'"
+              @keydown="onTriggerKeydown"
+              class="flex items-center gap-2 px-2.5 py-1 rounded-md bg-surface-hover hover:bg-surface-alt border border-border text-xs transition-colors cursor-pointer text-text-1"
+            >
+              <span class="w-2 h-2 rounded-full bg-brand-500" aria-hidden="true"></span>
+              <span class="font-medium text-text-1">{{ currentProject ? currentProject.name : '请创建项目' }}</span>
+              <span v-if="currentProject" class="font-mono text-text-3 text-[10px]">{{ currentProject.version }}</span>
+              <i aria-hidden="true" class="i-carbon-chevron-down text-text-3 text-12px" />
+            </button>
+          </template>
           <div
-            v-if="showProjectMenu"
-            class="absolute top-8 left-0 w-72 bg-surface border border-border-strong rounded-xl shadow-lg p-2 z-50 animate-fadeIn"
+            id="project-menu"
+            ref="projectMenuEl"
+            role="menu"
+            aria-label="项目切换菜单"
+            tabindex="-1"
+            class="w-72 bg-surface border border-border-strong rounded-xl shadow-lg p-2 animate-fadeIn outline-none"
+            @keydown="onMenuKeydown"
           >
             <div class="flex items-center justify-between px-2 py-1 text-[10px] font-mono text-text-3 uppercase">
               <span>业务项目 ({{ projectsStore.items.length }})</span>
-              <button @click="showAddProject = true; showProjectMenu = false" class="text-brand-500 hover:underline flex items-center gap-0.5 bg-transparent border-0 cursor-pointer">
+              <button
+                tabindex="0"
+                aria-label="新建项目"
+                @click="showAddProject = true; closeProjectMenu(true)"
+                class="text-brand-500 hover:underline flex items-center gap-0.5 bg-transparent border-0 cursor-pointer focus-ring rounded px-1"
+              >
                 <i aria-hidden="true" class="i-carbon-add text-12px" /> 新建项目
               </button>
             </div>
 
-            <div class="space-y-1 my-1 max-h-60 overflow-y-auto">
+            <div class="space-y-1 my-1 max-h-60 overflow-y-auto" role="none">
               <button
                 v-for="p in projectsStore.items"
                 :key="p.id"
-                @click="selectProject(p.id)"
-                class="flex items-center justify-between p-2 rounded-lg hover:bg-surface-hover cursor-pointer transition-colors w-full text-left border-0 bg-transparent focus-ring"
-                :class="{ 'bg-surface-hover border border-brand-300 text-brand-600': currentProject?.id === p.id }"
+                role="menuitem"
+                tabindex="-1"
+                :aria-current="currentProject?.id === p.id ? 'true' : undefined"
                 :aria-label="`切换到项目 ${p.name}`"
+                @click="selectProject(p.id)"
+                @keydown.enter.prevent="selectProject(p.id)"
+                @keydown.space.prevent="selectProject(p.id)"
+                class="flex items-center justify-between p-2 rounded-lg hover:bg-surface-hover cursor-pointer transition-colors w-full text-left border-0 bg-transparent focus-ring outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
+                :class="{ 'bg-surface-hover border border-brand-300 text-brand-600': currentProject?.id === p.id }"
               >
                 <div class="flex items-center gap-2 truncate">
-                  <span class="w-1.5 h-1.5 rounded-full" :class="currentProject?.id === p.id ? 'bg-brand-500' : 'bg-text-3'"></span>
+                  <span class="w-1.5 h-1.5 rounded-full" :class="currentProject?.id === p.id ? 'bg-brand-500' : 'bg-text-3'" aria-hidden="true"></span>
                   <div class="truncate">
                     <div class="text-xs truncate font-semibold text-text-1">{{ p.name }}</div>
                     <div class="text-[10px] font-mono text-text-3 truncate">{{ p.repos.length }} 个工程 · {{ p.version }}</div>
@@ -118,7 +234,7 @@ function triggerFastRelease() {
               </button>
             </div>
           </div>
-        </div>
+        </NPopover>
       </div>
 
       <!-- 中：全系统命令面板搜索框 (Ctrl+K) -->

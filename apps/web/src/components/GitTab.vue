@@ -30,13 +30,7 @@ const commitModal = reactive({
 })
 const commitSummary = computed(() => {
   if (!status.value) return ''
-  const s = status.value
-  const staged = s.files.filter(f => f.staged)
-  const counts = { M: 0, A: 0, D: 0, R: 0, '?': 0 } as Record<string, number>
-  for (const f of staged) {
-    const key = f.untracked ? '?' : (f.indexStatus || 'M')
-    counts[key] = (counts[key] ?? 0) + 1
-  }
+  const staged = status.value.files.filter(f => f.staged)
   return staged.map(f => `${f.indexStatus}${f.workStatus} ${f.path}`).join('\n')
 })
 

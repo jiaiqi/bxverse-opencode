@@ -35,8 +35,35 @@ export class SseHub {
     this.clients.add(client)
     res.on('close', () => this.remove(client))
     // 快照：重放缓冲事件（连接建立即补发，断线重连不丢事件）
-    for (const e of replay) this.sendTo(client, e)
+    // S4: 重放时校验 seq 连续性，缺口时首帧附 {truncated:true}
+    const normalized = this.normalizeReplay(replay)
+    for (const e of normalized) this.sendTo(client, e)
     return client
+  }
+
+  private normalizeReplay(replay: PublishEvent[]): PublishEvent[] {
+    if (replay.length === 0) return replay
+    let needTruncated = false
+    // 已被调用方标注的 truncated（data.truncated）视为已截断
+    const firstData = replay[0].data as Record<string, unknown> | undefined
+    if (firstData && (firstData as { truncated?: unknown }).truncated === true) return replay
+    for (let i = 1; i < replay.length; i++) {
+      const prev = replay[i - 1].seq
+      const cur = replay[i].seq
+      if (typeof prev === 'number' && typeof cur === 'number' && cur !== prev + 1) {
+        needTruncated = true
+        break
+      }
+    }
+    if (!needTruncated && typeof replay[0].seq === 'number' && replay[0].seq !== 1) needTruncated = true
+    if (!needTruncated) return replay
+    const copy = [...replay]
+    const first = copy[0]
+    const base = first.data && typeof first.data === 'object' && !Array.isArray(first.data)
+      ? (first.data as Record<string, unknown>)
+      : {}
+    copy[0] = { ...first, data: { ...base, truncated: true } } as PublishEvent
+    return copy
   }
 
   broadcast(taskId: string, event: PublishEvent): void {

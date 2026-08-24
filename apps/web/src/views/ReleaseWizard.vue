@@ -170,24 +170,7 @@ watch(projectId, async (id) => {
   await Promise.all([detect(), checkBranchAlignment()])
   // 默认勾选全部变动仓库
   store.setSelected(changedRepoIds.value)
-  // 刷新/重进时检测全局进行中任务 → 提供接管查看进度
-  void checkRunningTask()
 }, { immediate: true })
-
-// ==================== 进行中任务接管（刷新/重进后可恢复控制台） ====================
-const takeoverTask = ref('')
-const takeoverProjectId = ref('')
-
-async function checkRunningTask() {
-  try {
-    const cur = await api.publishCurrent()
-    takeoverTask.value = cur.taskId ?? ''
-    takeoverProjectId.value = cur.projectId ?? ''
-  } catch {
-    takeoverTask.value = ''
-    takeoverProjectId.value = ''
-  }
-}
 
 
 // 站内路由切换守卫：步骤 2-5 有未保存日志编辑或发布进行中时离开需确认

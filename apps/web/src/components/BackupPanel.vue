@@ -4,8 +4,9 @@
 import type { CompareResult, RepoBackupRef, BackupItem } from '@bxverse/shared'
 import { api } from '../api'
 import EmptyState from './EmptyState.vue'
-import { formatDateTime } from '../utils/format'
+import { formatDateTime, formatSize } from '../utils/format'
 import { useBackup } from '../composables/useBackup'
+import { useFsAccess } from '../composables/useFsAccess'
 import { h } from 'vue'
 import { useProjectsStore } from '../stores/projects'
 import { useDialog, useMessage } from 'naive-ui'
@@ -17,8 +18,22 @@ const projectsStore = useProjectsStore()
 const project = computed(() => projectsStore.byId(pid.value))
 const dialog = useDialog()
 const message = useMessage()
+const fsAccess = useFsAccess()
 
-const backup = useBackup(() => pid.value)
+const {
+  backupsByRepo,
+  loading,
+  usage,
+  usageLoading,
+  retentionForm,
+  retentionSaving,
+  cleanupLoading,
+  load: loadBackups,
+  loadUsage,
+  loadRetention,
+  saveRetention,
+  doCleanup,
+} = useBackup(() => pid.value)
 
 const KIND_LABEL: Record<string, string> = {
   'source-bundle': '源码 bundle',
@@ -31,28 +46,51 @@ const KIND_ICON: Record<string, string> = {
   artifact: 'i-carbon-cube',
 }
 
-function fmtBytes(n: number): string {
-  if (!Number.isFinite(n) || n <= 0) return '—'
-  if (n < 1024) return `${n} B`
-  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`
-  if (n < 1024 ** 3) return `${(n / 1024 / 1024).toFixed(1)} MB`
-  return `${(n / 1024 ** 3).toFixed(2)} GB`
-}
-
 async function reload() {
   if (!project.value) return
-  await Promise.all([backup.load(project.value.repos), backup.loadUsage()])
+  await Promise.all([loadBackups(project.value.repos), loadUsage()])
 }
 
 watch(() => props.projectId, async () => {
   if (!project.value) await projectsStore.load()
-  await Promise.all([backup.load(project.value?.repos ?? []), backup.loadUsage(), backup.loadRetention()])
+  await Promise.all([loadBackups(project.value?.repos ?? []), loadUsage(), loadRetention()])
 }, { immediate: true })
 
 onMounted(async () => {
   if (!project.value) await projectsStore.load()
-  await Promise.all([backup.load(project.value?.repos ?? []), backup.loadUsage(), backup.loadRetention()])
+  await Promise.all([loadBackups(project.value?.repos ?? []), loadUsage(), loadRetention()])
 })
+
+// 磁盘占用与保留策略 — 具名函数（原模板内联 300 字符 async 已抽离）
+async function previewCleanup() {
+  const r = await doCleanup(true)
+  if (r.deleted.length) {
+    panel.title = `清理预览 · 将删除 ${r.deleted.length} 份`
+    panel.result = {
+      kind: 'verify',
+      files: r.deleted.map(d => ({ path: `${d.repoName} ${d.version}`, status: 'removed' as const, left: { size: d.items.reduce((s, i) => s + i.size, 0) } })),
+      totals: { added: 0, removed: r.deleted.length, modified: 0, same: 0 },
+    }
+    panel.open = true
+  } else {
+    message.info('按当前策略无过期备份')
+  }
+}
+
+async function executeCleanup() {
+  const r = await doCleanup(false)
+  message.success(`已清理 ${r.deleted.length} 份，释放 ${formatSize(r.freedBytes)}`)
+  await reload()
+}
+
+async function handleSaveRetention() {
+  try {
+    await saveRetention()
+    message.success('保留策略已保存')
+  } catch (e) {
+    message.error((e as Error).message)
+  }
+}
 
 // 下载 / 删除
 async function downloadItem(ref: RepoBackupRef, kind: string) {
@@ -177,8 +215,8 @@ const compareRows = computed(() =>
     path: f.path,
     insertions: f.insertions != null ? String(f.insertions) : '—',
     deletions: f.deletions != null ? String(f.deletions) : '—',
-    leftSize: f.left?.size != null ? fmtBytes(f.left.size) : '—',
-    rightSize: f.right?.size != null ? fmtBytes(f.right.size) : '—',
+    leftSize: f.left?.size != null ? formatSize(f.left.size) : '—',
+    rightSize: f.right?.size != null ? formatSize(f.right.size) : '—',
   })),
 )
 
@@ -207,12 +245,14 @@ async function doRestore() {
   }
 }
 async function pickDirectory() {
-  try {
-    const handle = await (window as unknown as { showDirectoryPicker: () => Promise<FileSystemDirectoryHandle> }).showDirectoryPicker()
-    // 浏览器无法直接拿到绝对路径，提示用户手输；此处仅用目录名预填
-    if (handle?.name && !restoreState.targetDir) restoreState.targetDir = `E:\\restore\\${handle.name}`
-  } catch (e) {
-    if ((e as DOMException)?.name !== 'AbortError') message.error('目录选择失败，请手动输入绝对路径')
+  const handle = await fsAccess.pickDirectory()
+  if (handle) {
+    // 浏览器无法直接拿到绝对路径，保持预填留空，由用户手动输入绝对路径
+    if (!restoreState.targetDir) {
+      message.info('请选择后手动输入目标绝对路径')
+    }
+  } else {
+    // 不支持或取消时不做预填，用户手动输入
   }
 }
 </script>
@@ -224,20 +264,20 @@ async function pickDirectory() {
       <div class="glass-panel p-4 rounded-2xl">
         <div class="flex items-center justify-between mb-2">
           <span class="text-sm font-medium flex items-center gap-1.5"><i class="i-carbon-data--base" /> 磁盘占用</span>
-          <NButton size="tiny" :loading="backup.usageLoading.value" @click="backup.loadUsage()">刷新</NButton>
+          <NButton size="tiny" :loading="usageLoading" @click="loadUsage()">刷新</NButton>
         </div>
-        <div v-if="backup.usage.value" class="space-y-1 text-xs">
-          <div>总计：<span class="font-mono font-medium">{{ fmtBytes(backup.usage.value.totalBytes) }}</span> · {{ backup.usage.value.totalCount }} 份</div>
-          <div v-for="r in backup.usage.value.byRepo" :key="r.repoId" class="flex justify-between">
+        <div v-if="usage" class="space-y-1 text-xs">
+          <div>总计：<span class="font-mono font-medium">{{ formatSize(usage.totalBytes) }}</span> · {{ usage.totalCount }} 份</div>
+          <div v-for="r in usage.byRepo" :key="r.repoId" class="flex justify-between">
             <span class="truncate">{{ r.repoName }}</span>
-            <span class="font-mono">{{ r.count }} 份 · {{ fmtBytes(r.bytes) }}</span>
+            <span class="font-mono">{{ r.count }} 份 · {{ formatSize(r.bytes) }}</span>
           </div>
-          <div v-if="backup.usage.value.byRepo.length === 0" class="text-text-3">暂无备份</div>
+          <div v-if="usage.byRepo.length === 0" class="text-text-3">暂无备份</div>
         </div>
         <div v-else class="text-xs text-text-3">加载中…</div>
         <div class="flex gap-2 mt-3">
-          <NButton size="tiny" :loading="backup.cleanupLoading.value" @click="async () => { const r = await backup.doCleanup(true); if (r.deleted.length) { panel.title = `清理预览 · 将删除 ${r.deleted.length} 份`; panel.result = { kind: 'verify', files: r.deleted.map(d => ({ path: `${d.repoName} ${d.version}`, status: 'removed' as const, left: { size: d.items.reduce((s, i) => s + i.size, 0) } })), totals: { added: 0, removed: r.deleted.length, modified: 0, same: 0 } }; panel.open = true } else message.info('按当前策略无过期备份') }">预览清理</NButton>
-          <NButton size="tiny" type="warning" :loading="backup.cleanupLoading.value" @click="async () => { const r = await backup.doCleanup(false); message.success(`已清理 ${r.deleted.length} 份，释放 ${fmtBytes(r.freedBytes)}`); await reload() }">执行清理</NButton>
+          <NButton size="tiny" :loading="cleanupLoading" @click="previewCleanup">预览清理</NButton>
+          <NButton size="tiny" type="warning" :loading="cleanupLoading" @click="executeCleanup">执行清理</NButton>
         </div>
       </div>
       <div class="glass-panel p-4 rounded-2xl">
@@ -245,18 +285,18 @@ async function pickDirectory() {
         <div class="grid grid-cols-3 gap-2">
           <div>
             <div class="text-xs text-text-3 mb-1">保留份数</div>
-            <NInputNumber v-model:value="backup.retentionForm.keepLast" placeholder="不限" :min="1" size="small" clearable />
+            <NInputNumber v-model:value="retentionForm.keepLast" placeholder="不限" :min="1" size="small" clearable />
           </div>
           <div>
             <div class="text-xs text-text-3 mb-1">最大 MB</div>
-            <NInputNumber v-model:value="backup.retentionForm.maxBytesMB" placeholder="不限" :min="1" size="small" clearable />
+            <NInputNumber v-model:value="retentionForm.maxBytesMB" placeholder="不限" :min="1" size="small" clearable />
           </div>
           <div>
             <div class="text-xs text-text-3 mb-1">保留天数</div>
-            <NInputNumber v-model:value="backup.retentionForm.keepDays" placeholder="不限" :min="1" size="small" clearable />
+            <NInputNumber v-model:value="retentionForm.keepDays" placeholder="不限" :min="1" size="small" clearable />
           </div>
         </div>
-        <NButton size="small" type="primary" class="mt-3" :loading="backup.retentionSaving.value" @click="backup.saveRetention().then(() => message.success('保留策略已保存')).catch(e => message.error((e as Error).message))">保存策略</NButton>
+        <NButton size="small" type="primary" class="mt-3" :loading="retentionSaving" @click="handleSaveRetention">保存策略</NButton>
         <div class="text-xs text-text-3 mt-1">发布后自动按此策略清理；留空表示不限制</div>
       </div>
     </div>
@@ -269,7 +309,7 @@ async function pickDirectory() {
       <NButton quaternary size="small" @click="selected = []">清空</NButton>
     </div>
 
-    <div v-if="backup.loading.value" class="p-10 text-center text-text-3"><NSpin size="small" /></div>
+    <div v-if="loading" class="p-10 text-center text-text-3"><NSpin size="small" /></div>
     <template v-else-if="project">
       <div v-if="project.repos.length === 0" class="card"><EmptyState title="暂无仓库" description="接入仓库并发布后，这里将展示每次发布的备份。" /></div>
       <div v-else class="space-y-5">
@@ -277,13 +317,13 @@ async function pickDirectory() {
           <div class="flex items-center gap-2 mb-3">
             <i aria-hidden="true" class="i-carbon-git-branch text-brand-500" />
             <span class="font-medium text-sm">{{ repo.displayName || repo.name }}</span>
-            <span class="chip">{{ backup.backupsByRepo.value[repo.id]?.length ?? 0 }}</span>
+            <span class="chip">{{ backupsByRepo[repo.id]?.length ?? 0 }}</span>
             <span v-if="repo.artifactDir" class="code-text text-xs text-text-3">产物目录：{{ repo.artifactDir }}</span>
             <span v-else class="code-text text-xs text-text-3">未配置产物目录（仅源码备份）</span>
           </div>
-          <div v-if="(backup.backupsByRepo.value[repo.id]?.length ?? 0) === 0" class="py-4 text-center text-xs text-text-3">暂无备份——发布一次后自动生成</div>
+          <div v-if="(backupsByRepo[repo.id]?.length ?? 0) === 0" class="py-4 text-center text-xs text-text-3">暂无备份——发布一次后自动生成</div>
           <div v-else class="space-y-2">
-            <div v-for="r in backup.backupsByRepo.value[repo.id]" :key="r.releaseId" class="flex items-center gap-3 px-3.5 py-3 rounded-[var(--bx-radius-md)] border bg-surface transition-[border-color,background-color] duration-150" :class="isSelected(r) ? 'border-brand-500 bg-brand-soft' : 'border-border hover:border-border-strong'">
+            <div v-for="r in backupsByRepo[repo.id]" :key="r.releaseId" class="flex items-center gap-3 px-3.5 py-3 rounded-[var(--bx-radius-md)] border bg-surface transition-[border-color,background-color] duration-150" :class="isSelected(r) ? 'border-brand-500 bg-brand-soft' : 'border-border hover:border-border-strong'">
               <NCheckbox :checked="isSelected(r)" @update:checked="toggleSelect(r)" />
               <span class="w-[34px] h-[34px] flex items-center justify-center rounded-[9px] bg-surface-alt border border-border text-text-3 shrink-0"><i class="text-16px" :class="KIND_ICON[r.items[0]?.kind ?? ''] ?? 'i-carbon-database'" /></span>
               <div class="min-w-0 flex-1">
@@ -293,13 +333,13 @@ async function pickDirectory() {
                   <span v-if="r.tag" class="code-text text-xs text-text-3">{{ r.tag }}</span>
                 </div>
                 <div class="flex items-center gap-2 mt-1 flex-wrap">
-                  <span v-for="item in r.items" :key="item.kind" class="chip">{{ KIND_LABEL[item.kind] ?? item.kind }} · {{ fmtBytes(item.size) }}</span>
+                  <span v-for="item in r.items" :key="item.kind" class="chip">{{ KIND_LABEL[item.kind] ?? item.kind }} · {{ formatSize(item.size) }}</span>
                 </div>
               </div>
               <div class="flex items-center gap-1 shrink-0">
                                 <NDropdown
                   trigger="click"
-                  :options="r.items.map((i: BackupItem) => ({ label: `下载 ${KIND_LABEL[i.kind] ?? i.kind}（${fmtBytes(i.size)}）`, key: i.kind }))" @select="(k: string) => downloadItem(r, k)">
+                  :options="r.items.map((i: BackupItem) => ({ label: `下载 ${KIND_LABEL[i.kind] ?? i.kind}（${formatSize(i.size)}）`, key: i.kind }))" @select="(k: string) => downloadItem(r, k)">
                   <button class="w-7 h-7 flex items-center justify-center rounded-md text-text-3 hover:bg-surface-hover hover:text-text-1 transition-colors" aria-label="下载" title="下载"><i class="i-carbon-download" /></button>
                 </NDropdown>
                 <button class="w-7 h-7 flex items-center justify-center rounded-md text-text-3 hover:bg-surface-hover hover:text-text-1 transition-colors" aria-label="校验" title="校验" @click="runVerify(r)"><i class="i-carbon-checkmark-outline" /></button>
@@ -336,14 +376,14 @@ async function pickDirectory() {
           <div class="text-xs text-text-2 mb-1">备份：{{ restoreState.ref?.repoName }} {{ restoreState.ref?.version }}</div>
           <NRadioGroup v-model:value="restoreState.kind">
             <NSpace>
-              <NRadio v-for="it in restoreState.ref?.items ?? []" :key="it.kind" :value="it.kind">{{ KIND_LABEL[it.kind] ?? it.kind }} ({{ fmtBytes(it.size) }})</NRadio>
+              <NRadio v-for="it in restoreState.ref?.items ?? []" :key="it.kind" :value="it.kind">{{ KIND_LABEL[it.kind] ?? it.kind }} ({{ formatSize(it.size) }})</NRadio>
             </NSpace>
           </NRadioGroup>
         </div>
         <div>
           <div class="text-xs text-text-2 mb-1">目标绝对路径</div>
           <div class="flex gap-2">
-            <NInput v-model:value="restoreState.targetDir" placeholder="E:\restore\my-repo" class="flex-1" />
+            <NInput v-model:value="restoreState.targetDir" placeholder="输入绝对路径，如 D:\backups\restored…" class="flex-1" />
             <NButton secondary @click="pickDirectory">选择目录</NButton>
           </div>
         </div>

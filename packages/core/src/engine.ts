@@ -26,6 +26,7 @@ import { runPreflight } from './preflight'
 import { DataStore, loadAppConfig, versionSafe } from './store'
 import * as version from './version'
 import * as policy from './repo-policy'
+import { runWithPool } from './pool'
 
 // ==================== 变更检测 ====================
 
@@ -522,14 +523,6 @@ export async function executePublish(
   // 仓库级并行（默认串行 1，可通过 AppConfig.publish.concurrency 开启；隔离验证：每仓库独立路径，无共享写入，saveProject 合并批量落盘）
   const concurrency = Math.min(Math.max(Number((cfg as unknown as { publish?: { concurrency?: number } }).publish?.concurrency ?? 1), 1), 5)
   const toRun = plan.changed.filter(p => !(resume && stepOf(p.repoId, 'record')?.state === 'done') && !failedRepos.includes(p.repoId))
-  async function runWithPool<T>(items: T[], limit: number, fn: (item: T) => Promise<void>): Promise<void> {
-    if (limit <= 1) { for (const it of items) await fn(it); return }
-    const queue = [...items]
-    const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
-      while (queue.length > 0) { const it = queue.shift()!; await fn(it) }
-    })
-    await Promise.all(workers)
-  }
   await runWithPool(toRun, concurrency, async (planned) => {
     const repo = repoDefOf(planned.repoId)
     const repoReleaseId = store.nextReleaseId('repo', repo.id, planned.version)
