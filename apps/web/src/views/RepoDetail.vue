@@ -10,6 +10,7 @@ import FileTree from '../components/FileTree.vue'
 import FileViewer from '../components/FileViewer.vue'
 import DirPicker from '../components/DirPicker.vue'
 import GitTab from '../components/GitTab.vue'
+import ErrorState from '../components/ErrorState.vue'
 import { useDialog, useMessage } from 'naive-ui'
 
 const route = useRoute()
@@ -45,6 +46,7 @@ const status = ref<RepoStatus | null>(null)
 const statusLoading = ref(true)
 const releases = ref<ReleaseRecord[]>([])
 const releasesLoading = ref(false)
+const releasesError = ref<string | null>(null)
 const dirPickerOpen = ref(false)
 
 const selectedFile = ref('')
@@ -140,11 +142,14 @@ async function loadAll() {
   } finally {
     statusLoading.value = false
   }
+  releasesError.value = null
   try {
     const all = await api.releasesByScope(rid.value)
     const list = Array.isArray(all) ? all : [all]
     releases.value = list.filter(r => r.kind === 'repo')
     if (releases.value.length) selectedRelease.value = releases.value[0]
+  } catch (e) {
+    releasesError.value = (e as Error).message
   } finally {
     releasesLoading.value = false
   }
@@ -310,6 +315,13 @@ watch(tab, (t) => {
         <div v-show="tab === 'logs'" class="flex h-140">
           <div class="w-80 shrink-0 border-r border-border overflow-y-auto">
             <div v-if="releasesLoading" class="p-6 text-center text-text-3"><NSpin size="small" /></div>
+            <div v-else-if="releasesError" class="p-4">
+              <ErrorState title="加载失败" :reason="releasesError" hint="请稍后重试">
+                <template #actions>
+                  <NButton size="small" type="primary" @click="loadAll">重试</NButton>
+                </template>
+              </ErrorState>
+            </div>
             <div v-else-if="releases.length === 0" class="p-4">
               <div class="text-sm text-text-3 text-center py-8 font-mono">暂无发布记录</div>
             </div>
