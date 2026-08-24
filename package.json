@@ -12,7 +12,7 @@
     "dev": "concurrently -n server,web -c blue,green \"pnpm --filter @bxverse/server dev\" \"pnpm --filter @bxverse/web dev\"",
     "build": "pnpm --filter @bxverse/shared build && pnpm --filter @bxverse/core build && pnpm --filter @bxverse/server build && pnpm --filter @bxverse/cli build && pnpm --filter @bxverse/web build",
     "typecheck": "pnpm -r typecheck",
-    "test": "pnpm --filter @bxverse/core test",
+    "test": "pnpm -r --no-bail test",
     "start": "pnpm --filter @bxverse/server start",
     "seed": "node scripts/seed.mjs",
     "icons": "node scripts/gen-pwa-icons.cjs"

@@ -1,4 +1,4 @@
-// 受管理仓库写入策略：工作树默认零写入，仅允许受控 package.json version 例外。
+// 受管理仓库写入策略：默认写入 version.json（可关），R26 新增受控 package.json version 例外（白名单提交）。裁决 DOC2：以引擎实际行为为准。
 
 import fs from 'node:fs'
 import path from 'node:path'

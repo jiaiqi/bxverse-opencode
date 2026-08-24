@@ -797,10 +797,10 @@ syncDataRepo / rotateToken / authInit
 // router/index.ts —— history 模式（生产 SPA fallback 依赖）
 const routes = [
   { path: '/',                  name: 'dashboard',     component: Dashboard.vue },
-  { path: '/project/:id',       name: 'project-detail',component: ProjectDetail.vue },
-  { path: '/project/:id/release', name: 'release-wizard', component: ReleaseWizard.vue },
-  { path: '/project/:id/backups', name: 'backups', component: BackupManage.vue },
-  { path: '/repo/:pid/:rid',    name: 'repo-detail',   component: RepoDetail（R26 6 字段流水线）.vue },
+  { path: '/project/:id',       name: 'project',       component: ProjectDetail.vue },
+  { path: '/project/:id/release', name: 'release',     component: ReleaseWizard.vue },
+  { path: '/project/:id/backups', name: 'backups',     component: BackupManage.vue },
+  { path: '/repo/:pid/:rid',    name: 'repo',          component: RepoDetail.vue },
   { path: '/settings',          name: 'settings',      component: Settings.vue },
   { path: '/:pathMatch(.*)*',   name: 'not-found',     component: NotFound.vue },
 ]

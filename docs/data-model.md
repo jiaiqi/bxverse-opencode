@@ -505,14 +505,14 @@ JSON 示例：
 
 ## 10. 业务仓库内的写入物（version.json / version-history.json）
 
-受 `RepoDef.writeVersionFile`（默认 `true`）与 `RepoDef.outputDir`（默认 `public`）控制，写入业务仓库工作树（**仅文件，无 commit**）：
+受 `RepoDef.writeVersionFile`（默认 `true`）与 `RepoDef.outputDir`（默认 `public`）控制，写入业务仓库工作树（**仅文件，无 commit**）；裁决 DOC2：以引擎实际行为为准——**默认写入 version.json，可通过 `writeVersionFile=false` 关闭实现零侵入**（`types.ts:62` 注释描述的目标态与 `repo-policy.ts` 旧零写入头注已由 R26 接线废止，见变更记录 2026-08-24）：
 
 ```json
 // {outputDir}/version.json
 { "version": "v1.2.0.26081315", "build": "26081315", "buildTime": "2026-08-13T15:30:00+08:00" }
 ```
 
-- 字段与 `RepoStatus.versionFile` 逐字一致：`version`（hybrid/timestamp 完整版本或 syncedOnly 时的 `v{X.Y.Z}`）、`build`（buildStamp）、`buildTime`（ISO 时间）。
+- 字段与 `RepoStatus.versionFile` 逐字一致：`version`（R26 `X.Y.Z`/`VYYMMDDHHmm` 或旧 hybrid/timestamp；syncedOnly 时的 `X.Y.Z`）、`build`（`YYMMDDHHmm` 10 位）、`buildTime`（ISO 时间）。
 - `{outputDir}/version-history.json`：数组追加一条同构对象（`[ {version,build,buildTime}, … ]`），历史审计用。
 - 幂等：文件已存在且内容一致 → 跳过；不一致 → 报错（architecture §6.4）。
 - 这些文件由业务仓库自行决定是否 commit/推送（工具不 commit），后续可被业务仓库 gitignore。
@@ -602,7 +602,7 @@ export interface RepoBackupRef {
 
 ## 13. 完整示例
 
-### 12.1 `app.json` 示例
+### 13.1 `app.json` 示例
 
 ```json
 {
@@ -653,7 +653,7 @@ export interface RepoBackupRef {
 }
 ```
 
-### 12.2 仓库级记录 `data.json` 示例（`releases/r_8k2m1n/v1.2.0.26081315/data.json`）
+### 13.2 仓库级记录 `data.json` 示例（`releases/r_8k2m1n/v1.2.0.26081315/data.json`）
 
 ```json
 {
@@ -698,7 +698,7 @@ export interface RepoBackupRef {
 }
 ```
 
-### 12.3 数据目录树示例（发布 `v1.2.0` 之后）
+### 13.3 数据目录树示例（发布 `v1.2.0` 之后）
 
 ```
 ~/.bxverse/

@@ -405,6 +405,9 @@ architecture §3.2 全部路由可用且经 curl 验证；SSE 通道、单队列
 | R17 | UI/UX 美观优雅精致 | M3-14（主题与暗色）、M4-13（命令面板）、M5-07/08（可达性与引导打磨） |
 | R18 | 版本清单导出（下载/写仓库/本地目录/发布快照） | M4 相关任务（版本清单）、M6-00（契约扩展与清单复用） |
 | R19 | 版本一致性对比与发布备份 | M6 全链（备份存储/打包/对比引擎/引擎集成/API/前端管理页）；恢复功能 M7 暂缓 |
+| R23 | AI 场景特化路由 | M10（ai.routes 三场景分流 commit/polish/explain） |
+| R24 | 发布废弃审计 | M11（POST /api/releases/:id/deprecate + 标签清理） |
+| R25 | 多工程分支协同巡检与批量对齐 | M9（branch-alignment + batchCheckout/batchPull） |
 | R26 | 仓库级构建流水线与 package.json 双格式 | M13（契约 `repoVersionFormat`/`manifestTarget`/`versionSource` 等 → 版本引擎双格式与 `commitVersionFiles` → 流水线 `version-sync/install/pre-build` → API 校验 → 前端 `RepoDetail`/`AddProjectDialog` → 发布后 `manifestTarget` 自动落盘）；详见 `docs/r26-build-pipeline.md` |
 
 > 每条需求至少有一个里程碑任务覆盖；验收时以 M5-11 / M6-11 全量回归逐条核对本矩阵。
@@ -423,6 +426,8 @@ architecture §3.2 全部路由可用且经 curl 验证；SSE 通道、单队列
 | 2026-08-17 | R21 AI 多供应商体系落地：6 预设供应商支持、write-only 凭据隔离存储、旧单表单配置自动迁移、对外日志 AI 润色适配生效供应商 |
 | 2026-08-17 | R22 Git 面板与 AI 助手落地：仓库详情页新增 Git tab（分支/HEAD/ahead-behind/已暂存/未暂存/未追踪）、单文件与全部暂存/撤销、Conventional Commits 提交弹窗 + AI 生成标题/说明、单文件 Diff 侧栏 + AI 变更解读 |
 | 2026-08-17 | v1.0.0 正式定稿：发布里程碑 Tag `v1.0.0`，全面覆盖 R1–R22 基础规格；启动 v2 架构重构，规划 M8–M12 进阶里程碑（分支协同巡检、AI场景特化路由、发版废弃纠偏、多项目治理、三栏沉浸式仪表盘） |
+| 2026-08-17 | 追认 R23-R25：R23 AI 场景特化路由（M10 ai.routes）、R24 发布废弃审计（M11 deprecate）、R25 分支协同巡检与批量对齐（M9 branch-alignment），实现已在 `dfe8e6d` 落地，文档滞后追认 |
 | 2026-08-21 | P1 优化收敛：`AppConfig.publish.concurrency` 仓库级并发（默认1，上限5，批量落盘竞态安全）、`openapi.json`/`validate.ts` 契约与运行时校验、`useBackup`/`usePublishPlan` 前端收敛、`BackupPanel` 复用、`enforceRetention`/`restore` 闭环 |
+| 2026-08-17 | 追认 R23-R25：R23 AI 场景特化路由（M10）、R24 发布废弃审计（M11）、R25 分支协同巡检与批量对齐（M9），实现已在 dfe8e6d 落地，文档滞后追认 |
 | 2026-08-24 | 新增 R26/M13：仓库级构建流水线与 package.json 双格式（`X.Y.Z`/`VYYMMDDHHmm` + `versionSource`/`packageManager`/`installCommand`/`preBuildCommand`/`buildTimeoutMs`/`versionSyncCommit` + `manifestTarget` 自动落盘），core 单测 15+8 项、engine 流水线、API/前端三处，发布后真实 fixture 验证通过 |
 
