@@ -1,8 +1,8 @@
 // apps/server/src/api/history.ts
 // 发布历史查询 + 双轨日志编辑（PATCH /api/releases/:id/log，state 流转）
 
-import type { AppConfig, RepoVersionItem } from '@bxverse/shared'
-import { git, store } from '@bxverse/core'
+import type { AppConfig, ExternalReleaseProvider, RepoVersionItem } from '@bxverse/shared'
+import { git, release, store } from '@bxverse/core'
 import type { Ctx } from '../http/router'
 import { apiError, readJsonBody, sendJson } from '../http/json'
 
@@ -163,5 +163,122 @@ export function register(router: import('../http/router').Router, services: Hist
     }
     // 全部成功或无需清理：附加 removed/failed 便于审计，warnings 仅在部分成功时返回
     sendJson(ctx.res, 200, { ...updated, removed, failed })
+  })
+
+  // POST /api/releases/:id/publish-note —— R27 external 同步至 GitHub/Gitee Release（幂等 PATCH）
+  router.post('/api/releases/:id/publish-note', async (ctx: Ctx) => {
+    const raw = (await readJsonBody(ctx.req)) as Record<string, unknown>
+    const repoId = String(raw.repoId ?? '').trim()
+    const providerRaw = String(raw.provider ?? '').trim().toLowerCase()
+    const noteBody = typeof raw.body === 'string' ? raw.body : ''
+    if (!repoId) throw apiError(400, 'VALIDATION', 'repoId 必填')
+    if (!noteBody.trim()) throw apiError(400, 'VALIDATION', 'body 不能为空')
+    let provider: ExternalReleaseProvider
+    if (providerRaw === 'github' || providerRaw === 'gitee') provider = providerRaw as ExternalReleaseProvider
+    else if (!providerRaw) {
+      // 未传 provider 时尝试按 remote 自动推断，推断失败再 400
+      provider = '' as ExternalReleaseProvider
+    } else {
+      throw apiError(400, 'VALIDATION', 'provider 必须为 github 或 gitee')
+    }
+
+    const record = await services.dataStore.readRecord(ctx.params.id)
+    if (!record) throw apiError(404, 'NOT_FOUND', `发布记录不存在: ${ctx.params.id}`)
+
+    const cfg = await services.loadCfg()
+    // 定位所属项目：project 记录的 scopeId 即项目；repo 记录则反查归属项目
+    let project: AppConfig['projects'][number] | undefined
+    if (record.kind === 'project') {
+      project = cfg.projects.find(p => p.id === record.scopeId)
+    } else {
+      project = cfg.projects.find(p => p.repos.some(r => r.id === record.scopeId))
+      // repo 记录的同步：repoId 必须等于 scopeId 或属于同一项目
+      if (!project && record.scopeId === repoId) {
+        // 兼容：repoId 与 scopeId 同仓时允许查找其所属项目
+        project = cfg.projects.find(p => p.repos.some(r => r.id === repoId))
+      }
+    }
+    if (!project) throw apiError(404, 'NOT_FOUND', `发布记录所属项目不存在: ${record.scopeId}`)
+    const repoDef = project.repos.find(r => r.id === repoId)
+    if (!repoDef) throw apiError(404, 'NOT_FOUND', `仓库不存在于项目中: ${repoId}`)
+
+    // token：credentials.json releaseTokens[provider]（兼容 githubToken/giteeToken）
+    const cred = await store.loadCredentials()
+    const tokens = (cred.releaseTokens ?? {}) as Record<string, string>
+    // 兼容旧字段：若存量凭据直接写 githubToken/giteeToken 顶层
+    const legacyMap = cred as unknown as Record<string, string>
+    const token =
+      tokens[provider] ??
+      (provider === 'github' ? legacyMap['githubToken'] : undefined) ??
+      (provider === 'gitee' ? legacyMap['giteeToken'] : undefined) ??
+      ''
+    if (!provider) {
+      // 自动推断
+      const remoteForInfer = repoDef.remote ?? (await git.remoteUrl(repoDef.path))
+      const parsedInfer = release.parseRemoteUrl(remoteForInfer)
+      if (!parsedInfer) throw apiError(400, 'VALIDATION', '无法推断 provider，请显式传入 github/gitee')
+      provider = parsedInfer.provider
+      const inferredToken = tokens[provider] ?? (legacyMap[`${provider}Token`] as string | undefined) ?? ''
+      if (!inferredToken) throw apiError(400, 'VALIDATION', `未配置 ${provider} token，请在 credentials.json 配置 releaseTokens.${provider}`)
+      // 用推断的 provider/token 覆盖
+      const parsed2 = parsedInfer
+      const tagName2 = record.version
+      try {
+        const res2 = await release.publishReleaseNote({
+          owner: parsed2.owner,
+          repo: parsed2.repo,
+          tagName: tagName2,
+          name: tagName2,
+          body: noteBody,
+          token: inferredToken,
+          provider,
+        })
+        sendJson(ctx.res, 200, { ok: true, ...res2 })
+        return
+      } catch (e) {
+        const err = e as { code?: string; message?: string; detail?: Record<string, unknown> }
+        const status = err.code === 'UNAUTHORIZED' ? 502 : 502
+        throw apiError(status, err.code ?? 'GIT_FAILED', err.message ?? 'Release 同步失败')
+      }
+    }
+    if (!token || !String(token).trim()) {
+      throw apiError(400, 'VALIDATION', `未配置 ${provider} token，请在 credentials.json 配置 releaseTokens.${provider}`)
+    }
+
+    // 远程解析 owner/repo
+    let remoteUrl = repoDef.remote ?? ''
+    if (!remoteUrl) {
+      try {
+        remoteUrl = await git.remoteUrl(repoDef.path)
+      } catch {
+        remoteUrl = ''
+      }
+    }
+    if (!remoteUrl) throw apiError(400, 'VALIDATION', '仓库未配置 remote，无法解析 owner/repo')
+    const parsed = release.parseRemoteUrl(remoteUrl)
+    if (!parsed) throw apiError(400, 'VALIDATION', `无法解析 remote URL 的 owner/repo: ${remoteUrl}`)
+    // 若显式 provider 与解析 provider 不一致，尊重显式 provider 仅用 owner/repo
+    // （便于 mock 场景：remote 为本地地址但 provider 强制为 github）
+    const owner = parsed.owner
+    const repoName = parsed.repo
+    const tagName = record.version
+
+    try {
+      const result = await release.publishReleaseNote({
+        owner,
+        repo: repoName,
+        tagName,
+        name: tagName,
+        body: noteBody,
+        token: String(token).trim(),
+        provider,
+      })
+      sendJson(ctx.res, 200, { ok: true, ...result })
+    } catch (e) {
+      const err = e as { code?: string; message?: string; detail?: Record<string, unknown> }
+      // 上游鉴权/网络失败统一 502，保持前端可区分本地校验 400
+      const status = err.code === 'VALIDATION' ? 400 : 502
+      throw apiError(status, (err.code as string) ?? 'GIT_FAILED', err.message ?? 'Release 同步失败')
+    }
   })
 }

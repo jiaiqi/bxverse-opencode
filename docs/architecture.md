@@ -370,6 +370,8 @@ G:\vibecoding\
 │       │   ├── ai.ts                  [已有] 可选 AI 日志润色（polishLog，v1 短路返回原文）
 │       │   ├── diff.ts                [已有] autoDraft vs content 行级 LCS diff（diffLines/DiffLine）
 │       │   ├── home.ts                [已有] BX_HOME 解析、目录确保（data/repos/journal/logs/tmp）
+│       │   ├── release/               [已有] R27 external 分发至 GitHub/Gitee Release（`node:https`，GitHub/Gitee 双协议，幂等 GET+POST/PATCH，`parseRemoteUrl` owner/repo 解析）
+│       │   │   └── index.ts           [已有] `publishReleaseNote` + `parseRemoteUrl`（零依赖，token 从 credentials.json `releaseTokens` 取）
 │       │   ├── backup/                [已有] R19 发布备份（5 文件）
 │       │   │   ├── index.ts           [已有] 备份编排 backupRepo()（幂等、失败清理本次半成品、返回 RepoBackupRef）
 │       │   │   ├── source.ts          [已有] git bundle + git archive 源码备份（快照遵循 .gitignore）
@@ -406,7 +408,7 @@ G:\vibecoding\
 │   │           ├── versions.ts        [已有] R18 项目版本清单（GET /versions 汇总 + POST /versions/export 导出到仓库/目录）
 │   │           ├── publish.ts         [已有] plan/publish
 │   │           ├── events.ts          [已有] GET /api/events SSE 事件通道（实时控制台）
-│   │           ├── history.ts         [已有] 发布历史
+│   │           ├── history.ts         [已有] 发布历史 + R27 `POST /api/releases/:id/publish-note`（external 同步至 Release）
 │   │           ├── overview.ts        [已有] 首页聚合
 │   │           ├── backups.ts         [已有] R19/M6 备份列表/下载/删除/对比/校验/源码 diff（api.md §10.5）
 │   │           └── sync.ts            [已有] /api/system/sync
@@ -435,9 +437,10 @@ G:\vibecoding\
 │   │       ├── router/index.ts        [已有] 路由：/ /project/:id /project/:id/release /project/:id/backups /repo/:pid/:rid /settings + 404
 │   │       ├── views/
 │   │       │   ├── Dashboard.vue      [已有] 总览（R2/R13 变动仓库聚合）
-│   │       │   ├── ProjectDetail.vue  [已有] 项目详情（仓库列表 + 发布历史 + 项目设置）
+│   │       │   ├── ProjectDetail.vue  [已有] 项目详情（仓库列表 + 发布历史 + 项目设置，R27 历史行 Release 操作组）
 │   │       │   ├── RepoDetail.vue     [已有] 仓库详情（文件 / 版本日志 / 设置）
-│   │       │   ├── ReleaseWizard.vue  [已有] 六步发布向导（R9/R14）
+│   │       │   ├── ReleaseWizard.vue  [已有] 六步发布向导（R9/R14；完成页 R27 Release 操作组）
+│   │       │   ├── components/wizard/StepResult.vue  [已有] 完成页 R27 复制/导出 .md/.html/同步 Release
 │   │       │   ├── BackupManage.vue   [已有] R19 备份管理：备份列表/下载/删除/产物校验/两次备份对比/源码对比/版本导出
 │   │       │   ├── Settings.vue       [已有] 配置（PWA/R10 双模式/AI/数据仓库同步）
 │   │       │   └── NotFound.vue       [已有] 404 页

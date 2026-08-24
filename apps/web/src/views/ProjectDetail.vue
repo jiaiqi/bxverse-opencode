@@ -13,6 +13,7 @@ import AddRepoDialog from '../components/AddRepoDialog.vue'
 import AddProjectDialog from '../components/AddProjectDialog.vue'
 import VersionExportDropdown from '../components/VersionExportDropdown.vue'
 import BackupPanel from '../components/BackupPanel.vue'
+import ReleaseNoteActions from '../components/ReleaseNoteActions.vue'
 import { useDialog, useMessage } from 'naive-ui'
 import { formatDate } from '../utils/format'
 
@@ -240,6 +241,21 @@ usePolling(async () => {
               <template #icon><i aria-hidden="true" class="i-carbon-rocket" /></template>
               统一发版
             </NButton>
+            <!-- R28 快速发布：预填上次配置，≤5 步完成 patch；无记录时禁用并提示 -->
+            <NTooltip :disabled="!!project.lastQuickPublish">
+              <template #trigger>
+                <NButton
+                  type="primary"
+                  secondary
+                  :disabled="!project.lastQuickPublish"
+                  @click="router.push(`/project/${project.id}/release?mode=quick`)"
+                >
+                  <template #icon><i aria-hidden="true" class="i-carbon-flash" /></template>
+                  快速发布
+                </NButton>
+              </template>
+              首次发布请使用详细模式，完成一次发布后可一键复用配置快速发 patch
+            </NTooltip>
             <NButton type="info" secondary @click="showAddRepo = true">
               <template #icon><i aria-hidden="true" class="i-carbon-branch" /></template>
               接入新仓库
@@ -371,9 +387,21 @@ usePolling(async () => {
                       <span v-if="r.backups?.length" class="text-brand-500">Bundle+Manifest</span>
                       <span v-else>快照已归档</span>
                     </td>
-                    <td class="py-2.5 px-3 text-right space-x-2">
-                      <button class="text-brand-500 hover:underline bg-transparent border-0 cursor-pointer p-0" @click="openDetail(r)">查看日志</button>
-                      <button v-if="!r.deprecated" class="text-warning hover:underline bg-transparent border-0 cursor-pointer p-0" @click="openDeprecate(r)">标为废弃</button>
+                    <td class="py-2.5 px-3 text-right">
+                      <div class="flex flex-col items-end gap-1.5">
+                        <div class="flex gap-2">
+                          <button class="text-brand-500 hover:underline bg-transparent border-0 cursor-pointer p-0" @click="openDetail(r)">查看日志</button>
+                          <button v-if="!r.deprecated" class="text-warning hover:underline bg-transparent border-0 cursor-pointer p-0" @click="openDeprecate(r)">标为废弃</button>
+                        </div>
+                        <ReleaseNoteActions
+                          :release-id="r.id"
+                          :content="r.logs.external.content"
+                          :version="r.version"
+                          :repos="(project?.repos ?? []).map(x => ({ id: x.id, name: x.name, remote: x.remote }))"
+                          :project-id="projectId"
+                          size="tiny"
+                        />
+                      </div>
                     </td>
                   </tr>
                 </tbody>
@@ -396,8 +424,19 @@ usePolling(async () => {
       <AddProjectDialog v-model:show="showEdit" :editing="project" @saved="projectsStore.load()" />
 
       <!-- 记录详情抽屉 -->
-      <NDrawer v-model:show="showDetail" :width="560">
+      <NDrawer v-model:show="showDetail" :width="640">
         <NDrawerContent v-if="detailRelease" :title="detailRelease.version" closable>
+          <div class="mb-3 p-2 rounded-lg bg-surface-alt border border-border">
+            <div class="text-xs font-medium text-text-1 mb-1.5">external 分发闭环（R27）</div>
+            <ReleaseNoteActions
+              :release-id="detailRelease.id"
+              :content="detailRelease.logs.external.content"
+              :version="detailRelease.version"
+              :repos="(project?.repos ?? []).map(x => ({ id: x.id, name: x.name, remote: x.remote }))"
+              :project-id="projectId"
+              size="small"
+            />
+          </div>
           <NTabs type="segment" animated>
             <NTabPane name="external" tab="对外日志">
               <MarkdownView :content="detailRelease.logs.external.content" :max-lines="800" />

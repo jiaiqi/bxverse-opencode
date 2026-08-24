@@ -1,13 +1,19 @@
 <script setup lang="ts">
 import { usePublishStore } from '../../stores/publish'
+import { useProjectsStore } from '../../stores/projects'
 import VersionExportDropdown from '../VersionExportDropdown.vue'
+import ReleaseNoteActions from '../ReleaseNoteActions.vue'
 import { api } from '../../api'
 
 const props = defineProps<{ projectId: string }>()
 
 const store = usePublishStore()
+const projectsStore = useProjectsStore()
 const router = useRouter()
 const resultReleaseId = computed(() => store.result?.releaseId ?? '')
+const project = computed(() => projectsStore.byId(props.projectId))
+const externalContent = computed(() => store.logs.external.content || '')
+const repos = computed(() => (project.value?.repos ?? []).map(r => ({ id: r.id, name: r.name, remote: r.remote })))
 
 const emit = defineEmits<{ again: [] }>()
 </script>
@@ -36,6 +42,18 @@ const emit = defineEmits<{ again: [] }>()
     <template v-else>
       <NResult status="success" title="发布完成" />
     </template>
+    <!-- R27 external 分发闭环：复制 / 导出 .md/.html / 同步 Release -->
+    <div v-if="resultReleaseId && store.result" class="mt-6 flex flex-col items-center gap-3">
+      <div class="text-xs text-text-3">external 日志分发</div>
+      <ReleaseNoteActions
+        :release-id="resultReleaseId"
+        :content="externalContent"
+        :version="store.result.version"
+        :repos="repos"
+        :project-id="projectId"
+        size="small"
+      />
+    </div>
     <div class="flex justify-center gap-3 mt-6">
       <NButton @click="router.push(`/project/${projectId}`)">返回项目</NButton>
       <NButton

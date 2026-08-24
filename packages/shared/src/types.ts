@@ -2,6 +2,7 @@
 // 全局共享类型：项目 / 仓库 / 发布记录 / 应用配置 / API 类型
 
 // ==================== 版本 ====================
+// 扩展：R30 prerelease 契约裁决——BumpType 保持 major|minor|patch 不变，灰度通过可选 prerelease?: string（beta.1/rc.1 等）承载，避免联合类型膨胀
 export type BumpType = 'major' | 'minor' | 'patch'
 
 // ==================== 提交与日志 ====================
@@ -105,6 +106,15 @@ export interface ProjectDef {
   repos: RepoDef[]
   createdAt?: string
   updatedAt?: string
+  // 扩展：R28 快速发布通道——上次发布配置快照，用于一键预填（不含日志内容与排除明细）
+  lastQuickPublish?: {
+    repoIds: string[]
+    bump: BumpType | 'auto'
+    skipBuild: boolean
+    offline: boolean
+    backupSource: boolean
+    backupArtifacts: boolean
+  }
 }
 
 export interface AppConfig {
@@ -137,6 +147,8 @@ export interface AppConfig {
   backup?: BackupConfig
   /** 扩展：发布并发（默认 1 串行；设 2-3 可仓库级并行，需保证 saveProject 竞态安全） */
   publish?: { concurrency?: number }
+  // 扩展：R29 发布 webhook 通知（适配钉钉/企微/飞书 Incoming webhook POST）
+  notifications?: { webhooks: { id: string; url: string; events: ('done' | 'error')[]; enabled: boolean }[] }
   projects: ProjectDef[]
 }
 
@@ -208,6 +220,8 @@ export interface RepoReleaseRef {
   /** 发布时刻的仓库中文名快照（缺省回退 repoName） */
   displayName?: string
   version: string
+  // 扩展：R30 prerelease 灰度标识（随 version 快照，正式版缺省）
+  prerelease?: string
   commits: CommitInfo[]
 }
 
@@ -220,6 +234,8 @@ export interface ReleaseRecord {
   baseVersion: string
   buildStamp: string
   bump: BumpType
+  // 扩展：R30 prerelease 灰度标识（beta.1/rc.1 等，缺省为正式版）
+  prerelease?: string
   date: string
   from?: string | null
   to?: string
@@ -264,6 +280,8 @@ export interface PlannedRepo {
   currentVersion?: string
   /** 扩展：R26 生效的版本来源（packageJson 模式无 package.json 时降级为 downgraded） */
   effectiveMode?: 'packageJson' | 'derived' | 'downgraded'
+  // 扩展：R30 prerelease 灰度标识（beta.1/rc.1 等，缺省为正式版）
+  prerelease?: string
 }
 
 export interface PublishPlan {
@@ -273,6 +291,8 @@ export interface PublishPlan {
   buildStamp: string
   bump: BumpType
   suggestedBump: BumpType
+  // 扩展：R30 prerelease 灰度标识（beta.1/rc.1 等，缺省为正式版）
+  prerelease?: string
   changed: PlannedRepo[]
   /** 未变动、仅同步基版 version.json 的仓库 */
   syncedOnly: PlannedRepo[]
@@ -288,6 +308,8 @@ export interface PublishPlan {
 export interface PublishRequest {
   projectId: string
   bump: BumpType | 'auto'
+  // 扩展：R30 prerelease 灰度标识（beta.1/rc.1 等，与 bump 组合生成 vX.Y.Z-beta.N；缺省为正式版）
+  prerelease?: string
   /** 不传 = 自动选择有变动的仓库 */
   repoIds?: string[]
   skipBuild?: boolean
@@ -527,4 +549,21 @@ export interface BranchAlignmentResult {
   isAllAligned: boolean
   defaultBranch: string
   items: BranchAlignmentItem[]
+}
+
+// 扩展：R27 external 日志分发至 GitHub/Gitee Release
+export type ExternalReleaseProvider = 'github' | 'gitee'
+
+export interface ReleasePublishNoteRequest {
+  repoId: string
+  provider: ExternalReleaseProvider
+  body: string
+}
+
+export interface ReleasePublishNoteResult {
+  ok: boolean
+  provider: ExternalReleaseProvider
+  tag: string
+  action: 'created' | 'updated'
+  url?: string
 }

@@ -41,6 +41,9 @@ function deepMergeDefault(raw: Partial<AppConfig>): AppConfig {
     pwa: { ...DEFAULT_APP_CONFIG.pwa, ...(raw.pwa ?? {}) },
     ai: { ...DEFAULT_APP_CONFIG.ai, ...(raw.ai ?? {}) },
     backup: raw.backup ? { ...DEFAULT_APP_CONFIG.backup!, ...raw.backup, retention: raw.backup.retention ? { ...raw.backup.retention } : undefined } : DEFAULT_APP_CONFIG.backup,
+    notifications: (raw as Record<string, unknown>).notifications != null
+      ? (raw as unknown as { notifications: AppConfig['notifications'] }).notifications
+      : (DEFAULT_APP_CONFIG as AppConfig).notifications,
     dataDir: raw.dataDir ?? DEFAULT_APP_CONFIG.dataDir,
   }
 }
@@ -133,6 +136,8 @@ export interface Credentials {
   dataRemote?: string | null
   /** 扩展：R21 AI 供应商 API key（write-only，API 与 UI 永不回显明文） */
   aiKeys?: Record<string, string>
+  /** 扩展：R27 Release 平台 token（github/gitee，write-only，幂等同步 external 日志至平台 Release） */
+  releaseTokens?: Record<string, string>
 }
 
 export function generateToken(): string {
@@ -146,7 +151,7 @@ export async function loadCredentials(): Promise<Credentials> {
     return cred
   }
   const cred = JSON.parse(fs.readFileSync(CRED_JSON, 'utf8')) as Credentials
-  return { token: cred.token ?? '', dataRemote: cred.dataRemote ?? null, aiKeys: cred.aiKeys ?? {} }
+  return { token: cred.token ?? '', dataRemote: cred.dataRemote ?? null, aiKeys: cred.aiKeys ?? {}, releaseTokens: cred.releaseTokens ?? {} }
 }
 
 export async function saveCredentials(cred: Credentials): Promise<void> {

@@ -9,7 +9,8 @@
 > R26：仓库级构建流水线（versionSource/packageManager/installCommand/preBuildCommand/buildTimeoutMs/versionSyncCommit）+ 双格式 X.Y.Z/VYYMMDDHHmm + manifestTarget 自动落盘（`docs/r26-build-pipeline.md`）
 
 - 项目/仓库两级版本与双轨更新日志（对内全量 / 对外分节）统一管理，发布数据存于 git 数据仓库（历史即审计）
-- 发布向导六步（检测→版本→日志确认→预览→执行→完成）+ 提交级排除（人工甄别哪些提交进版本）
+- 发布向导六步（检测→版本→日志确认→预览→执行→完成）+ 提交级排除（人工甄别哪些提交进版本） + R28 快速发布通道（复用上次配置，≤5 步完成周度 patch，`?mode=quick` 预填，门禁仍强制；详细模式保留）
+- R27 external 分发闭环：发布完成页与发布历史行一键复制 Markdown / 导出 .md/.html / 同步 external 日志至 GitHub/Gitee Release（`tag_name`+`name`+`body`，同 tag 幂等 PATCH，token 隔离存储，离线禁用提示）
 - R19 备份与一致性对比：发布时可备份源码/产物（bundle + 快照 + 产物归档；向导开关，默认关闭），备份列表/下载/校验/删除，两次发布的产物与源码对比 + 校验报告导出
 - 版本清单导出三种方式：另存为文件 / 写入项目仓库（树选目录）/ 导出到本地目录（原生选择器），另附直接预览；版本号格式可选「完整 / 仅日期（V+8 位时间戳）」，默认文件名 version.json
 - AI 多供应商体系（R21）：支持 DeepSeek / OpenAI / Ollama / Kimi coding plan / 小米 MiMo / MiniMax / 自定义等 OpenAI 兼容供应商，多供应商自由切换；API Key 安全隔离存储于本机 credentials（write-only，API 与 UI 永不回显明文），一键连通性测试；对外日志一键润色面向用户友好草稿（仍须人工核对确认）

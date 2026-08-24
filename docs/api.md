@@ -130,6 +130,7 @@
 | GET | `/api/backups/usage` | 备份磁盘占用（按项目/仓库过滤） | `BackupUsage` | `apps/server/src/api/backups.ts` |
 | POST | `/api/backups/cleanup` | 按保留策略清理（dryRun 预览） | `BackupCleanupResult` | `apps/server/src/api/backups.ts` |
 | POST | `/api/backups/restore` | 恢复备份到目标目录（校验绝对路径+kind） | `{ok}` | `apps/server/src/api/backups.ts` |
+| POST | `/api/releases/:id/publish-note` | 同步 external 日志至平台 Release（R27） | `ExternalReleaseProvider` | `apps/server/src/api/history.ts` |
 | GET | `/api/openapi.json` | OpenAPI 3.0 契约（免 token） | — | `apps/server/src/api/openapi.ts` |
 | GET | `/api/metrics` | 进程指标（免 token） | — | `apps/server/src/api/metrics.ts` |
 
@@ -729,6 +730,7 @@ state 状态机（`auto → edited → confirmed`）：
 {
   "projectId": "p_3f1",
   "bump": "auto",
+  "prerelease": "beta.1",
   "repoIds": ["r_8k2m", "r_x9"],
   "excludeCommits": { "r_8k2m": ["9d4f2a1c3b5e7f8a9d0b1c2d3e4f5a6b7c8d9e0f"] },
   "skipBuild": false,
@@ -743,6 +745,7 @@ state 状态机（`auto → edited → confirmed`）：
 |---|---|
 | `projectId` | 必填 |
 | `bump` | `major/minor/patch/auto`；`auto` = 按提交语义推断 |
+| `prerelease` | 可选（扩展 R30，灰度标识 `beta.1`/`rc.1` 等）；`PRERELEASE_RE=/^[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*$/` 校验，空串/缺省 = 正式版；同标识递增（`beta.1→beta.2`、`beta→beta.2`），异标识覆盖（`beta.1` 请求 `rc.1` → `rc.1`）；非法 → 400 `VALIDATION`（`非法 prerelease: ${req}`） |
 | `repoIds` | 可选；缺省 = 自动选择所有有变动的仓库 |
 | `skipBuild` | 跳过 buildCommand 执行 |
 | `offline` | 纯本地模式：跳过 tag 推送与数据仓库 push |
@@ -784,7 +787,9 @@ state 状态机（`auto → edited → confirmed`）：
 ```
 
 - `changed` 只含有变动的仓库（提交或版本需要推进）；`syncedOnly` 为未变动、仅同步基版 version.json 的仓库。
-- `changed.version` 按项目 `repoVersionFormat` 生成（优先于 `repoVersionScheme`）：`X.Y.Z` → `1.2.0`；`VYYMMDDHHmm` → `V2608241530`；旧 `hybrid` → `v1.2.0.26081315`、`timestamp` → `v26081315` 保留兼容。
+- `changed.version` 按项目 `repoVersionFormat` 生成（优先于 `repoVersionScheme`）：`X.Y.Z` → `1.2.0`；`VYYMMDDHHmm` → `V2608241530`；旧 `hybrid` → `v1.2.0.26081315`、`timestamp` → `v26081315` 保留兼容；prerelease 时 `X.Y.Z` 渲染为 `1.2.0-beta.1`，hybrid 为 `v1.2.0-beta.1.26081315`。
+- `PublishPlan.prerelease?`（扩展 R30）：灰度标识快照，同标识递增（`beta.1→beta.2`），异标识覆盖；prerelease 时 `projectVersion: "v1.2.0-beta.1"`、`milestoneTag: "v1.2.0-beta.1"`、`tags[].tag: "build/v1.2.0-beta.1"`（`X.Y.Z` 格式下为 `build/1.2.0-beta.1`）；缺省为正式版。
+- `prerelease` 校验失败 → 400 `VALIDATION`（`非法 prerelease: ${value}`，`PRERELEASE_RE` 未通过）；`bump`/`repoIds`/`excludeCommits` 校验同前。
 - dry-run 可能耗时数秒（含 git 查询），无副作用（不建任务、不写 journal、不打标签）。
 
 **模式二：执行（`dryRun` 缺省或 `false`）** —— 立即创建任务并入队，响应 `202`：
@@ -1067,6 +1072,44 @@ data: {"type":"done","message":"发布完成","data":{"releaseId":"rel_p_3f1_v1.
 - `GET /api/backups/usage?projectId=&repoId=`：`BackupUsage` 聚合（`getBackupUsage`）。
 - `POST /api/backups/cleanup`：`{ projectId?, repoId?, retention?, dryRun }` → `enforceRetention`；缺 `retention` 时取 `AppConfig.backup.retention`，三项全空 400 `VALIDATION`；`assertBackupCleanupBody` 校验 `keepLast>=1/maxBytes>=0/keepDays>=1`。
 - `POST /api/backups/restore`：`{ releaseId, repoId, kind, targetDir }` → `restoreBundle/restoreArchive`；`assertRestoreBody` 校验绝对路径且非根，`kind` ∈ `source-bundle/source-archive/artifact`。
+
+### 10.9 发布说明分发至平台 Release（R27）
+
+#### POST /api/releases/:id/publish-note
+
+用途：将项目级/仓库级发布记录的 `external` 日志一键同步为对应仓库在 GitHub/Gitee 的 Release 备注（tag 已打好，Release API 幂等：同 `tag_name` 存在则 PATCH `body`）。
+
+请求体：
+
+```json
+{ "repoId": "r_8k2m", "provider": "github", "body": "# v1.2.0 更新日志\n..." }
+```
+
+| 字段 | 说明 |
+|---|---|
+| `repoId` | 必填；必须属于该发布记录所属项目（`ReleaseRecord.scopeId` 对应的 `ProjectDef.repos`） |
+| `provider` | `github` \| `gitee`（大小写不敏感，前端下拉直供；缺省按 remoteUrl 自动推断，推断失败 400） |
+| `body` | 必填；Release 备注 Markdown（取 `ReleaseRecord.logs.external.content` 时后端不再二次校验节选，直接透传） |
+
+服务端步骤：
+
+1. `readRecord(id)` → 取项目定义与 `repoDef.path`/`remote`；无记录 404 `NOT_FOUND`。
+2. 参数校验：`repoId` 非法 / `body` 空 400 `VALIDATION`；`provider` 非法 400。
+3. 凭据：`credentials.json` 的 `releaseTokens[provider]`（兼容旧 `githubToken`/`giteeToken` 字段）；缺失 → 400 `VALIDATION`（`未配置 ${provider} token，请在 credentials.json 配置 releaseTokens.${provider}`）。
+4. 远程解析：`remote` 或 `git remoteUrl(repoPath)` → `parseRemoteUrl` 得 `owner/repo`；无法解析 400 `VALIDATION`。
+5. 标签：`tag_name = ReleaseRecord.version`（如 `v1.2.0` / `1.2.0` / `V2608241530`），`name = tag_name`；同 tag 已存在则 PATCH，仅更新 `body`（与 `name`），幂等。
+6. 调用 `core/release.publishReleaseNote`（`node:https`，`Authorization: token <token>`，Gitee 走 `?access_token=`），超时 15s；失败 502 上游错误（`error` 含 HTTP 状态与截断响应体）。
+
+响应 `200`：
+
+```json
+{ "ok": true, "provider": "github", "tag": "v1.2.0", "action": "created", "url": "https://github.com/owner/repo/releases/tag/v1.2.0" }
+{ "ok": true, "provider": "github", "tag": "v1.2.0", "action": "updated" }
+```
+
+离线：发布时 `offline=true` 且本次 `hasRemote=false` 的仓库仍可同步（Release 与 tag 推送独立）；前端据 `navigator.onLine` / `hasRemote` 禁用按钮并提示「离线环境或未配置远程，无法同步」。
+
+实现：`apps/server/src/api/history.ts`（新增路由）；底层 `@bxverse/core/release`（`parseRemoteUrl` 复用 git 远程解析逻辑，`publishReleaseNote` 处理 GitHub/Gitee 双协议与幂等 GET+POST/PATCH）。
 
 ---
 

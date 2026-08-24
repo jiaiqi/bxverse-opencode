@@ -28,6 +28,7 @@ export const usePublishStore = defineStore('publish', {
     plan: null as PublishPlan | null,
     planning: false,
     bumpOverride: 'auto' as 'auto' | BumpType,
+    prerelease: '' as string,
     logs: {
       internal: { state: 'auto', content: '', autoDraft: '' } as LogTrackState,
       external: { state: 'auto', content: '', autoDraft: '' } as LogTrackState,
@@ -67,6 +68,7 @@ export const usePublishStore = defineStore('publish', {
         plan: null,
         planning: false,
         bumpOverride: 'auto',
+        prerelease: '',
         logs: {
           internal: { state: 'auto', content: '', autoDraft: '' },
           external: { state: 'auto', content: '', autoDraft: '' },
@@ -102,9 +104,11 @@ export const usePublishStore = defineStore('publish', {
       if (!this.projectId || this.selectedRepoIds.length === 0) return
       this.planning = true
       try {
+        const rawPre = this.prerelease.trim()
         const req: PublishRequest = {
           projectId: this.projectId,
           bump: this.bumpOverride,
+          prerelease: rawPre ? rawPre : undefined,
           repoIds: this.selectedRepoIds,
           excludeCommits: this.excludedCommits,
           offline: this.offline,
@@ -160,9 +164,11 @@ export const usePublishStore = defineStore('publish', {
       // 超长日志（首次发布可达数 MB）无需重复传输，engine 会用 plan 草稿兜底
       const extEdited = this.logs.external.state !== 'auto' && this.logs.external.content !== this.logs.external.autoDraft
       const intEdited = this.logs.internal.state !== 'auto' && this.logs.internal.content !== this.logs.internal.autoDraft
+      const rawPre = this.prerelease.trim()
       const req: PublishRequest = {
         projectId: this.projectId,
         bump: this.plan.bump,
+        prerelease: rawPre ? rawPre : undefined,
         repoIds: this.selectedRepoIds,
         excludeCommits: this.excludedCommits,
         offline: this.offline,

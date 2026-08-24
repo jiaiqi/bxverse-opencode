@@ -44,7 +44,7 @@ export function register(router: import('../http/router').Router, services: AppS
   const updateConfig = async (ctx: Ctx): Promise<void> => {
     const body = (await readJsonBody(ctx.req)) as Record<string, unknown>
 
-    const allowed = ['theme', 'themeStyle', 'pwa', 'pollInterval', 'ai', 'backup']
+    const allowed = ['theme', 'themeStyle', 'pwa', 'pollInterval', 'ai', 'backup', 'notifications']
     for (const key of Object.keys(body)) {
       if (!allowed.includes(key)) {
         throw apiError(400, 'VALIDATION', `字段不支持在线修改: ${key}（仅支持 ${allowed.join('/')}）`)
@@ -122,6 +122,34 @@ export function register(router: import('../http/router').Router, services: AppS
             : cfg.backup?.retention,
         }
         if (cfg.backup.retention && Object.keys(cfg.backup.retention).length === 0) cfg.backup.retention = undefined
+      }
+
+      if (body.notifications !== undefined) {
+        const n = body.notifications as Record<string, unknown>
+        if (typeof n !== 'object' || n === null || Array.isArray(n)) {
+          throw apiError(400, 'VALIDATION', 'notifications 必须为对象')
+        }
+        const webhooks = n.webhooks
+        if (webhooks !== undefined) {
+          if (!Array.isArray(webhooks)) throw apiError(400, 'VALIDATION', 'notifications.webhooks 必须为数组')
+          // 校验每条 webhook（url https、events 白名单、id 唯一等）
+          const { validateWebhooks } = await import('../notifications')
+          try {
+            validateWebhooks(webhooks)
+          } catch (e) {
+            throw apiError(400, 'VALIDATION', (e as Error).message)
+          }
+          cfg.notifications = {
+            webhooks: (webhooks as { id: string; url: string; events: ('done' | 'error')[]; enabled: boolean }[]).map(w => ({
+              id: String(w.id).trim(),
+              url: String(w.url).trim(),
+              events: [...w.events] as ('done' | 'error')[],
+              enabled: !!w.enabled,
+            })),
+          }
+        } else {
+          cfg.notifications = { webhooks: [] }
+        }
       }
 
       if (body.ai !== undefined) {

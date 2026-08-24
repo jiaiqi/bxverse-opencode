@@ -136,10 +136,11 @@ AppConfig ─── 1:N ─── ProjectDef ─── 1:N ─── RepoDef
 | `kind` | `'project' \| 'repo'` | `project`=项目级统一发布记录；`repo`=单仓库发布记录（同一发布内两条都产生） |
 | `scopeId` | `string` | 记录归属：`project` 时为项目 `id`；`repo` 时为仓库 `id`；同时是 `releases/{scopeId}/` 目录名 |
 | `scopeName` | `string` | 落盘时刻的名称快照（`project` 时为项目 `name`，`repo` 时为仓库 `name`） |
-| `version` | `string` | 本次发布版本：`project` 记录 = `vX.Y.Z`；`repo` 记录 = `vX.Y.Z.YYMMDDHH`（hybrid）或 `vYYMMDDHH`（timestamp） |
-| `baseVersion` | `string` | 项目基版：`project` 记录 = 自身 `version`；`repo` 记录 = 所属项目 `ProjectDef.version`（同一次发布内全部一致） |
+| `version` | `string` | 本次发布版本：`project` 记录 = `vX.Y.Z`（含 prerelease 时如 `v1.2.0-beta.1`）；`repo` 记录 = `vX.Y.Z.YYMMDDHH`（hybrid）或 `vYYMMDDHH`（timestamp），prerelease 时为 `v1.2.0-beta.1` / `v1.2.0-beta.1.26081315`（`X.Y.Z` 格式下仓库版本为 `1.2.0-beta.1`） |
+| `baseVersion` | `string` | 项目基版：`project` 记录 = 自身 `version`；`repo` 记录 = 所属项目 `ProjectDef.version`（同一次发布内全部一致，含 prerelease 时如 `v1.2.0-beta.1`） |
 | `buildStamp` | `string` | `YYMMDDHH`（或撞名规避后的 `YYMMDDHHNN`，见 §6.3）；同一次发布内所有记录共享 |
-| `bump` | `BumpType` | 项目基版本次实际采用的步长（`major`/`minor`/`patch`） |
+| `bump` | `BumpType` | 项目基版本次实际采用的步长（`major`/`minor`/`patch`，prerelease 不改变 bump 语义） |
+| `prerelease` | `string`（可选） | 扩展 R30：灰度标识（`beta.1`/`rc.1` 等，缺省为正式版，`PRERELEASE_RE` 校验；与 `version` 同步快照，`RepoReleaseRef.prerelease`/`PlannedRepo.prerelease`/`PublishPlan.prerelease` 均同口径，同标识递增见 §6.2） |
 | `date` | `string` | 发布完成时刻，ISO 8601 含时区偏移（如 `2026-08-13T15:30:00+08:00`） |
 | `from` | `string \| null`（可选） | 变更检测起点 commit（fullHash）：`repo` 记录 = 该仓库 `lastPublishCommit`（首次发布为 `null`）；`project` 记录恒为 `null`（聚合无单一范围） |
 | `to` | `string`（可选） | 变更检测终点 commit（fullHash）= 发布时刻 HEAD；`project` 记录缺省 |
@@ -162,10 +163,10 @@ AppConfig ─── 1:N ─── ProjectDef ─── 1:N ─── RepoDef
 | `Stats` | `commits`/`filesChanged`/`insertions`/`deletions` + `byType: Record<CommitType, number>` |
 | `DiffStat` | `filesChanged`/`insertions`/`deletions`（单文件粒度之上的短平快统计，用于总览卡片） |
 | `ReleaseLog` | `state` + `content` + `autoDraft`，见 §7 |
-| `RepoReleaseRef` | `repoId`/`repoName`/`displayName`/`version`/`commits`：项目记录对仓库发布结果的快照；`displayName` 为**发布落盘时定格**的仓库中文名快照，旧记录缺省回退 `repoName`（`GET /api/releases/:id/versions` 以 `displayName || repoName` 输出 `name`） |
-| `PlannedRepo` | 计划内单仓库：`repoId`/`name`/`changed`/`version`/`from`/`to`/`commits`/`buildCommand`；`changed=true` 进 `PublishPlan.changed`，`false` 进 `PublishPlan.syncedOnly` |
-| `PublishPlan` | `projectId`/`projectName`/`projectVersion`（目标 `vX.Y.Z`）/`buildStamp`/`bump`（最终采用）/`suggestedBump`（推断建议）/`changed`/`syncedOnly`/`milestoneTag`/`tags`（`{repoId,name,tag}[]` 干跑预览标签清单）/`externalDraft`/`internalDraft`（项目级双轨草稿）/`warnings`（非阻断警告，如「首次发布仅展示最近 500 条」） |
-| `PublishRequest` | `projectId`/`bump`（`BumpType \| 'auto'`，`auto` 表示采用 `suggestedBump`）/`repoIds`（不传 = 全部有变动仓库）/`skipBuild`/`offline`/`dryRun`/`externalContent`/`internalContent`（向导人工定稿，覆盖草稿）/`excludeCommits`（提交级排除，语义见 §8.4） |
+| `RepoReleaseRef` | `repoId`/`repoName`/`displayName`/`version`/`prerelease?`（扩展 R30，灰度标识快照，正式版缺省）/`commits`：项目记录对仓库发布结果的快照；`displayName` 为**发布落盘时定格**的仓库中文名快照，旧记录缺省回退 `repoName`（`GET /api/releases/:id/versions` 以 `displayName \|\| repoName` 输出 `name`） |
+| `PlannedRepo` | 计划内单仓库：`repoId`/`name`/`changed`/`version`/`prerelease?`（扩展 R30，灰度标识，同标识递增）/`from`/`to`/`commits`/`buildCommand`/`diffStat?`/`currentVersion?`/`effectiveMode?`；`changed=true` 进 `PublishPlan.changed`，`false` 进 `PublishPlan.syncedOnly` |
+| `PublishPlan` | `projectId`/`projectName`/`projectVersion`（目标 `vX.Y.Z`，含 prerelease 时如 `v1.2.0-beta.1`）/`buildStamp`/`bump`（最终采用）/`suggestedBump`（推断建议）/`prerelease?`（扩展 R30，灰度标识，`beta.1→beta.2` 递增）/`changed`/`syncedOnly`/`milestoneTag`（含 prerelease 时 `vX.Y.Z-beta.N`）/`tags`（`{repoId,name,tag}[]` 干跑预览标签清单，tag 含 prerelease 如 `build/v1.2.0-beta.1`）/`externalDraft`/`internalDraft`（项目级双轨草稿）/`warnings`（非阻断警告，如「首次发布仅展示最近 500 条」） |
+| `PublishRequest` | `projectId`/`bump`（`BumpType \| 'auto'`，`auto` 表示采用 `suggestedBump`）/`prerelease?`（扩展 R30，灰度标识 `beta.1`/`rc.1` 等，`PRERELEASE_RE` 校验，空为正式版，同标识递增见 §6.2）/`repoIds`（不传 = 全部有变动仓库）/`skipBuild`/`offline`/`dryRun`/`externalContent`/`internalContent`（向导人工定稿，覆盖草稿）/`excludeCommits`（提交级排除，语义见 §8.4）/`backupSource?`/`backupArtifacts?` |
 | `PublishEvent` | `type` 7 值（architecture §3.3）+ `message` + `repoId`（可选）+ `data`（可选，`done` 时携带 `releaseId/version/failedRepos`） |
 | `RepoStatus` | 实时状态：`id/name/path/branch/head/dirty/hasRemote/remoteUrl`（无 remote 为 `''`）/`versionFile`（`{version,build,buildTime} \| null`，读业务仓库内 version.json）/`buildTags`（build 前缀 tag 列表）/`milestoneTag`（最新 milestone tag 或 `null`）/`changed`（`commits.length>0 \|\| dirty>0`）/`lastPublishCommit`/`commits` |
 | `FileEntry` | `name/type('dir'\|'file')/size`（字节，目录为 0） |
@@ -363,14 +364,17 @@ data/releases/{scopeId}/{versionSafeName}/
 | 方案 | 形态 | 使用对象 | 正则 | 示例 |
 |---|---|---|---|---|
 | semver | `vX.Y.Z` / `X.Y.Z` | 项目统一版本、milestone 标签 | `SEMVER_RE` / `SEMVER_TOLERANT_RE` | `1.2.0` |
+| prerelease（R30） | `vX.Y.Z-beta.N` / `X.Y.Z-beta.N` | 项目/仓库版本（灰度，正式版缺省） | `SEMVER_PRERELEASE_RE` / `PRERELEASE_RE` | `v1.2.0-beta.1` / `1.2.0-rc.1` |
 | X.Y.Z | `X.Y.Z` | 仓库版本（`repoVersionFormat='X.Y.Z'`，R26 默认） | `SEMVER_TOLERANT_RE` | `1.2.0` |
 | VYYMMDDHHmm | `VYYMMDDHHmm` | 仓库版本（`repoVersionFormat='VYYMMDDHHmm'`） | `V_STAMP_RE`（`V`+10~12 位） | `V2608241530` |
 | hybrid（legacy） | `vX.Y.Z.YYMMDDHH` | 仓库版本（`repoVersionScheme='hybrid'`，未设新格式时） | `HYBRID_VERSION_RE` | `v1.2.0.26081315` |
+| hybrid+prerelease | `vX.Y.Z-beta.N.YYMMDDHH` | 仓库版本（hybrid 灰度） | `HYBRID_VERSION_RE`（含 `-beta.N`） | `v1.2.0-beta.1.26081315` |
 | timestamp（legacy） | `vYYMMDDHH` | 仓库版本（`repoVersionScheme='timestamp'`） | `^v(\d{8,10})$` | `v26081315` |
 
 - 新格式 `X.Y.Z`/`VYYMMDDHHmm` 为 R26 主推；`hybrid`/`timestamp` 保留兼容旧数据（解析时 `parseVersionTolerant` 通吃）。
 - `X.Y.Z` 规范形态**无 `v` 前缀**（写入 `package.json` 的 `X.Y.Z` 核心）；旧数据带 `v` 前缀的仍可解析。
 - 里程碑标签名：新格式下 `milestoneTag` = `X.Y.Z`（无前缀）；旧格式下 `v{X.Y.Z}`；build 标签名 = `build/` + 仓库版本。
+- prerelease（R30）：`PRERELEASE_RE=/^[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*$/` 校验，仅允许字母数字 `.` `-` 的 dot 分段标识；`SEMVER_PRERELEASE_RE=/^v?(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+?))?(?:\.(\d{6,12}))?$/` 捕获 `prerelease` 与 `build`；`build` 段统一 `6~12` 位（修正 `SEMVER_RE \d{6,10}` 与 `HYBRID \d{8,10}` 不一致）；版本形态 `vX.Y.Z-beta.N`（可选 `.build` 如 `v1.2.0-beta.1.26081315`），`X.Y.Z` 格式下仓库版本亦渲染为 `1.2.0-beta.1`；里程碑始终 `vX.Y.Z-beta.N`（如 `v1.2.0-beta.1`），build 标签 `build/vX.Y.Z-beta.N` / `build/1.2.0-beta.1`；`VYYMMDDHHmm` 不受 prerelease 影响。
 
 ### 6.2 bump 推断规则（`suggestedBump`）
 
@@ -386,6 +390,7 @@ data/releases/{scopeId}/{versionSafeName}/
 - `ProjectDef.bump === 'manual'` 时：`suggestedBump` 恒为 `patch`，不做推断。
 - `PublishPlan.suggestedBump` = 推断建议；`PublishPlan.bump` = 最终采用值（向导中用户可覆盖）；`PublishRequest.bump`：传 `'auto'` 时 engine 采用 `suggestedBump`，传具体值则采用该值。
 - 项目新版本 = 当前 `ProjectDef.version` 按 `bump` 递增；`milestoneTag = 'v' + 新 X.Y.Z`。
+- prerelease 递增（R30）：`resolvePrerelease(prev, requested)`——`prev` 为当前 `ProjectDef.version` 的 prerelease 段（`parseSemver`），`requested` 为 `PublishRequest.prerelease`；同前缀（`beta.1` vs `beta.1` 或 `beta` vs `beta.1`）→ `prefix.(maxNum+1)` 如 `beta.1→beta.2`、`beta→beta.2`；异前缀直接覆盖；空 `requested` → 正式版（`prerelease=undefined`）；非法 `requested` 抛 `VALIDATION`。
 
 ### 6.3 buildStamp 生成与撞名规避
 

@@ -4,6 +4,7 @@
 import fs from 'node:fs'
 import type { PlannedRepo, ProjectDef, RepoDef } from '@bxverse/shared'
 import { currentBranch, dirtyCount, git, head, isRepo, tagExists, tagTarget } from './git'
+import * as version from './version'
 
 export interface PreflightResult {
   ok: boolean
@@ -39,9 +40,10 @@ export async function runPreflight(repo: RepoDef, plan: PlannedRepo, _project: P
     const dirty = await dirtyCount(repo.path)
     if (dirty > 0) blocked.push(`工作树有 ${dirty} 个未提交改动（仅统计已跟踪文件），请先提交或 stash`)
     if (plan.changed) {
-      const m = plan.version.match(/^v?(\d+)\.(\d+)\.(\d+)/)
-      if (m) {
-        const milestone = `v${m[1]}.${m[2]}.${m[3]}`
+      // 扩展 R30：里程碑标签含 prerelease 前缀（vX.Y.Z-beta.N）
+      const parsed = version.parseSemver(plan.version)
+      if (parsed) {
+        const milestone = `v${parsed.major}.${parsed.minor}.${parsed.patch}` + (parsed.prerelease ? `-${parsed.prerelease}` : '')
         if (await tagExists(repo.path, milestone)) {
           const target = await tagTarget(repo.path, milestone)
           if (target && target !== repoHead) {

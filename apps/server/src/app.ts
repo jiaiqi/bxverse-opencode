@@ -61,7 +61,7 @@ export function createApp(opts: { token?: string } = {}): App {
   }
 
   const sse = new SseHub()
-  const queue = new PublishQueue(sse)
+  const queue = new PublishQueue(sse, undefined, undefined)
   const cfgHolder: { current: AppConfig | null } = { current: null }
   let dataStore: store.DataStore | null = null
   const loadCfg = async (): Promise<AppConfig> => {
@@ -94,6 +94,8 @@ export function createApp(opts: { token?: string } = {}): App {
     return result
   }
   const poll = new PollCache(() => cfgHolder.current?.pollInterval ?? 30_000)
+  // R28 快速发布快照需 withCfg 原子化，注入队列
+  queue.setWithCfg(withCfg)
   const rotate = async (): Promise<string> => {
     const next = await rotateToken()
     token = next

@@ -3,7 +3,7 @@
 
 import fs from 'node:fs'
 import path from 'node:path'
-import { APP_NAME, BUILD_TAG_PREFIX, SEMVER_RE } from '@bxverse/shared'
+import { APP_NAME, BUILD_TAG_PREFIX, PRERELEASE_RE, SEMVER_RE } from '@bxverse/shared'
 import type {
   DiffStat,
   PlannedRepo,
@@ -116,10 +116,16 @@ export function detectChanged(
 
 function repoVersionFor(project: ProjectDef, projectVersion: string, stamp: string): string {
   // 扩展 R26：repoVersionFormat 优先于旧 repoVersionScheme
+  // 扩展 R30：传递 prerelease（从 projectVersion 提取）
+  const pre = version.parseSemver(projectVersion)?.prerelease
   if (project.repoVersionFormat === 'VYYMMDDHHmm') return `V${stamp}`
-  if (project.repoVersionFormat === 'X.Y.Z') return version.semverCore(projectVersion)
+  if (project.repoVersionFormat === 'X.Y.Z') {
+    const core = version.semverCore(projectVersion)
+    return pre ? `${core}-${pre}` : core
+  }
   // 未配置新格式时保持旧行为（兼容 v1.0.0 历史数据与现有单测）
-  return project.repoVersionScheme === 'timestamp' ? `v${stamp}` : version.hybridVersion(projectVersion, stamp)
+  if (project.repoVersionScheme === 'timestamp') return `v${stamp}`
+  return version.hybridVersion(projectVersion, stamp, pre)
 }
 
 function repoStampFor(project: ProjectDef, usedStamps: Set<string>): string {
@@ -172,7 +178,17 @@ export async function planPublish(req: PublishRequest): Promise<PublishPlan> {
 
   const suggestedBump = project.bump === 'manual' ? 'patch' : version.suggestBump(allCommits)
   const bump = req.bump === 'auto' ? suggestedBump : req.bump
-  const projectVersion = version.bumpSemver(project.version, bump)
+  // 扩展 R30：prerelease 透传与递增（beta.1→beta.2 同标识递增，不同标识覆盖）
+  let prerelease: string | undefined
+  if (req.prerelease != null && String(req.prerelease).trim() !== '') {
+    const raw = String(req.prerelease).trim()
+    if (!PRERELEASE_RE.test(raw)) throw new CoreError(CORE_ERROR_CODES.VALIDATION, `非法 prerelease: ${raw}`, { prerelease: raw })
+    const prevPre = version.parseSemver(project.version)?.prerelease
+    prerelease = version.resolvePrerelease(prevPre, raw)
+  } else {
+    prerelease = undefined
+  }
+  const projectVersion = version.bumpSemver(project.version, bump, prerelease)
 
   // buildStamp：已有 build tag 的 stamp 集合 + 发布记录占用 → 撞名自动加序号
   // 扩展 R26：VYYMMDDHHmm 使用 10 位（YYMMDDHHmm），legacy 8 位，容错正则覆盖 8~12 位
@@ -242,28 +258,50 @@ export async function planPublish(req: PublishRequest): Promise<PublishPlan> {
       warnings: st.warnings,
       currentVersion: currentVersions[repo.id],
       effectiveMode: effectiveModes[repo.id],
+      prerelease,
     }
   })
 
   const syncedOnly: PlannedRepo[] = project.repos
     .filter(r => candidateIds.includes(r.id) && !statuses[r.id]?.changed)
-    .map(r => ({
-      repoId: r.id,
-      name: r.name,
-      changed: false,
-      version: project.repoVersionFormat === 'X.Y.Z' || project.repoVersionFormat === 'VYYMMDDHHmm'
-        ? version.semverCore(projectVersion)
-        : projectVersion,
-      from: r.lastPublishCommit ?? null,
-      to: statuses[r.id]?.head ?? '',
-      commits: [],
-      buildCommand: r.buildCommand,
-    }))
+    .map(r => {
+      let ver: string
+      if (project.repoVersionFormat === 'X.Y.Z' || project.repoVersionFormat === 'VYYMMDDHHmm') {
+        const core = version.semverCore(projectVersion)
+        const pre = version.parseSemver(projectVersion)?.prerelease
+        ver = pre ? `${core}-${pre}` : core
+        if (project.repoVersionFormat === 'VYYMMDDHHmm') ver = `V${stamp}`
+        // For X.Y.Z with prerelease we keep core-prerelease without v (align semverCore style)
+        // But if prerelease present and we want v prefix per R30, keep as v+core-prerelease for milestoneTag separately
+      } else {
+        ver = projectVersion
+      }
+      return {
+        repoId: r.id,
+        name: r.name,
+        changed: false,
+        version: ver,
+        from: r.lastPublishCommit ?? null,
+        to: statuses[r.id]?.head ?? '',
+        commits: [],
+        buildCommand: r.buildCommand,
+        prerelease,
+      }
+    })
 
   const now = new Date().toISOString()
-  const milestoneTag = project.repoVersionFormat === 'X.Y.Z' || project.repoVersionFormat === 'VYYMMDDHHmm'
-    ? version.semverCore(projectVersion)
-    : projectVersion
+  // 扩展 R30：prerelease 时 milestoneTag 为 vX.Y.Z-beta.N（始终带 v）
+  const milestoneTag = (() => {
+    const pre = version.parseSemver(projectVersion)?.prerelease
+    if (pre) {
+      const core = version.semverCore(projectVersion)
+      return `v${core}-${pre}`
+    }
+    if (project.repoVersionFormat === 'X.Y.Z' || project.repoVersionFormat === 'VYYMMDDHHmm') {
+      return version.semverCore(projectVersion)
+    }
+    return projectVersion
+  })()
   const externalDraft = changelog.renderExternal(allCommits, {
     version: projectVersion,
     date: now,
@@ -301,6 +339,7 @@ export async function planPublish(req: PublishRequest): Promise<PublishPlan> {
     buildStamp: stamp,
     bump,
     suggestedBump,
+    ...(prerelease ? { prerelease } : {}),
     changed,
     syncedOnly,
     milestoneTag,
@@ -703,6 +742,7 @@ export async function executePublish(
         baseVersion: plan.projectVersion,
         buildStamp: plan.buildStamp,
         bump: plan.bump,
+        ...(planned.prerelease ? { prerelease: planned.prerelease } : plan.prerelease ? { prerelease: plan.prerelease } : {}),
         date,
         from: planned.from ?? null,
         to: planned.to,
@@ -798,6 +838,7 @@ export async function executePublish(
     baseVersion: project.version,
     buildStamp: plan.buildStamp,
     bump: plan.bump,
+    ...(plan.prerelease ? { prerelease: plan.prerelease } : {}),
     date: new Date().toISOString(),
     commits: allCommits,
     stats: changelog.computeStats(allCommits, repoRecords.reduce((sum, record) => ({
@@ -825,6 +866,7 @@ export async function executePublish(
           repoName: rec.scopeName,
           displayName: repoDefOf(rec.scopeId).displayName,
           version: rec.version,
+          ...(rec.prerelease ? { prerelease: rec.prerelease } : {}),
           commits: rec.commits,
         }
       }

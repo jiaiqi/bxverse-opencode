@@ -2,6 +2,7 @@
 // POST /api/publish（dry-run 预览 / 执行入队）+ GET /api/publish/current
 
 import type { AppConfig, PublishRequest } from '@bxverse/shared'
+import { PRERELEASE_RE } from '@bxverse/shared'
 import { engine } from '@bxverse/core'
 import type { Ctx } from '../http/router'
 import { apiError, readJsonBody, sendJson, sendJsonGzip } from '../http/json'
@@ -61,9 +62,18 @@ function validateRequest(body: Record<string, unknown>): PublishRequest {
     }
     excludeCommits = raw as Record<string, string[]>
   }
+  let prerelease: string | undefined
+  if (body.prerelease !== undefined && body.prerelease !== null) {
+    const raw = String(body.prerelease).trim()
+    if (raw !== '') {
+      if (!PRERELEASE_RE.test(raw)) throw apiError(400, 'VALIDATION', `非法 prerelease: ${raw}`)
+      prerelease = raw
+    }
+  }
   return {
     projectId,
     bump: bump as PublishRequest['bump'],
+    prerelease,
     repoIds,
     excludeCommits,
     skipBuild: body.skipBuild === true,

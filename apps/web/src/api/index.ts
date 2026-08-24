@@ -163,6 +163,13 @@ export const api = {
   backupRestore: (body: { releaseId: string; repoId: string; kind: string; targetDir: string }) =>
     http.post<{ ok: boolean; targetDir: string }>('/backups/restore', body),
 
+  // R27 external 分发至 Release
+  publishReleaseNote: (releaseId: string, body: { repoId: string; provider: 'github' | 'gitee'; body: string }) =>
+    http.post<{ ok: boolean; provider: string; tag: string; action: 'created' | 'updated'; url?: string }>(
+      `/releases/${encodeURIComponent(releaseId)}/publish-note`,
+      body,
+    ),
+
   // SSE
   subscribePublish: (taskId: string, onEvent: (e: PublishEventLike) => void, onError: (e: Error) => void) =>
     streamSse(`/events?task=${taskId}`, onEvent, onError),

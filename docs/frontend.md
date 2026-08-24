@@ -380,6 +380,8 @@ NConfigProvider(theme + themeOverrides)
 
 详见 §8（状态机）与 §9（日志编辑器）。页面骨架：PageHeader（返回项目）+ `NSteps` 横向六步 + 步骤内容容器（`card card-pad`）+ 底部步骤操作栏（上一步/下一步/执行发布）。
 
+**R28 快速发布通道**：ProjectDetail 顶栏「快速发布」按钮（`i-carbon-flash`）与向导 `?mode=quick` 入口。`ProjectDef.lastQuickPublish`（扩展字段）存上次发布的 `{repoIds,bump,skipBuild,offline,backupSource,backupArtifacts}`（发布成功时 server 经 `withCfg` 原子化快照）。向导 mount 时若 `mode=quick` 且存在快照则预填仓库选择/ bump / 开关（`applyQuickSnapshot()`），检测→版本（沿用 bump）→日志（auto-draft 展示一次确认）→dry-run→执行，砍掉反复重选但 dry-run 与双轨 confirmed 仍强制（`canExecute` 门禁），向导保留为“详细模式”。无快照时按钮禁用并 tooltip 引导首次走详细模式；顶部成功/警告横幅提示模式与切换入口。验收：连续两次 patch 第二次交互≤5 步；门禁不可绕过。
+
 ### 3.5 设置 `/settings`（Settings.vue）
 
 **数据来源**：`GET /api/config`（AppConfig）加载表单；`PUT /api/config` 保存（整对象）。
@@ -711,6 +713,7 @@ state: {
   statuses: RepoStatus[]                 // 第 1 步 fresh 检测结果
   selectedRepoIds: string[]              // 默认 = 全部 changed 仓库
   bumpOverride: BumpType | 'auto'        // 第 2 步选择，默认 'auto'
+  prerelease: string                     // 扩展 R30：灰度标识（''=正式版，''beta.1'/'rc.1' 等，PRERELEASE_RE 校验，400ms 防抖 rePlan）
   plan: PublishPlan | null
   logs: {
     external: { state: LogState; content: string }   // 初始 = plan.externalDraft, 'auto'
@@ -734,10 +737,10 @@ getters: {
   canExecute: (s) => s.logs.external.state === 'confirmed' && s.logs.internal.state === 'confirmed' && !!s.plan
 }
 actions: {
-  async start(pid)                     // 重置全部 + 跳向导
+  async start(pid)                     // 重置全部 + 跳向导（含 prerelease=''）
   async detect()                       // step1：reposStore.refreshStatuses(pid) → statuses
-  async loadPlan()                     // step2：POST /api/projects/:pid/plan body { projectId, bump: bumpOverride, repoIds: selectedRepoIds } → plan；logs 初始化为 'auto' + 草稿
-  async rePlan()                       // bumpOverride/selectedRepoIds 变化后重取（若日志已 edited 先确认提示）
+  async loadPlan()                     // step2：POST /api/projects/:pid/plan body { projectId, bump: bumpOverride, prerelease, repoIds: selectedRepoIds } → plan；logs 初始化为 'auto' + 草稿
+  async rePlan()                       // bumpOverride/selectedRepoIds/prerelease 变化后重取（若日志已 edited 先确认提示；prerelease 400ms 防抖）
   next() / back() / goto(step)
   editLog(side: 'external'|'internal', content: string)   // state: 'auto'|'edited' → 'edited'
   resetLog(side)                       // content = plan 草稿；state = 'auto'
@@ -844,12 +847,14 @@ const routes = [
 
 ### 8.4 步骤 2 细节（版本号）
 
-- 进入即 `loadPlan()`（`PublishRequest { projectId, bump: bumpOverride, repoIds: selectedRepoIds }`）。
+- 进入即 `loadPlan()`（`PublishRequest { projectId, bump: bumpOverride, prerelease, repoIds: selectedRepoIds }`）。
 - 展示区：
-  - 项目版本：`{当前 projectVersion 基线} → {plan.projectVersion}`（大号 mono）+ `plan.bump` 徽标 + `suggestedBump` 说明（「建议：feat→minor / breaking→major / fix→patch」）。
+  - 项目版本：`{当前 projectVersion 基线} → {plan.projectVersion}`（大号 mono）+ `plan.bump` 徽标 + `suggestedBump` 说明（「建议：feat→minor / breaking→major / fix→patch」）；prerelease 时如 `v1.2.0 → v1.2.0-beta.1`。
   - bump 覆盖：NSegmented `auto / major / minor / patch`（绑定 `bumpOverride`，变更 → `rePlan()`）。
-  - 仓库版本表：`plan.changed` 每行 name / `from` → `to`（mono，hybrid 展示 `v1.2.0.26081315`）/ commits 数；`plan.syncedOnly` 折叠区「仅同步基版 version.json（N 个）」。
-  - `milestoneTag` 徽标（mono）+ `buildStamp` 展示；`plan.warnings` NAlert 列表。
+  - 版本类型（R30 prerelease 选择器，`apps/web/src/components/wizard/StepVersion.vue`）：`NRadioGroup` 四项「正式版 / Beta / RC / 自定义」（`PrereleaseKind='stable'|'beta'|'rc'|'custom'`），切正式版清空 `store.prerelease=''` 立即 `rePlan`；切 Beta 预填 `beta.1`、RC 预填 `rc.1`、自定义保留输入（空时预填 `beta.1`）；`NInput`（`autocomplete="off"` `spellcheck="false"`，`placeholder="beta.1"`）绑定 `prereleaseInput`，校验 `PRERELEASE_RE`（非法提示「格式非法，仅允许字母数字 .-，如 beta.1」），空提示「请输入 prerelease 标识」；`prereleaseError` 为空时 400ms 防抖 `rePlan`；初始化 `syncFromStore()` 回填（解析 `store.prerelease` 前缀归类），`watch(prerelease)` 双向同步。
+  - 实时预览：本地轻量 `SEMVER_PRERELEASE_RE_LOCAL`/`resolvePrereleaseLocal`/`bumpSemverLocal` 计算 `previewVersion`（如 `v1.2.0-beta.1`）、`milestonePreview`/`buildTagPreview`（`v1.2.0-beta.1`/`build/v1.2.0-beta.1`），链路说明「`v1.2.0-beta.1 → v1.2.0-beta.2`（同标识递增）→ `v1.2.0`（切正式版）；不同标识如 `beta→rc` 直接覆盖」；预览与服务端 `plan.projectVersion` 一致性校验（`store.plan.projectVersion`）。
+  - 仓库版本表：`plan.changed` 每行 name / `from` → `to`（mono，hybrid 展示 `v1.2.0.26081315`，prerelease 时 `v1.2.0-beta.1` / `v1.2.0-beta.1.26081315`，`X.Y.Z` 格式下 `1.2.0-beta.1`）/ commits 数；`plan.syncedOnly` 折叠区「仅同步基版 version.json（N 个）」。
+  - `milestoneTag` 徽标（mono，prerelease 时 `v1.2.0-beta.1`）+ `buildStamp` 展示；`plan.warnings` NAlert 列表。
 
 ### 8.5 步骤校验表（canNext / 按钮态）
 
@@ -1049,3 +1054,4 @@ const routes = [
 | 2026-08-13 | 补 R18/R19 落地：BackupManage 备份管理页（§3.6）、RuntimeStatus（R26 新增 RepoDetail（R26 6 字段流水线） 流水线6字段 + AddProjectDialog 格式选择 + DirPicker 复用 manifestTarget） / VersionExportDropdown / DirPicker 组件（§4.16–4.18）、composables 与 format.ts（§5.5）、提交级排除与 URL 同步 / beforeunload 守卫（§8）、WIG 合规约定（§12） |
 | 2026-08-17 | 新增 §4.18 Settings AI 供应商管理（多供应商：预设 DeepSeek/OpenAI/Ollama/Kimi coding plan/小米 MiMo/MiniMax coding plan/自定义，write-only 凭据，热更新，旧配置迁移）与 §4.19 AI Git 助手（阶段二设计预留：Git 面板 + AI 提交信息/变更解读/预检失败分析）；§3.4 Settings 表单表与 §4.14 LogEditor AI 润色描述同步为多供应商语义；章节编号顺延（原 §4.18 DirPicker 编号保留，其他小组件→§4.20） |
 | 2026-08-17 | §4.19 GitTab 落地：双栏布局、状态摘要统计、单文件与全部暂存/撤销、Conventional Commits 提交弹窗（AI 生成标题/说明）、单文件 Diff 侧栏 + AI 变更解读，RepoDetail（R26 6 字段流水线） 接入 `git` TabPane |
+| 2026-08-24 | 新增 R28 快速发布通道：§3.4 向导补充快速模式（`?mode=quick` 预填 `lastQuickPublish`，检测→版本→日志→dry-run→执行，门禁仍强制，向导保留为详细模式；连续两次 patch 第二次≤5 步） |

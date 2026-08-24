@@ -409,6 +409,8 @@ architecture §3.2 全部路由可用且经 curl 验证；SSE 通道、单队列
 | R24 | 发布废弃审计 | M11（POST /api/releases/:id/deprecate + 标签清理） |
 | R25 | 多工程分支协同巡检与批量对齐 | M9（branch-alignment + batchCheckout/batchPull） |
 | R26 | 仓库级构建流水线与 package.json 双格式 | M13（契约 `repoVersionFormat`/`manifestTarget`/`versionSource` 等 → 版本引擎双格式与 `commitVersionFiles` → 流水线 `version-sync/install/pre-build` → API 校验 → 前端 `RepoDetail`/`AddProjectDialog` → 发布后 `manifestTarget` 自动落盘）；详见 `docs/r26-build-pipeline.md` |
+| R29 | 发布 webhook 通知 | N4（shared `AppConfig.notifications.webhooks[]` 契约 → server `POST /api/config` 校验（https+events 白名单）→ 发布 done/error 时逐条 POST `{event,projectId,version,failedRepos,timestamp}` 5s 超时重试 1 次 → structuredLog，不影响主流程）；stub server 断言 done/error 两种 payload |
+| R30 | prerelease 灰度支持 | N3（shared `PRERELEASE_RE`/`SEMVER_PRERELEASE_RE` + `prerelease?:string` 契约（`PublishRequest`/`PublishPlan`/`PlannedRepo`/`ReleaseRecord`/`RepoReleaseRef`）→ core `resolvePrerelease` 同标识递增 `beta.1→beta.2`（异标识覆盖）+ `bumpSemver`/`hybridVersion`/`formatRepoVersion` 透传、里程碑 `vX.Y.Z-beta.N` → server `POST /api/publish` 校验 → web 向导 `StepVersion.vue` 选择器（正式版/Beta/RC/自定义 + `NInput` 校验 + 实时预览 + 400ms 防抖 `rePlan`））；正式版缺省 |
 
 > 每条需求至少有一个里程碑任务覆盖；验收时以 M5-11 / M6-11 全量回归逐条核对本矩阵。
 
@@ -430,4 +432,6 @@ architecture §3.2 全部路由可用且经 curl 验证；SSE 通道、单队列
 | 2026-08-21 | P1 优化收敛：`AppConfig.publish.concurrency` 仓库级并发（默认1，上限5，批量落盘竞态安全）、`openapi.json`/`validate.ts` 契约与运行时校验、`useBackup`/`usePublishPlan` 前端收敛、`BackupPanel` 复用、`enforceRetention`/`restore` 闭环 |
 | 2026-08-17 | 追认 R23-R25：R23 AI 场景特化路由（M10）、R24 发布废弃审计（M11）、R25 分支协同巡检与批量对齐（M9），实现已在 dfe8e6d 落地，文档滞后追认 |
 | 2026-08-24 | 新增 R26/M13：仓库级构建流水线与 package.json 双格式（`X.Y.Z`/`VYYMMDDHHmm` + `versionSource`/`packageManager`/`installCommand`/`preBuildCommand`/`buildTimeoutMs`/`versionSyncCommit` + `manifestTarget` 自动落盘），core 单测 15+8 项、engine 流水线、API/前端三处，发布后真实 fixture 验证通过 |
+| 2026-08-24 | 新增 R29/N4：发布 webhook 通知（`AppConfig.notifications.webhooks[]`，https 校验+events 白名单，done/error 时 POST `{event,projectId,version,failedRepos,timestamp}`，5s 超时重试 1 次，structuredLog 不影响主流程），stub server 断言 done/error 两种 payload 全过 |
+| 2026-08-24 | 新增 R30/N3 prerelease 灰度收口：①子 PR① 契约层 `prerelease?:string`（`PRERELEASE_RE`/`SEMVER_PRERELEASE_RE`，`build` 统一 `6~12` 位）；②子 PR② 版本引擎 `resolvePrerelease` 同标识递增 `beta.1→beta.2`（`beta→beta.2`）、异标识覆盖，里程碑 `vX.Y.Z-beta.N`（`X.Y.Z` 亦 `1.2.0-beta.1`，`VYYMMDDHHmm` 不受影响）、排序引入 prerelease；③子 PR③ 向导 UI `StepVersion.vue` 选择器（正式版/Beta/RC/自定义，`PRERELEASE_RE` 校验、实时预览 `previewVersion`/`buildTagPreview`、400ms 防抖 `rePlan`）；④子 PR④ 文档全套回写（`requirements`/`data-model`/`api`/`frontend`/`roadmap`），`pnpm typecheck` 通过 |
 

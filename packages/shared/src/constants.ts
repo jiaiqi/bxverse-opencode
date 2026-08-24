@@ -3,11 +3,19 @@
 
 import type { CommitType, AiProviderPreset } from './types'
 
-/** 语义版本匹配：v1.0.6 / 1.0.6 / v1.0.6.26081315 */
-export const SEMVER_RE = /^v?(\d+)\.(\d+)\.(\d+)(?:\.(\d{6,10}))?$/
+// 扩展：R30 prerelease 支持 vX.Y.Z-beta.N（可选 build 6~12 位），统一 build 段为 6~12 位（修正 SEMVER \d{6,10} 与 HYBRID \d{8,10} 不一致）
+/** 语义版本匹配：v1.0.6 / 1.0.6 / v1.0.6.26081315 / v1.0.6-beta.1 / v1.0.6-beta.1.26081315 */
+export const SEMVER_RE = /^v?(\d+)\.(\d+)\.(\d+)(?:-[0-9A-Za-z.-]+?)?(?:\.(\d{6,12}))?$/
 
-/** 混合版本：vX.Y.Z.YYMMDDHH */
-export const HYBRID_VERSION_RE = /^v\d+\.\d+\.\d+\.\d{8,10}$/
+// 扩展：R30 同 SEMVER_RE 口径，支持可选 prerelease 前缀
+/** 混合版本：vX.Y.Z.YYMMDDHH（含可选 -beta.N 前缀） */
+export const HYBRID_VERSION_RE = /^v\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+?)?\.\d{6,12}$/
+
+// 扩展：R30 prerelease 标识校验（beta.1 / rc.1 等，dot 分隔字母数字-标识，符合 semver prerelease）
+export const PRERELEASE_RE = /^[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*$/
+
+// 扩展：R30 含 prerelease 捕获的语义版本（vX.Y.Z-beta.N，可选 build 6~12 位），供 core 下一步解析 prerelease 递增
+export const SEMVER_PRERELEASE_RE = /^v?(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+?))?(?:\.(\d{6,12}))?$/
 
 /** build 标签：build/vX.Y.Z.YYMMDDHH */
 export const BUILD_TAG_PREFIX = 'build'

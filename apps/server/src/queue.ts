@@ -3,9 +3,10 @@
 // S4: 事件持久化到 journal 旁挂 .events.jsonl，重启后可重放；缓冲上限 5000，标注 truncated
 
 import type { PublishEvent, PublishRequest } from '@bxverse/shared'
-import { CoreError, CORE_ERROR_CODES, engine } from '@bxverse/core'
+import { CoreError, CORE_ERROR_CODES, engine, store } from '@bxverse/core'
 import { JournalStore } from '@bxverse/core'
 import type { SseHub } from './sse'
+import { dispatchWebhooks } from './notifications'
 
 const MAX_BUFFERED = 5000
 
@@ -28,13 +29,20 @@ export class PublishQueue {
   private readonly tasks = new Map<string, TaskState>()
   private nextSeq = 0
   private readonly journalStore: JournalStore
+  private withCfg?: <T>(mutator: (cfg: import('@bxverse/shared').AppConfig) => T | Promise<T>) => Promise<T>
 
   constructor(
     private sse: SseHub,
     journalStore?: JournalStore,
+    withCfg?: <T>(mutator: (cfg: import('@bxverse/shared').AppConfig) => T | Promise<T>) => Promise<T>,
   ) {
     this.journalStore = journalStore ?? new JournalStore()
+    this.withCfg = withCfg
     this.restoreFromJournal()
+  }
+
+  setWithCfg(withCfg: <T>(mutator: (cfg: import('@bxverse/shared').AppConfig) => T | Promise<T>) => Promise<T>): void {
+    this.withCfg = withCfg
   }
 
   get running(): boolean {
@@ -212,9 +220,60 @@ export class PublishQueue {
         task.finishedAt = new Date().toISOString()
         task.releaseId = (e.data as { releaseId?: string | null } | undefined)?.releaseId ?? null
         task.failedRepos = ((e.data as { failedRepos?: string[] } | undefined)?.failedRepos ?? [])
+        // R28 快速发布快照（withCfg 原子化）+ R29 webhook done
+        void (async () => {
+          // 1) R28 快照
+          try {
+            const snapshot = {
+              repoIds: req.repoIds ?? [],
+              bump: req.bump as import('@bxverse/shared').BumpType | 'auto',
+              skipBuild: !!req.skipBuild,
+              offline: !!req.offline,
+              backupSource: !!req.backupSource,
+              backupArtifacts: !!req.backupArtifacts,
+            }
+            if (this.withCfg) {
+              await this.withCfg(async (cfg) => {
+                const proj = cfg.projects.find(p => p.id === task.projectId)
+                if (proj) (proj as import('@bxverse/shared').ProjectDef).lastQuickPublish = snapshot
+                return cfg
+              })
+            } else {
+              const cfg = await store.loadAppConfig()
+              const proj = cfg.projects.find(p => p.id === task.projectId)
+              if (proj) {
+                (proj as import('@bxverse/shared').ProjectDef).lastQuickPublish = snapshot
+                await store.saveAppConfig(cfg)
+              }
+            }
+          } catch {
+            // 绝不影响发布主流程
+          }
+          // 2) R29 webhook done 通知
+          try {
+            const cfg = await store.loadAppConfig()
+            const data = e.data as { version?: string; failedRepos?: string[] } | undefined
+            const version = data?.version ?? task.releaseId ?? ''
+            const failedRepos = data?.failedRepos ?? task.failedRepos ?? []
+            await dispatchWebhooks(cfg, 'done', { projectId: task.projectId, version, failedRepos })
+          } catch {
+            // 绝不影响发布主流程
+          }
+        })()
       } else if (e.type === 'error') {
         task.status = 'failed'
         task.finishedAt = new Date().toISOString()
+        void (async () => {
+          try {
+            const cfg = await store.loadAppConfig()
+            const data = e.data as { version?: string; failedRepos?: string[] } | undefined
+            const version = data?.version ?? ''
+            const failedRepos = data?.failedRepos ?? []
+            await dispatchWebhooks(cfg, 'error', { projectId: task.projectId, version, failedRepos })
+          } catch {
+            // 绝不影响发布主流程
+          }
+        })()
       }
     }
     try {

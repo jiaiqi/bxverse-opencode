@@ -25,10 +25,27 @@ const message = useMessage()
 const projectId = computed(() => String(route.params.id))
 const project = computed(() => projectsStore.byId(projectId.value))
 
+const isQuick = computed(() => String(route.query.mode ?? '') === 'quick')
+const hasQuickSnapshot = computed(() => !!project.value?.lastQuickPublish)
+
 // composables
 const { statuses, failedRepos, detecting, failedRepoIds, changedRepoIds, detect, detectRepo, visibleCommits, hiddenCommitsCount, showAllCommits } = useDetectPool(projectId, project as never)
 const { branchAlignment, checkBranchAlignment, doBatchCheckout, doBatchPull } = useBranchAlignment(projectId, { detect, changedRepoIds })
 const { checkRunningTask } = useTakeover()
+
+function applyQuickSnapshot(): void {
+  const snap = project.value?.lastQuickPublish
+  if (!snap) return
+  store.bumpOverride = snap.bump as typeof store.bumpOverride
+  store.offline = snap.offline
+  store.skipBuild = snap.skipBuild
+  store.backupSource = snap.backupSource
+  store.backupArtifacts = snap.backupArtifacts
+  const changed = changedRepoIds.value
+  const target = snap.repoIds.length ? snap.repoIds.filter(id => changed.includes(id)) : [...changed]
+  if (target.length > 0) store.setSelected(target)
+  else store.setSelected([...changed])
+}
 
 watch(projectId, async (id) => {
   if (!projectsStore.byId(id)) await projectsStore.load()
@@ -39,9 +56,27 @@ watch(projectId, async (id) => {
     store.step = q
   }
   await Promise.all([detect(), checkBranchAlignment()])
-  store.setSelected(changedRepoIds.value)
+  if (isQuick.value && hasQuickSnapshot.value) {
+    applyQuickSnapshot()
+    // 快速通道：自动跳过反复重选，检测后直接进入版本与日志（仍需人审 confirm 与 dry-run 门禁）
+    // 仅在初始步骤 1 时自动推进，避免覆盖用户深链刷新到其他步骤的意图
+    if (store.step === 1 && store.selectedRepoIds.length > 0) {
+      if (store.goTo(2)) {
+        await store.loadPlan()
+        // 版本推演完成即展示日志草稿，用户只剩双轨确认 + dry-run + 执行 ≤5 步
+        if (store.plan) store.goTo(3)
+      }
+    }
+  } else store.setSelected(changedRepoIds.value)
   void checkRunningTask()
 }, { immediate: true })
+
+// route.query.mode 变化时同步应用快照（不重置检测结果）
+watch(() => String(route.query.mode ?? ''), (mode) => {
+  if (mode === 'quick' && hasQuickSnapshot.value && changedRepoIds.value.length > 0) {
+    applyQuickSnapshot()
+  }
+})
 
 // 站内路由切换守卫：步骤 2-5 有未保存日志编辑或发布进行中时离开需确认
 onBeforeRouteLeave((_to, _from, next) => {
@@ -137,6 +172,31 @@ function goNext() {
     />
 
     <template v-if="project">
+      <!-- R28 快速发布通道：预填上次配置，门禁不变（dry-run + 双轨 confirmed 仍强制） -->
+      <NAlert
+        v-if="isQuick && hasQuickSnapshot"
+        type="success"
+        :show-icon="true"
+        class="mb-4"
+        title="快速发布模式 · 已预填上次配置（≤5 步完成 patch）"
+      >
+        <div class="flex items-center justify-between gap-3 flex-wrap text-xs">
+          <span>已自动勾选上次仓库与 bump（{{ project.lastQuickPublish?.bump }}）及构建/离线/备份开关；仅需确认双轨日志与预检即可执行。门禁（dry-run 与双轨 confirmed）保持强制，人审为终。</span>
+          <NButton size="tiny" quaternary @click="router.replace(`/project/${projectId}/release`)">切换到详细模式</NButton>
+        </div>
+      </NAlert>
+      <NAlert
+        v-if="isQuick && !hasQuickSnapshot"
+        type="warning"
+        :show-icon="true"
+        class="mb-4"
+        title="尚无快速发布记录"
+      >
+        <div class="flex items-center justify-between gap-3 flex-wrap text-xs">
+          <span>首次发布请使用详细模式，完成一次发布后将自动记录配置供快速发布复用。</span>
+          <NButton size="tiny" quaternary @click="router.replace(`/project/${projectId}/release`)">去详细模式</NButton>
+        </div>
+      </NAlert>
       <!-- 6 步发版微流水线时间轴卡片 (Glass Panel Timeline) -->
       <div class="glass-panel p-5 rounded-2xl space-y-4 mb-4">
         <div class="flex items-center justify-between gap-4 flex-wrap">
