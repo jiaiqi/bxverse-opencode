@@ -99,7 +99,9 @@ AppConfig ─── 1:N ─── ProjectDef ─── 1:N ─── RepoDef
 | `description` | `string`（可选） | 项目描述 | 缺省不输出 |
 | `version` | `string` | 当前统一版本，**规范形态恒带 `v` 前缀**（`v1.2.0`），与 `SEMVER_RE` 兼容；发布成功后前移 | `v0.1.0` |
 | `bump` | `'auto' \| 'manual'` | 版本建议来源：`auto`=按提交语义推断（§6.2）；`manual`=建议恒为 `patch`，由用户在向导自选 | `auto` |
-| `repoVersionScheme` | `'hybrid' \| 'timestamp'` | 仓库版本号方案（§6.1）：`hybrid`=vX.Y.Z.YYMMDDHH；`timestamp`=vYYMMDDHH | `hybrid` |
+| `repoVersionScheme` | `'hybrid' \| 'timestamp'` | 仓库版本号方案（§6.1， legacy；新项目优先用 `repoVersionFormat`） | `hybrid` |
+| `repoVersionFormat` | `'X.Y.Z' \| 'VYYMMDDHHmm'`（可选） | 扩展 R26：仓库版本输出格式（缺省 `X.Y.Z`）；存在时优先于 `repoVersionScheme`；`VYYMMDDHHmm` 为纯时间戳（大写 V + 10 位 YYMMDDHHmm） | 缺省 `X.Y.Z` |
+| `manifestTarget` | `{ repoId: string; path: string }`（可选） | 扩展 R26：汇总清单自动落盘目标；每次发布完成后将 `RepoVersionItem[]` 写入该仓库相对路径 | 缺省不自动写 |
 | `externalExclude` | `CommitType[]` | 对外日志排除的提交类型 | `DEFAULT_EXTERNAL_EXCLUDE`（`['chore','docs','test','style','ci','build','revert']`） |
 | `repos` | `RepoDef[]` | 仓库列表，顺序即 UI 展示顺序 | `[]` |
 | `createdAt` / `updatedAt` | `string`（可选） | ISO 8601 本地时区时间；`updatedAt` 每次 CRUD/发布触及时更新 | 创建/更新时写入 |
@@ -117,6 +119,12 @@ AppConfig ─── 1:N ─── ProjectDef ─── 1:N ─── RepoDef
 | `outputDir` | `string`（可选） | `version.json`/`version-history.json` 输出目录（相对仓库根） | `public` |
 | `writeVersionFile` | `boolean`（可选） | 是否在业务仓库内写版本文件；`false` 实现零侵入（只打 tag） | `true` |
 | `artifactDir` | `string`（可选） | 扩展：R19 产物备份目录（相对仓库根）；未配置则发布时跳过产物备份并提示 | 缺省不输出 |
+| `versionSource` | `'derived' \| 'packageJson'`（可选） | 扩展 R26：版本来源；`derived`=派生版本（默认）；`packageJson`=以仓库根 `package.json` 为权威，写入 `X.Y.Z` 核心 | `derived` |
+| `packageManager` | `'pnpm' \| 'npm' \| 'yarn' \| 'bun'`（可选） | 扩展 R26：包管理器（用于推导默认安装命令）；缺省按锁文件自动探测 | 缺省自动探测 |
+| `installCommand` | `string`（可选） | 扩展 R26：构建前依赖安装命令；缺省按包管理器推导 frozen 命令，设为 `skip` 可跳过 | 缺省推导 |
+| `preBuildCommand` | `string`（可选） | 扩展 R26：构建前自定义步骤（如更新依赖、codegen），在 install 之后、build 之前 | 缺省不执行 |
+| `buildTimeoutMs` | `number`（可选） | 扩展 R26：构建链路总超时毫秒 | `600000` |
+| `versionSyncCommit` | `'package' \| 'none'`（可选） | 扩展 R26：版本写回提交策略；`package`=自动提交仅 `package.json`+锁文件（默认）；`none`=只写不提交 | `package` |
 | `lastPublishCommit` | `string \| null`（可选） | 上次统一发布时该仓库的 HEAD **fullHash**（40 hex）；变更检测基准，见 §8 | `null`（= 从未发布） |
 | `createdAt` | `string`（可选） | ISO 8601 接入时间 | 接入时写入 |
 
@@ -350,17 +358,19 @@ data/releases/{scopeId}/{versionSafeName}/
 
 ## 6. 版本号体系
 
-### 6.1 三种方案
+### 6.1 版本方案（R26 双格式，兼容旧三方案）
 
 | 方案 | 形态 | 使用对象 | 正则 | 示例 |
 |---|---|---|---|---|
-| semver | `vX.Y.Z` | 项目统一版本、milestone 标签 | `SEMVER_RE` | `v1.2.0` |
-| hybrid | `vX.Y.Z.YYMMDDHH` | 仓库版本（`repoVersionScheme='hybrid'`，默认）、build 标签 | `HYBRID_VERSION_RE`（末段 8–10 位） | `v1.2.0.26081315` |
-| timestamp | `vYYMMDDHH` | 仓库版本（`repoVersionScheme='timestamp'`） | `SEMVER_RE` 不匹配；按 `^v(\d{8,10})$` 校验（core 私有） | `v26081315` |
+| semver | `vX.Y.Z` / `X.Y.Z` | 项目统一版本、milestone 标签 | `SEMVER_RE` / `SEMVER_TOLERANT_RE` | `1.2.0` |
+| X.Y.Z | `X.Y.Z` | 仓库版本（`repoVersionFormat='X.Y.Z'`，R26 默认） | `SEMVER_TOLERANT_RE` | `1.2.0` |
+| VYYMMDDHHmm | `VYYMMDDHHmm` | 仓库版本（`repoVersionFormat='VYYMMDDHHmm'`） | `V_STAMP_RE`（`V`+10~12 位） | `V2608241530` |
+| hybrid（legacy） | `vX.Y.Z.YYMMDDHH` | 仓库版本（`repoVersionScheme='hybrid'`，未设新格式时） | `HYBRID_VERSION_RE` | `v1.2.0.26081315` |
+| timestamp（legacy） | `vYYMMDDHH` | 仓库版本（`repoVersionScheme='timestamp'`） | `^v(\d{8,10})$` | `v26081315` |
 
-- 规范形态**一律带 `v` 前缀**；解析时 `SEMVER_RE` 兼容无前缀输入。
-- `vX.Y.Z` 的 X/Y/Z 从 0 起：X/Y/Z 进位后低位清零（如 `v1.9.9` + minor = `v2.0.0`）。
-- 里程碑标签名 = `milestoneTag` = `v{X.Y.Z}`；build 标签名 = `build/` + 仓库版本（如 `build/v1.2.0.26081315`，`BUILD_TAG_PREFIX='build'`）。
+- 新格式 `X.Y.Z`/`VYYMMDDHHmm` 为 R26 主推；`hybrid`/`timestamp` 保留兼容旧数据（解析时 `parseVersionTolerant` 通吃）。
+- `X.Y.Z` 规范形态**无 `v` 前缀**（写入 `package.json` 的 `X.Y.Z` 核心）；旧数据带 `v` 前缀的仍可解析。
+- 里程碑标签名：新格式下 `milestoneTag` = `X.Y.Z`（无前缀）；旧格式下 `v{X.Y.Z}`；build 标签名 = `build/` + 仓库版本。
 
 ### 6.2 bump 推断规则（`suggestedBump`）
 
@@ -763,4 +773,4 @@ export interface RepoBackupRef {
 | 2026-08-13 | 新增 §8.4 提交级排除（`PublishRequest.excludeCommits`：引擎过滤后重算 `changed`；全部排除且 dirty=0 → `syncedOnly`；warnings 记录排除数）；§3.5 `PublishRequest` 行同步 |
 | 2026-08-17 | §3.1 `AppConfig.ai` 扩展多供应商：新增可选 `providers[]`（`AiProvider{ id, name, kind, baseUrl, model, enabled }`，kind 当前仅 `openai-compatible` 预留扩展）与 `activeProviderId`；旧 `baseUrl/model/apiKey` 为兼容迁移载体（读取时自动迁移为默认 provider，key 迁入 `credentials.json.aiKeys` 后清空）；§4 凭据布局同步 `aiKeys`（write-only 不回显）；项目级发布记录 `repos` 全量快照语义（成功=发布版本 / 同步基版=项目版本 / 失败=仓库当前版本） |
 | 2026-08-21 | §3.1 补 `AppConfig.backup.retention`（`keepLast/maxBytes/keepDays`）与 `AppConfig.publish.concurrency`（默认1串行，上限5，批量 `saveProject` 竞态安全）；§4/§12 备份保留策略 `enforceRetention` 发布后自动清理；前端 `useBackup`/`usePublishPlan` 收敛与契约 `openapi.json` |
-| 2026-08-21 | §3.1 补 `AppConfig.backup.retention`（`keepLast/maxBytes/keepDays`）与 `AppConfig.publish.concurrency`（默认1串行，上限5，批量 `saveProject` 竞态安全）；§4/§12 备份保留策略 `enforceRetention` 发布后自动清理；前端 `useBackup`/`usePublishPlan` 收敛与契约 `openapi.json` |
+| 2026-08-24 | 新增 R26 双格式与构建流水线：`ProjectDef` 补 `repoVersionFormat`（`X.Y.Z`/`VYYMMDDHHmm`）与 `manifestTarget`；`RepoDef` 补 `versionSource`/`packageManager`/`installCommand`/`preBuildCommand`/`buildTimeoutMs`/`versionSyncCommit`；`PlannedRepo` 补 `currentVersion`/`effectiveMode`；§6.1 新增主推双格式（含 legacy 兼容说明）；详见 `docs/r26-build-pipeline.md` |
