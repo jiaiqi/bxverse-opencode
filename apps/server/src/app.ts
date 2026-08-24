@@ -5,7 +5,7 @@ import http from 'node:http'
 import type { AppConfig } from '@bxverse/shared'
 import { store } from '@bxverse/core'
 import { Router } from './http/router'
-import { authenticate, timingSafeCompare } from './http/auth'
+import { authenticate, isHostAllowed, timingSafeCompare } from './http/auth'
 import { sendError } from './http/json'
 import { serveStatic } from './http/static'
 import { SseHub } from './sse'
@@ -28,11 +28,14 @@ import { register as registerOpenApi } from './api/openapi'
 import { register as registerAi } from './api/ai'
 import { register as registerGit } from './api/git'
 
+export type WithCfg = <T>(mutator: (cfg: AppConfig) => T | Promise<T>) => Promise<T>
+
 export interface App {
   server: http.Server
   ctx: {
     loadCfg: () => Promise<AppConfig>
     saveCfg: (cfg: AppConfig) => Promise<void>
+    withCfg: WithCfg
     getToken: () => string
     rotateToken: () => Promise<string>
     queue: PublishQueue
@@ -76,6 +79,20 @@ export function createApp(opts: { token?: string } = {}): App {
     await store.saveAppConfig(cfg)
     cfgHolder.current = cfg
   }
+  // 配置并发写互斥：promise 链串行化 loadCfg → mutate → saveCfg
+  let cfgChain: Promise<void> = Promise.resolve()
+  const withCfg: WithCfg = async <T>(mutator: (cfg: AppConfig) => T | Promise<T>): Promise<T> => {
+    let result!: T
+    const task = async (): Promise<void> => {
+      const cfg = await loadCfg()
+      result = await mutator(cfg)
+      await saveCfg(cfg)
+    }
+    const next = cfgChain.then(task, task)
+    cfgChain = next.then(() => {}, () => {})
+    await next
+    return result
+  }
   const poll = new PollCache(() => cfgHolder.current?.pollInterval ?? 30_000)
   const rotate = async (): Promise<string> => {
     const next = await rotateToken()
@@ -104,10 +121,10 @@ export function createApp(opts: { token?: string } = {}): App {
     const { sendJson } = await import('./http/json')
     sendJson(ctx.res, 200, { ok: true, version })
   })
-  registerConfig(router, { loadCfg, saveCfg, getToken: () => token })
+  registerConfig(router, { loadCfg, withCfg, getToken: () => token })
   registerAuthApi(router, { rotateToken: rotate })
-  registerProjects(router, { loadCfg, saveCfg, lockedProjectId: () => queue.lockedProjectId })
-  registerRepos(router, { loadCfg, saveCfg, lockedProjectId: () => queue.lockedProjectId, poll })
+  registerProjects(router, { loadCfg, withCfg, lockedProjectId: () => queue.lockedProjectId })
+  registerRepos(router, { loadCfg, withCfg, lockedProjectId: () => queue.lockedProjectId, poll })
   registerFiles(router, { loadCfg })
   registerHistory(router, registerHistoryServices)
   registerPublish(router, { loadCfg, queue })
@@ -118,12 +135,19 @@ export function createApp(opts: { token?: string } = {}): App {
   registerBackups(router, { loadCfg, getDataStore: () => dataStore as store.DataStore })
   registerMetrics(router, { loadCfg, getDataStore: () => dataStore as store.DataStore })
   registerOpenApi(router)
-  registerAi(router, { loadCfg, saveCfg })
+  registerAi(router, { loadCfg, withCfg })
   registerGit(router, { loadCfg })
 
   const server = http.createServer(async (req, res) => {
     const url = new URL(req.url ?? '/', 'http://127.0.0.1')
     const pathname = url.pathname
+    // Host 头校验封堵 DNS rebinding（F4）
+    if (!isHostAllowed(req.headers.host as string | undefined, cfgHolder.current?.host)) {
+      res.writeHead(403, { 'Content-Type': 'application/json; charset=utf-8', Connection: 'close' })
+      res.end(JSON.stringify({ error: 'Host 不在白名单内', code: 'FORBIDDEN' }))
+      res.on('finish', () => req.socket.destroy())
+      return
+    }
     try {
       await ensureToken()
       if (pathname.startsWith('/api/')) {
@@ -153,6 +177,7 @@ export function createApp(opts: { token?: string } = {}): App {
     ctx: {
       loadCfg,
       saveCfg,
+      withCfg,
       getToken: () => token,
       rotateToken: rotate,
       queue,

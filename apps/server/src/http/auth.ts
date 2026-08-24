@@ -8,6 +8,36 @@ import { apiError } from './json'
 /** Origin 白名单：http://127.0.0.1:* 或 http://localhost:* */
 const ORIGIN_RE = /^http:\/\/(127\.0\.0\.1|localhost)(:\d+)?$/
 
+const LOOPBACK_HOSTNAMES = new Set(['localhost', '127.0.0.1', '::1', '[::1]'])
+
+function extractHostname(host: string): string {
+  try {
+    const u = new URL(`http://${host}`)
+    return u.hostname.toLowerCase()
+  } catch {
+    const withoutPort = host.split(':')[0] ?? ''
+    return withoutPort.toLowerCase()
+  }
+}
+
+export function isHostAllowed(hostHeader: string | undefined, configuredHost?: string): boolean {
+  if (!hostHeader) return false
+  const hostname = extractHostname(hostHeader)
+  if (LOOPBACK_HOSTNAMES.has(hostname)) return true
+  if (hostname === '[::1]') return true
+  if (configuredHost) {
+    const cfg = configuredHost.trim().toLowerCase()
+    if (cfg && hostname === cfg) return true
+    try {
+      const cfgHost = new URL(`http://${cfg}`).hostname.toLowerCase()
+      if (hostname === cfgHost) return true
+    } catch {
+      // ignore
+    }
+  }
+  return false
+}
+
 export interface AuthContext {
   token: string
 }

@@ -8,10 +8,11 @@ import { git, store } from '@bxverse/core'
 import type { Ctx } from '../http/router'
 import { apiError, readJsonBody, sendJson } from '../http/json'
 import type { PollCache } from '../poll'
+import type { WithCfg } from '../app'
 
 export interface RepoServices {
   loadCfg: () => Promise<AppConfig>
-  saveCfg: (cfg: AppConfig) => Promise<void>
+  withCfg: WithCfg
   lockedProjectId: () => string | null
   poll: PollCache
 }
@@ -31,9 +32,6 @@ export function register(router: import('../http/router').Router, services: Repo
       throw apiError(409, 'PUBLISH_RUNNING', '该项目正在发布中，禁止修改仓库')
     }
     const body = (await readJsonBody(ctx.req)) as Record<string, unknown>
-    const cfg = await services.loadCfg()
-    const project = cfg.projects.find(p => p.id === ctx.params.id)
-    if (!project) throw apiError(404, 'NOT_FOUND', `项目不存在: ${ctx.params.id}`)
 
     const hasPath = typeof body.path === 'string' && body.path.trim() !== ''
     const hasUrl = typeof body.url === 'string' && body.url.trim() !== ''
@@ -50,24 +48,29 @@ export function register(router: import('../http/router').Router, services: Repo
       if (!(await git.isRepo(repoPath))) {
         throw apiError(400, 'REPO_INVALID', `不是有效的 git 仓库（缺少 .git）: ${repoPath}`)
       }
-      const existing = project.repos.find(r => path.resolve(r.path) === repoPath)
-      if (existing) {
-        sendJson(ctx.res, 200, existing) // 幂等接入
-        return
+      const result = await services.withCfg(async (cfg) => {
+        const project = cfg.projects.find(p => p.id === ctx.params.id)
+        if (!project) throw apiError(404, 'NOT_FOUND', `项目不存在: ${ctx.params.id}`)
+        const existing = project.repos.find(r => path.resolve(r.path) === repoPath)
+        if (existing) return { existing: true as const, repo: existing }
+        const remote = await git.remoteUrl(repoPath)
+        const repo: RepoDef = {
+          id: newId('r'),
+          name: typeof body.name === 'string' && body.name.trim() ? String(body.name).trim() : path.basename(repoPath),
+          path: repoPath,
+          remote: remote || undefined,
+          updatePackageVersion: false,
+          lastPublishCommit: null,
+          createdAt: new Date().toISOString(),
+        }
+        project.repos.push(repo)
+        return { existing: false as const, repo }
+      })
+      if (result.existing) {
+        sendJson(ctx.res, 200, result.repo)
+      } else {
+        sendJson(ctx.res, 201, result.repo)
       }
-      const remote = await git.remoteUrl(repoPath)
-      const repo: RepoDef = {
-        id: newId('r'),
-        name: typeof body.name === 'string' && body.name.trim() ? String(body.name).trim() : path.basename(repoPath),
-        path: repoPath,
-        remote: remote || undefined,
-        updatePackageVersion: false,
-        lastPublishCommit: null,
-        createdAt: new Date().toISOString(),
-      }
-      project.repos.push(repo)
-      await services.saveCfg(cfg)
-      sendJson(ctx.res, 201, repo)
       return
     }
 
@@ -81,25 +84,33 @@ export function register(router: import('../http/router').Router, services: Repo
       name: typeof body.name === 'string' ? String(body.name).trim() : undefined,
       shallow: body.shallow === true,
     }
+    // 预检查项目存在性（不持锁，正式写入前会在 withCfg 内二次校验）
+    const preCfg = await services.loadCfg()
+    const preProject = preCfg.projects.find(p => p.id === ctx.params.id)
+    if (!preProject) throw apiError(404, 'NOT_FOUND', `项目不存在: ${ctx.params.id}`)
     const name = safeName(cloneReq.name ?? cloneReq.url)
-    const target = path.join(store.APP_DIR, 'repos', project.id, name)
+    const target = path.join(store.APP_DIR, 'repos', ctx.params.id, name)
     try {
       await git.clone(cloneReq.url, target, { shallow: cloneReq.shallow })
     } catch (e) {
       throw apiError(400, 'CLONE_FAILED', `克隆失败: ${(e as Error).message.split('\n')[0]}`)
     }
-    const repo: RepoDef = {
-      id: newId('r'),
-      name: cloneReq.name || name,
-      path: target,
-      remote: cloneReq.url,
-      outputDir: 'public',
-      writeVersionFile: true,
-      lastPublishCommit: null,
-      createdAt: new Date().toISOString(),
-    }
-    project.repos.push(repo)
-    await services.saveCfg(cfg)
+    const repo = await services.withCfg(async (cfg) => {
+      const project = cfg.projects.find(p => p.id === ctx.params.id)
+      if (!project) throw apiError(404, 'NOT_FOUND', `项目不存在: ${ctx.params.id}`)
+      const r: RepoDef = {
+        id: newId('r'),
+        name: cloneReq.name || name,
+        path: target,
+        remote: cloneReq.url,
+        outputDir: 'public',
+        writeVersionFile: true,
+        lastPublishCommit: null,
+        createdAt: new Date().toISOString(),
+      }
+      project.repos.push(r)
+      return r
+    })
     sendJson(ctx.res, 201, repo)
   })
 
@@ -108,78 +119,79 @@ export function register(router: import('../http/router').Router, services: Repo
       throw apiError(409, 'PUBLISH_RUNNING', '该项目正在发布中，禁止修改仓库')
     }
     const body = (await readJsonBody(ctx.req)) as Record<string, unknown>
-    const cfg = await services.loadCfg()
-    const project = cfg.projects.find(p => p.id === ctx.params.id)
-    if (!project) throw apiError(404, 'NOT_FOUND', `项目不存在: ${ctx.params.id}`)
-    const repo = project.repos.find(r => r.id === ctx.params.rid)
-    if (!repo) throw apiError(404, 'NOT_FOUND', `仓库不存在: ${ctx.params.rid}`)
+    const repo = await services.withCfg(async (cfg) => {
+      const project = cfg.projects.find(p => p.id === ctx.params.id)
+      if (!project) throw apiError(404, 'NOT_FOUND', `项目不存在: ${ctx.params.id}`)
+      const r = project.repos.find(x => x.id === ctx.params.rid)
+      if (!r) throw apiError(404, 'NOT_FOUND', `仓库不存在: ${ctx.params.rid}`)
 
-    if (body.name !== undefined) {
-      const name = String(body.name).trim()
-      if (!name) throw apiError(400, 'VALIDATION', 'name 不能为空')
-      repo.name = name
-    }
-    if (body.displayName !== undefined) {
-      const displayName = String(body.displayName).trim()
-      repo.displayName = displayName || undefined
-    }
-    if (body.buildCommand !== undefined) repo.buildCommand = String(body.buildCommand) || undefined
-    if (body.outputDir !== undefined) repo.outputDir = String(body.outputDir) || undefined
-    if (body.updatePackageVersion !== undefined) {
-      if (typeof body.updatePackageVersion !== 'boolean') throw apiError(400, 'VALIDATION', 'updatePackageVersion 必须为布尔')
-      repo.updatePackageVersion = body.updatePackageVersion
-    }
-    if (body.artifactDir !== undefined) {
-      const dir = String(body.artifactDir).trim().replace(/\\/g, '/').replace(/^\/+/, '')
-      if (dir.split('/').includes('..')) throw apiError(400, 'VALIDATION', 'artifactDir 必须是仓库内的相对目录（禁止 .. 越界）')
-      repo.artifactDir = dir || undefined
-    }
-    if (body.writeVersionFile !== undefined) {
-      if (typeof body.writeVersionFile !== 'boolean') throw apiError(400, 'VALIDATION', 'writeVersionFile 必须为布尔')
-      repo.writeVersionFile = body.writeVersionFile
-    }
-    // 扩展 R26：仓库级构建流水线与 package.json 版本源
-    if (body.versionSource !== undefined) {
-      const v = String(body.versionSource)
-      if (!['derived', 'packageJson'].includes(v)) throw apiError(400, 'VALIDATION', 'versionSource 必须为 derived/packageJson')
-      repo.versionSource = v as RepoDef['versionSource']
-    }
-    if (body.packageManager !== undefined) {
-      const v = String(body.packageManager).trim()
-      if (v === '') repo.packageManager = undefined
-      else {
-        if (!['pnpm', 'npm', 'yarn', 'bun'].includes(v)) throw apiError(400, 'VALIDATION', 'packageManager 必须为 pnpm/npm/yarn/bun')
-        repo.packageManager = v as RepoDef['packageManager']
+      if (body.name !== undefined) {
+        const name = String(body.name).trim()
+        if (!name) throw apiError(400, 'VALIDATION', 'name 不能为空')
+        r.name = name
       }
-    }
-    if (body.installCommand !== undefined) {
-      const v = String(body.installCommand)
-      // 空字符串表示清除；skip 为显式跳过
-      repo.installCommand = v.trim() === '' ? undefined : v
-    }
-    if (body.preBuildCommand !== undefined) {
-      const v = String(body.preBuildCommand)
-      repo.preBuildCommand = v.trim() === '' ? undefined : v
-    }
-    if (body.buildTimeoutMs !== undefined) {
-      const n = Number(body.buildTimeoutMs)
-      if (!Number.isInteger(n) || n < 1000 || n > 60 * 60 * 1000) throw apiError(400, 'VALIDATION', 'buildTimeoutMs 必须为 1000~3600000 的整数毫秒')
-      repo.buildTimeoutMs = n
-    }
-    if (body.versionSyncCommit !== undefined) {
-      const v = String(body.versionSyncCommit)
-      if (!['package', 'none'].includes(v)) throw apiError(400, 'VALIDATION', 'versionSyncCommit 必须为 package/none')
-      repo.versionSyncCommit = v as RepoDef['versionSyncCommit']
-    }
-    if (body.path !== undefined) {
-      const repoPath = path.resolve(String(body.path))
-      if (!fs.existsSync(repoPath) || !(await git.isRepo(repoPath))) {
-        throw apiError(400, 'REPO_INVALID', `不是有效的 git 仓库: ${repoPath}`)
+      if (body.displayName !== undefined) {
+        const displayName = String(body.displayName).trim()
+        r.displayName = displayName || undefined
       }
-      repo.path = repoPath
-      repo.remote = (await git.remoteUrl(repoPath)) || undefined
-    }
-    await services.saveCfg(cfg)
+      if (body.buildCommand !== undefined) r.buildCommand = String(body.buildCommand) || undefined
+      if (body.outputDir !== undefined) r.outputDir = String(body.outputDir) || undefined
+      if (body.updatePackageVersion !== undefined) {
+        if (typeof body.updatePackageVersion !== 'boolean') throw apiError(400, 'VALIDATION', 'updatePackageVersion 必须为布尔')
+        r.updatePackageVersion = body.updatePackageVersion
+      }
+      if (body.artifactDir !== undefined) {
+        const dir = String(body.artifactDir).trim().replace(/\\/g, '/').replace(/^\/+/, '')
+        if (dir.split('/').includes('..')) throw apiError(400, 'VALIDATION', 'artifactDir 必须是仓库内的相对目录（禁止 .. 越界）')
+        r.artifactDir = dir || undefined
+      }
+      if (body.writeVersionFile !== undefined) {
+        if (typeof body.writeVersionFile !== 'boolean') throw apiError(400, 'VALIDATION', 'writeVersionFile 必须为布尔')
+        r.writeVersionFile = body.writeVersionFile
+      }
+      // 扩展 R26：仓库级构建流水线与 package.json 版本源
+      if (body.versionSource !== undefined) {
+        const v = String(body.versionSource)
+        if (!['derived', 'packageJson'].includes(v)) throw apiError(400, 'VALIDATION', 'versionSource 必须为 derived/packageJson')
+        r.versionSource = v as RepoDef['versionSource']
+      }
+      if (body.packageManager !== undefined) {
+        const v = String(body.packageManager).trim()
+        if (v === '') r.packageManager = undefined
+        else {
+          if (!['pnpm', 'npm', 'yarn', 'bun'].includes(v)) throw apiError(400, 'VALIDATION', 'packageManager 必须为 pnpm/npm/yarn/bun')
+          r.packageManager = v as RepoDef['packageManager']
+        }
+      }
+      if (body.installCommand !== undefined) {
+        const v = String(body.installCommand)
+        // 空字符串表示清除；skip 为显式跳过
+        r.installCommand = v.trim() === '' ? undefined : v
+      }
+      if (body.preBuildCommand !== undefined) {
+        const v = String(body.preBuildCommand)
+        r.preBuildCommand = v.trim() === '' ? undefined : v
+      }
+      if (body.buildTimeoutMs !== undefined) {
+        const n = Number(body.buildTimeoutMs)
+        if (!Number.isInteger(n) || n < 1000 || n > 60 * 60 * 1000) throw apiError(400, 'VALIDATION', 'buildTimeoutMs 必须为 1000~3600000 的整数毫秒')
+        r.buildTimeoutMs = n
+      }
+      if (body.versionSyncCommit !== undefined) {
+        const v = String(body.versionSyncCommit)
+        if (!['package', 'none'].includes(v)) throw apiError(400, 'VALIDATION', 'versionSyncCommit 必须为 package/none')
+        r.versionSyncCommit = v as RepoDef['versionSyncCommit']
+      }
+      if (body.path !== undefined) {
+        const repoPath = path.resolve(String(body.path))
+        if (!fs.existsSync(repoPath) || !(await git.isRepo(repoPath))) {
+          throw apiError(400, 'REPO_INVALID', `不是有效的 git 仓库: ${repoPath}`)
+        }
+        r.path = repoPath
+        r.remote = (await git.remoteUrl(repoPath)) || undefined
+      }
+      return r
+    })
     sendJson(ctx.res, 200, repo)
   })
 
@@ -187,13 +199,14 @@ export function register(router: import('../http/router').Router, services: Repo
     if (services.lockedProjectId() === ctx.params.id) {
       throw apiError(409, 'PUBLISH_RUNNING', '该项目正在发布中，禁止修改仓库')
     }
-    const cfg = await services.loadCfg()
-    const project = cfg.projects.find(p => p.id === ctx.params.id)
-    if (!project) throw apiError(404, 'NOT_FOUND', `项目不存在: ${ctx.params.id}`)
-    const idx = project.repos.findIndex(r => r.id === ctx.params.rid)
-    if (idx === -1) throw apiError(404, 'NOT_FOUND', `仓库不存在: ${ctx.params.rid}`)
-    const [repo] = project.repos.splice(idx, 1)
-    await services.saveCfg(cfg)
+    const repo = await services.withCfg(async (cfg) => {
+      const project = cfg.projects.find(p => p.id === ctx.params.id)
+      if (!project) throw apiError(404, 'NOT_FOUND', `项目不存在: ${ctx.params.id}`)
+      const idx = project.repos.findIndex(r => r.id === ctx.params.rid)
+      if (idx === -1) throw apiError(404, 'NOT_FOUND', `仓库不存在: ${ctx.params.rid}`)
+      const [r] = project.repos.splice(idx, 1)
+      return r
+    })
 
     const purge = ctx.query.get('purge') === 'true'
     let purged = false

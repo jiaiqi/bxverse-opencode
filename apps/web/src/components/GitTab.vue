@@ -8,12 +8,14 @@ import { onMounted, ref, computed } from 'vue'
 import type { GitFileDiff, GitFileStatus, GitStatus, AiExplainDiffResult } from '@bxverse/shared'
 import { api } from '../api'
 import { useMessage } from 'naive-ui'
+import ErrorState from './ErrorState.vue'
 
 const props = defineProps<{ projectId: string; repoId: string }>()
 const message = useMessage()
 
 const status = ref<GitStatus | null>(null)
 const statusLoading = ref(false)
+const statusError = ref<string | null>(null)
 const selectedPath = ref<string | null>(null)
 const selectedDiff = ref<GitFileDiff | null>(null)
 const diffLoading = ref(false)
@@ -45,9 +47,12 @@ const explainLoading = ref(false)
 // ---------- 操作 ----------
 async function loadStatus() {
   statusLoading.value = true
+  statusError.value = null
   try {
     status.value = await api.gitStatus(props.projectId, props.repoId)
   } catch (e) {
+    statusError.value = (e as Error).message
+    status.value = null
     message.error((e as Error).message)
   } finally {
     statusLoading.value = false
@@ -262,6 +267,13 @@ onMounted(loadStatus)
       </div>
 
       <div v-if="statusLoading" class="py-12 text-center"><NSpin size="small" /></div>
+      <div v-else-if="statusError" class="py-6">
+        <ErrorState title="加载失败" :reason="statusError" hint="请检查仓库状态或稍后重试">
+          <template #actions>
+            <NButton size="small" type="primary" @click="loadStatus">重试</NButton>
+          </template>
+        </ErrorState>
+      </div>
       <div v-else-if="!status || status.files.length === 0" class="py-12 text-center text-xs text-text-3">
         <i aria-hidden="true" class="i-carbon-checkmark-outline text-2xl mb-2 block text-success" />
         工作区干净～无未提交变更

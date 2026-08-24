@@ -23,14 +23,18 @@ export function apiError(status: number, code: string, message: string): ApiErro
  *  须 resume() 排空剩余流，待 end 后再 reject，由统一错误处理返回 400 JSON。 */
 export function readJsonBody(req: IncomingMessage): Promise<unknown> {
   return new Promise((resolve, reject) => {
-    let data = ''
+    const chunks: Buffer[] = []
+    let byteLen = 0
     let over = false
     req.on('data', (chunk: Buffer) => {
       if (over) return
-      data += chunk.toString('utf8')
-      if (data.length > MAX_BODY) {
+      const buf = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)
+      chunks.push(buf)
+      byteLen += buf.length
+      if (byteLen > MAX_BODY) {
         over = true
-        data = ''
+        chunks.length = 0
+        byteLen = 0
         req.resume()
       }
     })
@@ -39,6 +43,7 @@ export function readJsonBody(req: IncomingMessage): Promise<unknown> {
         reject(apiError(400, 'VALIDATION', `请求体超过 ${Math.round(MAX_BODY / 1024 / 1024)}MB 上限`))
         return
       }
+      const data = Buffer.concat(chunks).toString('utf8')
       if (!data.trim()) {
         resolve({})
         return

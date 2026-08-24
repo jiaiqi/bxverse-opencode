@@ -25,6 +25,7 @@ export function register(
         sendJsonGzip(ctx.res, 200, plan, ctx.req)
       } catch (e) {
         const msg = (e as Error).message
+        // TODO(A1): 字符串嗅探分类待 CoreError 体系收敛（F2 范围内不改，仅加注释）
         if (msg.includes('仓库')) throw apiError(400, 'VALIDATION', msg)
         throw apiError(500, 'GIT_FAILED', `计划生成失败: ${msg}`)
       }
@@ -81,8 +82,8 @@ function validateRequest(body: Record<string, unknown>): PublishRequest {
     bump: bump as PublishRequest['bump'],
     repoIds,
     excludeCommits,
-    skipBuild: body.skipBuild !== false,
-    offline: body.offline !== false,
+    skipBuild: body.skipBuild === true,
+    offline: body.offline === true,
     dryRun: body.dryRun === true,
     backupSource: body.backupSource === true,
     backupArtifacts: body.backupArtifacts === true,

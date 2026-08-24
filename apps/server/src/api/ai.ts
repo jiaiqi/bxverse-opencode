@@ -11,15 +11,32 @@ import { explainDiff, fetchModels, generateCommitMessage, normalizeBaseUrl, poli
 import type { Ctx } from '../http/router'
 import { apiError, readJsonBody, sendJson } from '../http/json'
 
+import type { WithCfg } from '../app'
+
 export interface AiServices {
   loadCfg: () => Promise<AppConfig>
-  saveCfg: (cfg: AppConfig) => Promise<void>
+  withCfg: WithCfg
 }
 
-/** 惰性迁移旧单表单配置 → 默认 provider；apiKey 迁入 credentials 后清空 app.json */
-export async function ensureLegacyMigration(cfg: AppConfig, services: AiServices): Promise<void> {
+/** 纯迁移：旧单表单配置 → 默认 provider；apiKey 迁入 credentials 后清空；不落盘，调用方需经 withCfg 持久化 */
+export async function applyLegacyMigration(cfg: AppConfig): Promise<boolean> {
   const ai = cfg.ai
-  if ((ai.providers?.length ?? 0) > 0 || !ai.baseUrl) return
+  if ((ai.providers?.length ?? 0) > 0 || !ai.baseUrl) {
+    // 仍需处理 apiKey 遗留？若 providers 已存在但 apiKey 仍有残留，迁入首个 provider
+    if (ai.apiKey && (ai.providers?.length ?? 0) > 0) {
+      const target = ai.providers?.find(p => p.id === ai.activeProviderId) ?? ai.providers?.[0]
+      if (target) {
+        const cred = await store.loadCredentials()
+        if (!cred.aiKeys?.[target.id]) {
+          cred.aiKeys = { ...(cred.aiKeys ?? {}), [target.id]: ai.apiKey }
+          await store.saveCredentials(cred)
+        }
+        ai.apiKey = ''
+        return true
+      }
+    }
+    return false
+  }
   const legacy: AiProvider = {
     id: 'legacy',
     name: '默认',
@@ -36,7 +53,30 @@ export async function ensureLegacyMigration(cfg: AppConfig, services: AiServices
     await store.saveCredentials(cred)
     ai.apiKey = ''
   }
-  await services.saveCfg(cfg)
+  return true
+}
+
+/** 兼容旧调用：若需迁移则经 withCfg 原子持久化 */
+export async function ensureLegacyMigration(cfg: AppConfig, services: AiServices): Promise<void> {
+  const needs = !cfg.ai.providers?.length && !!cfg.ai.baseUrl
+  if (!needs && !cfg.ai.apiKey) return
+  // 尝试在 fresh 配置上应用迁移并持久化，保持与当前 cfg 同步
+  const mutated = await applyLegacyMigration(cfg)
+  if (!mutated) return
+  // 持久化：经 withCfg 串行化，避免并发丢更新
+  await services.withCfg(async (fresh) => {
+    const changed = await applyLegacyMigration(fresh)
+    // 若 fresh 未变化但 cfg 已变，说明持久化仍需写入 cfg 的状态；此处 fresh 已包含最新，返回即可触发保存
+    if (!changed) {
+      // 将当前 cfg 的迁移结果同步到 fresh（幂等场景）
+      if (!fresh.ai.providers?.length && cfg.ai.providers?.length) {
+        fresh.ai.providers = cfg.ai.providers
+        fresh.ai.activeProviderId = cfg.ai.activeProviderId
+        fresh.ai.apiKey = cfg.ai.apiKey
+      }
+    }
+    return fresh
+  })
 }
 
 /** 解析当前生效供应商（支持根据场景路由特化指定，如 commit / polish / explain） */
@@ -82,7 +122,6 @@ export function register(router: import('../http/router').Router, services: AiSe
 
   // ---------- 新增 ----------
   router.post('/api/ai/providers', async (ctx: Ctx) => {
-    const cfg = await services.loadCfg()
     const body = (await readJsonBody(ctx.req)) as Record<string, unknown>
     const name = String(body.name ?? '').trim()
     const rawBaseUrl = String(body.baseUrl ?? '').trim()
@@ -93,51 +132,56 @@ export function register(router: import('../http/router').Router, services: AiSe
     if (!baseUrl || !/^https?:\/\//i.test(baseUrl)) throw apiError(400, 'VALIDATION', 'Base URL 必须为有效 http(s) 地址')
     if (!model) throw apiError(400, 'VALIDATION', '模型必填')
 
-    const id = `p_${Math.random().toString(36).slice(2, 10)}`
-    const provider: AiProvider = { id, name, kind: 'openai-compatible', baseUrl, model, enabled }
-    const providers = cfg.ai.providers ?? []
-    cfg.ai.providers = [...providers, provider]
-    if (enabled) {
-      for (const x of cfg.ai.providers) x.enabled = x.id === id
-      cfg.ai.activeProviderId = id
-    }
-    await services.saveCfg(cfg)
+    const provider = await services.withCfg(async (cfg) => {
+      await applyLegacyMigration(cfg)
+      const id = `p_${Math.random().toString(36).slice(2, 10)}`
+      const p: AiProvider = { id, name, kind: 'openai-compatible', baseUrl, model, enabled }
+      const providers = cfg.ai.providers ?? []
+      cfg.ai.providers = [...providers, p]
+      if (enabled) {
+        for (const x of cfg.ai.providers) x.enabled = x.id === id
+        cfg.ai.activeProviderId = id
+      }
+      return p
+    })
     sendJson(ctx.res, 201, toView(provider, false))
   })
 
   // ---------- 修改 ----------
   router.patch('/api/ai/providers/:id', async (ctx: Ctx) => {
-    const cfg = await services.loadCfg()
-    await ensureLegacyMigration(cfg, services)
-    const p = providerOf(cfg, ctx.params.id)
     const body = (await readJsonBody(ctx.req)) as Record<string, unknown>
-    if (typeof body.name === 'string' && body.name.trim()) p.name = body.name.trim()
-    if (typeof body.baseUrl === 'string' && body.baseUrl.trim()) {
-      const normalized = normalizeBaseUrl(body.baseUrl.trim())
-      if (!/^https?:\/\//i.test(normalized)) throw apiError(400, 'VALIDATION', 'Base URL 必须为有效 http(s) 地址')
-      p.baseUrl = normalized
-    }
-    if (typeof body.model === 'string' && body.model.trim()) p.model = body.model.trim()
-    if (body.enabled === true) {
-      for (const x of cfg.ai.providers ?? []) x.enabled = x.id === p.id
-      cfg.ai.activeProviderId = p.id
-    } else if (body.enabled === false && p.id === cfg.ai.activeProviderId) {
-      p.enabled = false
-      cfg.ai.activeProviderId = ''
-    }
-    await services.saveCfg(cfg)
+    const p = await services.withCfg(async (cfg) => {
+      await applyLegacyMigration(cfg)
+      const prov = providerOf(cfg, ctx.params.id)
+      if (typeof body.name === 'string' && body.name.trim()) prov.name = body.name.trim()
+      if (typeof body.baseUrl === 'string' && body.baseUrl.trim()) {
+        const normalized = normalizeBaseUrl(body.baseUrl.trim())
+        if (!/^https?:\/\//i.test(normalized)) throw apiError(400, 'VALIDATION', 'Base URL 必须为有效 http(s) 地址')
+        prov.baseUrl = normalized
+      }
+      if (typeof body.model === 'string' && body.model.trim()) prov.model = body.model.trim()
+      if (body.enabled === true) {
+        for (const x of cfg.ai.providers ?? []) x.enabled = x.id === prov.id
+        cfg.ai.activeProviderId = prov.id
+      } else if (body.enabled === false && prov.id === cfg.ai.activeProviderId) {
+        prov.enabled = false
+        cfg.ai.activeProviderId = ''
+      }
+      return prov
+    })
     const cred = await store.loadCredentials()
     sendJson(ctx.res, 200, toView(p, !!((cred.aiKeys ?? {})[p.id])))
   })
 
   // ---------- 删除 ----------
   router.delete('/api/ai/providers/:id', async (ctx: Ctx) => {
-    const cfg = await services.loadCfg()
-    await ensureLegacyMigration(cfg, services)
-    const p = providerOf(cfg, ctx.params.id)
-    cfg.ai.providers = (cfg.ai.providers ?? []).filter(x => x.id !== p.id)
-    if (cfg.ai.activeProviderId === p.id) cfg.ai.activeProviderId = ''
-    await services.saveCfg(cfg)
+    const p = await services.withCfg(async (cfg) => {
+      await applyLegacyMigration(cfg)
+      const prov = providerOf(cfg, ctx.params.id)
+      cfg.ai.providers = (cfg.ai.providers ?? []).filter(x => x.id !== prov.id)
+      if (cfg.ai.activeProviderId === prov.id) cfg.ai.activeProviderId = ''
+      return prov
+    })
     const cred = await store.loadCredentials()
     if (cred.aiKeys?.[p.id]) {
       const next = { ...cred.aiKeys }

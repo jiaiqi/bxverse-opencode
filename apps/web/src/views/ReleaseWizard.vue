@@ -338,14 +338,12 @@ async function execute() {
 function onConsoleEvent(e: PublishEventLike) {
   store.pushEvent(e)
 }
-function onFinished(result: { releaseId: string | null; version: string; failedRepos: string[] } | null) {
-  store.result = result
-  store.phase = 'done'
+function onFinished(_result: { releaseId: string | null; version: string; failedRepos: string[] } | null) {
   store.step = 6
 }
-function onFailed(msg: string) {
-  store.error = msg
-  store.phase = 'error'
+function onFailed(_msg: string) {
+  // 结果与阶段已由 pushEvent(done/error) 统一派生，此处仅负责步骤导航，避免双写覆盖 syncFailedRepos
+  store.step = 6
 }
 
 // ==================== 步骤 6：完成 ====================
@@ -722,7 +720,7 @@ const resultReleaseId = computed(() => store.result?.releaseId ?? '')
               :filename="`${store.result!.version}-version.json`"
               :load-items="() => api.releaseVersions(resultReleaseId)"
             />
-            <NButton type="primary" secondary @click="store.reset(projectId); detect(); store.setSelected(changedRepoIds)">再次发布</NButton>
+            <NButton type="primary" secondary @click="async () => { store.reset(projectId); await detect(); store.setSelected(changedRepoIds) }">再次发布</NButton>
           </div>
         </div>
       </div>

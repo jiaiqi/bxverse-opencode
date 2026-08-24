@@ -23,6 +23,7 @@
   /* 中性 */
   --bx-bg: #F4F6F8;
   --bx-surface: #FFFFFF;
+  --bx-surface-glass: rgba(255, 255, 255, 0.82);
   --bx-surface-hover: #F2F4F7;
   --bx-surface-alt: #F0F2F5;
   --bx-border: #E2E6EC;
@@ -86,6 +87,7 @@ html.dark {
 
   --bx-bg: #07090E;
   --bx-surface: #0E1219;
+  --bx-surface-glass: rgba(14, 18, 25, 0.82);
   --bx-surface-hover: #161C26;
   --bx-surface-alt: #090C12;
   --bx-border: #1A212D;
@@ -611,7 +613,7 @@ html.dark .hljs-regexp {
 
 /* ==================== 次世代全景驾驶舱原子样式 ==================== */
 .glass-panel {
-  background: rgba(14, 18, 25, 0.82);
+  background: var(--bx-surface-glass);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
   border: 1px solid rgba(255, 255, 255, 0.08);

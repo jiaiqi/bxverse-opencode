@@ -741,7 +741,16 @@ export async function executePublish(
     }
   })
   // 批量持久化项目 lastPublishCommit（避免并发 saveProject 竞态）
-  if (toRun.length > 0) await store.saveProject(project)
+  // F5 修复：续跑分支下已完成仓库的 lastPublishCommit 不能仅靠本次 toRun 赋值，
+  // 数据源取 plan.changed 中所有非 failed 仓库的 planned.to（含续跑前已完成者），幂等回写
+  {
+    const succeededIds = new Set(plan.changed.filter(p => !failedRepos.includes(p.repoId)).map(p => p.repoId))
+    for (const planned of plan.changed) {
+      if (!succeededIds.has(planned.repoId)) continue
+      repoDefOf(planned.repoId).lastPublishCommit = planned.to ?? null
+    }
+    if (succeededIds.size > 0) await store.saveProject(project)
+  }
 
   // ---- 2.5 备份保留策略自动清理（R19 扩展） ----
   if (backupCfg.retention && (backupCfg.retention.keepLast != null || backupCfg.retention.maxBytes != null || backupCfg.retention.keepDays != null)) {

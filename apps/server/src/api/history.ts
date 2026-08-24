@@ -104,23 +104,64 @@ export function register(router: import('../http/router').Router, services: Hist
     const updated = await services.dataStore.deprecateRecord(ctx.params.id, reason)
 
     // 2. 若勾选撤销标签，遍历关联工程安全清理
-    if (cleanupTags && updated.kind === 'project' && updated.repos) {
+    // 修正：不再只读 project 记录的 tags（仅 milestone，build 永不清理），改为从 projectRecord.repos 反查各 repo 最新 record，取其 tags.build/tags.milestone 组装待删清单
+    let removed: string[] = []
+    let failed: { repoId: string; tag: string; reason: string }[] = []
+    if (cleanupTags && updated.kind === 'project' && updated.repos?.length) {
       const project = cfg.projects.find(p => p.id === updated.scopeId)
       if (project) {
         for (const rRef of updated.repos) {
           const repoDef = project.repos.find(r => r.id === rRef.repoId)
-          if (repoDef) {
-            // 删除构建标签与里程碑标签
+          if (!repoDef) continue
+          // 反查该仓最新 record（优先精确匹配 rRef.version，fallback 最新一条）
+          let repoRecord: import('@bxverse/shared').ReleaseRecord | null = null
+          try {
+            const candidates = await services.dataStore.listRecords(rRef.repoId, 20)
+            repoRecord = candidates.find(r => r.version === rRef.version) ?? candidates[0] ?? null
+            if (!repoRecord) {
+              const rid = services.dataStore.nextReleaseId('repo', rRef.repoId, rRef.version)
+              repoRecord = await services.dataStore.readRecord(rid)
+            }
+          } catch {
+            repoRecord = null
+          }
+          if (!repoRecord) continue
+          const tagsToDelete = [repoRecord.tags.build, repoRecord.tags.milestone].filter(Boolean) as string[]
+          const uniqTags = [...new Set(tagsToDelete)]
+          for (const tag of uniqTags) {
             try {
-              if (updated.tags.build) await git.deleteTag(repoDef.path, updated.tags.build, { remote: true })
-              if (updated.tags.milestone) await git.deleteTag(repoDef.path, updated.tags.milestone, { remote: true })
-            } catch {
-              // 忽略个别非关键删除异常
+              await git.deleteTag(repoDef.path, tag, { remote: true })
+              removed.push(tag)
+            } catch (e) {
+              failed.push({ repoId: rRef.repoId, tag, reason: (e as Error).message })
             }
           }
         }
       }
+    } else if (cleanupTags && updated.kind === 'repo') {
+      // 仓库级废弃：直接清理自身 tags
+      const cfgProject = cfg.projects.find(p => p.repos.some(r => r.id === updated.scopeId))
+      const repoDef = cfgProject?.repos.find(r => r.id === updated.scopeId)
+      if (repoDef) {
+        const tagsToDelete = [updated.tags.build, updated.tags.milestone].filter(Boolean) as string[]
+        for (const tag of [...new Set(tagsToDelete)]) {
+          try {
+            await git.deleteTag(repoDef.path, tag, { remote: true })
+            removed.push(tag)
+          } catch (e) {
+            failed.push({ repoId: updated.scopeId, tag, reason: (e as Error).message })
+          }
+        }
+      }
     }
-    sendJson(ctx.res, 200, updated)
+
+    if (failed.length > 0) {
+      const warnings = failed.map(f => `${f.repoId} 清理标签 ${f.tag} 失败: ${f.reason}`)
+      // 部分成功：HTTP 200 + warnings
+      sendJson(ctx.res, 200, { ...updated, removed, failed, warnings })
+      return
+    }
+    // 全部成功或无需清理：附加 removed/failed 便于审计，warnings 仅在部分成功时返回
+    sendJson(ctx.res, 200, { ...updated, removed, failed })
   })
 }

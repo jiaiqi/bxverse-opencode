@@ -1015,7 +1015,54 @@ data: {"type":"done","message":"发布完成","data":{"releaseId":"rel_p_3f1_v1.
 - `GET /api/openapi.json`（免 token）：返回 `openApiSpec`（`apps/server/src/openapi.ts` 从 `shared/types` 派生，运行时经 `validate.ts` 校验备份 `retention`/`restore` 入参）。
 - `GET /api/metrics`（免 token）：进程指标与 `logger.ts` JSON 行日志（`logs/server-YYYY-MM-DD.log`）配套排查。
 
-### 10.7 备份增强端点
+### 10.7 发布废弃与标签清理（R24）
+
+#### POST /api/releases/:id/deprecate
+
+用途：将已发布记录标为废弃（`deprecated=true`，写入 `deprecateReason`/`deprecatedAt` 并进数据仓库审计），可选清理业务仓库标签（`cleanupTags=true` 时纠偏撤销）。
+
+请求体：
+
+```json
+{ "reason": "存在严重回归，废弃此版本", "cleanupTags": true }
+```
+
+| 字段 | 说明 |
+|---|---|
+| `reason` | 可选，废弃原因（trim 后空串回退 `人为标为废弃`） |
+| `cleanupTags` | 可选，`true` 时清理关联仓库标签；`false`/缺省仅标记废弃 |
+
+标签清理逻辑（已修复 F3 死逻辑）：
+
+- **不再**只读 `project` 记录的 `tags`（仅 `milestone`，导致 `build` 标签永不清理）；
+- 改为：遍历 `projectRecord.repos`，对每个 `repoId` 反查该仓最新 `ReleaseRecord`（`listRecords(repoId, 20)` 优先精确匹配 `r.version`，fallback 最新一条；必要时 `nextReleaseId+readRecord` 兜底），取其 `tags.build` 与 `tags.milestone` 组装待删清单（去重）；
+- 逐仓调用 `deleteTag(repoPath, tag, { remote: true })`，单仓/单标签失败不中断整体；
+- 聚合返回 `{ removed: string[], failed: { repoId, tag, reason }[] }`，`failed` 非空时 HTTP 仍 `200`，并附加 `warnings: string[]`（部分成功语义）。
+
+响应 `200`（成功或部分成功）：
+
+```json
+{
+  "id": "rel_p_3f1_v1.2.0",
+  "kind": "project",
+  "version": "v1.2.0",
+  "deprecated": true,
+  "deprecateReason": "存在严重回归",
+  "deprecatedAt": "2026-08-24T10:00:00.000Z",
+  "removed": ["build/v1.2.0.26082410", "v1.2.0"],
+  "failed": [],
+  "warnings": ["r_xxx 清理标签 build/... 失败: ..."]
+}
+```
+
+- `cleanupTags=false` 或无需清理时 `removed: []`、`failed: []` 且 `warnings` 缺省；
+- `failed` 非空时响应仍为 `200`，但携带 `warnings`（`failed.map(f => \`\${f.repoId} 清理标签 \${f.tag} 失败: \${f.reason}\`)`）提示调用方部分成功（前端可 toast 黄条）；
+- 仓库级记录（`kind='repo'`）的清理逻辑同理：直接取该记录 `tags.build`/`tags.milestone` 逐一删除；
+- 状态码 `404 NOT_FOUND`（记录不存在）。
+
+实现：`apps/server/src/api/history.ts`；底层 `DataStore.deprecateRecord` + `git.deleteTag`。
+
+### 10.8 备份增强端点
 
 - `GET /api/backups/usage?projectId=&repoId=`：`BackupUsage` 聚合（`getBackupUsage`）。
 - `POST /api/backups/cleanup`：`{ projectId?, repoId?, retention?, dryRun }` → `enforceRetention`；缺 `retention` 时取 `AppConfig.backup.retention`，三项全空 400 `VALIDATION`；`assertBackupCleanupBody` 校验 `keepLast>=1/maxBytes>=0/keepDays>=1`。
