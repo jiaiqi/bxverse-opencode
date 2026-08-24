@@ -118,6 +118,84 @@ export async function createBuildWorkspace(repoPath: string, commit: string, tmp
   }
 }
 
+// ==================== R26 锁文件与包管理器探测 ====================
+export type PackageManager = 'pnpm' | 'npm' | 'yarn' | 'bun'
+
+const LOCK_FILES: Record<PackageManager, string> = {
+  bun: 'bun.lockb',
+  pnpm: 'pnpm-lock.yaml',
+  npm: 'package-lock.json',
+  yarn: 'yarn.lock',
+}
+
+/** 探测仓库包管理器（按锁文件优先级）；无锁文件返回 null */
+export function detectPackageManager(repoPath: string): PackageManager | null {
+  if (fs.existsSync(path.join(repoPath, LOCK_FILES.bun))) return 'bun'
+  if (fs.existsSync(path.join(repoPath, LOCK_FILES.pnpm))) return 'pnpm'
+  if (fs.existsSync(path.join(repoPath, LOCK_FILES.yarn))) return 'yarn'
+  if (fs.existsSync(path.join(repoPath, LOCK_FILES.npm))) return 'npm'
+  return null
+}
+
+/** 列出已存在的锁文件（相对仓库根路径） */
+export function listLockFiles(repoPath: string): string[] {
+  const out: string[] = []
+  for (const pm of Object.keys(LOCK_FILES) as PackageManager[]) {
+    const f = LOCK_FILES[pm]
+    if (fs.existsSync(path.join(repoPath, f))) out.push(f)
+  }
+  return out
+}
+
+/** 按包管理器推导默认 frozen 安装命令；无匹配返回 null */
+export function getDefaultInstallCommand(pm: PackageManager | null): string | null {
+  switch (pm) {
+    case 'pnpm': return 'pnpm install --frozen-lockfile'
+    case 'npm': return 'npm ci'
+    case 'yarn': return 'yarn install --frozen-lockfile'
+    case 'bun': return 'bun install --frozen-lockfile'
+    default: return null
+  }
+}
+
+/** 解析安装命令：显式配置优先，'skip' 表示跳过，否则按探测推导 */
+export function resolveInstallCommand(repoPath: string, explicit?: string, pmOverride?: PackageManager | null): string | null {
+  if (explicit !== undefined) {
+    const v = explicit.trim()
+    if (v.toLowerCase() === 'skip' || v === '') return null
+    return v
+  }
+  const pm = pmOverride ?? detectPackageManager(repoPath)
+  return getDefaultInstallCommand(pm)
+}
+
+/**
+ * 受控提交：仅提交 package.json + 已存在的锁文件。
+ * 无变更 → { committed: false }；有变更 → commit 并返回新 hash。
+ */
+export async function commitVersionFiles(repoPath: string, message: string): Promise<{ committed: boolean; hash?: string }> {
+  const candidates = ['package.json', ...listLockFiles(repoPath)]
+  const existing = candidates.filter(f => fs.existsSync(path.join(repoPath, f)))
+  if (existing.length === 0) return { committed: false }
+
+  // 仅 add 白名单文件
+  const addArgs = ['add', '--', ...existing]
+  const addRes = await git(addArgs, { cwd: repoPath })
+  if (!addRes.ok) throw new Error(addRes.stderr || 'git add 失败')
+
+  const staged = await git(['diff', '--cached', '--name-only'], { cwd: repoPath })
+  if (!staged.ok) throw new Error(staged.stderr || '无法读取暂存区')
+  if (!staged.stdout.trim()) return { committed: false }
+
+  const msg = message.trim() || 'chore(release): bump version'
+  if (/[\r\n]/.test(msg.split('\n')[0] ?? '')) throw new Error('提交信息标题不能包含换行')
+  const commitRes = await git(['commit', '-m', msg], { cwd: repoPath })
+  if (!commitRes.ok) throw new Error(commitRes.stderr || 'git commit 失败')
+
+  const headRes = await git(['rev-parse', '--short', 'HEAD'], { cwd: repoPath })
+  return { committed: true, hash: headRes.ok ? headRes.stdout.trim() : undefined }
+}
+
 export function assertExternalPath(target: string, repoPaths: string[]): void {
   const resolved = path.resolve(target)
   for (const repoPath of repoPaths) {

@@ -67,6 +67,19 @@ export interface RepoDef {
   updatePackageVersion?: boolean
   /** 扩展：R19 产物备份目录（相对仓库根；未配置则发布时跳过产物备份并提示） */
   artifactDir?: string
+  // 扩展：R26 仓库级构建流水线与 package.json 版本源
+  /** 扩展：R26 版本来源：derived=派生版本（默认，保持现行为）；packageJson=以仓库根 package.json 为权威 */
+  versionSource?: 'derived' | 'packageJson'
+  /** 扩展：R26 包管理器（用于推导默认安装命令）；缺省按锁文件自动探测 */
+  packageManager?: 'pnpm' | 'npm' | 'yarn' | 'bun'
+  /** 扩展：R26 构建前依赖安装命令；缺省按包管理器推导 frozen install，设为 'skip' 可跳过 */
+  installCommand?: string
+  /** 扩展：R26 构建前自定义步骤（如更新依赖、codegen），在 install 之后、build 之前执行 */
+  preBuildCommand?: string
+  /** 扩展：R26 构建链路总超时毫秒（默认 600000） */
+  buildTimeoutMs?: number
+  /** 扩展：R26 版本写回提交策略：package=自动提交仅 package.json+锁文件（默认）；none=只写不提交 */
+  versionSyncCommit?: 'package' | 'none'
   /** 上次统一发布时的 commit（变更检测基准） */
   lastPublishCommit?: string | null
   createdAt?: string
@@ -82,6 +95,11 @@ export interface ProjectDef {
   bump: 'auto' | 'manual'
   /** 仓库版本号方案：hybrid=vX.Y.Z.YYMMDDHH（默认）/ timestamp=vYYMMDDHH */
   repoVersionScheme: 'hybrid' | 'timestamp'
+  // 扩展：R26 双格式 X.Y.Z / VYYMMDDHHmm
+  /** 扩展：R26 仓库版本输出格式（缺省 X.Y.Z）；存在时优先于 repoVersionScheme */
+  repoVersionFormat?: 'X.Y.Z' | 'VYYMMDDHHmm'
+  /** 扩展：R26 汇总清单自动落盘目标；每次发布完成后将 [{app,name,version}] 写入该仓库相对路径 */
+  manifestTarget?: { repoId: string; path: string }
   /** 对外日志排除的提交类型 */
   externalExclude: CommitType[]
   repos: RepoDef[]
@@ -241,6 +259,11 @@ export interface PlannedRepo {
   diffStat?: DiffStat
   /** 扩展：检测阶段诊断信息 */
   warnings?: string[]
+  // 扩展：R26 双格式与 versionSource 透传
+  /** 扩展：R26 package.json 当前版本（用于展示与幂等） */
+  currentVersion?: string
+  /** 扩展：R26 生效的版本来源（packageJson 模式无 package.json 时降级为 downgraded） */
+  effectiveMode?: 'packageJson' | 'derived' | 'downgraded'
 }
 
 export interface PublishPlan {

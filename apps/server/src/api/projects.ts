@@ -42,6 +42,12 @@ export function register(router: import('../http/router').Router, services: Proj
       repos: [],
       createdAt: new Date().toISOString(),
     }
+    // 扩展 R26：创建时可指定格式与清单落盘目标
+    if (body.repoVersionFormat !== undefined) {
+      const v = String(body.repoVersionFormat)
+      if (!['X.Y.Z', 'VYYMMDDHHmm'].includes(v)) throw apiError(400, 'VALIDATION', 'repoVersionFormat 必须为 X.Y.Z/VYYMMDDHHmm')
+      project.repoVersionFormat = v as ProjectDef['repoVersionFormat']
+    }
     cfg.projects.push(project)
     await services.saveCfg(cfg)
     sendJson(ctx.res, 201, project)
@@ -76,6 +82,26 @@ export function register(router: import('../http/router').Router, services: Proj
         throw apiError(400, 'VALIDATION', 'repoVersionScheme 必须为 hybrid/timestamp')
       }
       project.repoVersionScheme = body.repoVersionScheme as ProjectDef['repoVersionScheme']
+    }
+    // 扩展 R26：双格式 X.Y.Z / VYYMMDDHHmm
+    if (body.repoVersionFormat !== undefined) {
+      const v = String(body.repoVersionFormat)
+      if (!['X.Y.Z', 'VYYMMDDHHmm'].includes(v)) throw apiError(400, 'VALIDATION', 'repoVersionFormat 必须为 X.Y.Z/VYYMMDDHHmm')
+      project.repoVersionFormat = v as ProjectDef['repoVersionFormat']
+    }
+    if (body.manifestTarget !== undefined) {
+      if (body.manifestTarget === null) {
+        project.manifestTarget = undefined
+      } else {
+        const mt = body.manifestTarget as Record<string, unknown>
+        const repoId = String(mt.repoId ?? '').trim()
+        const p = String(mt.path ?? '').trim()
+        if (!repoId || !p) throw apiError(400, 'VALIDATION', 'manifestTarget 需包含 repoId 与 path')
+        if (!p.toLowerCase().endsWith('.json')) throw apiError(400, 'VALIDATION', 'manifestTarget.path 必须以 .json 结尾')
+        if (path.isAbsolute(p) || p.split(/[\\/]/).includes('..')) throw apiError(400, 'VALIDATION', 'manifestTarget.path 必须是仓库内的相对路径（禁止绝对路径与 ..）')
+        if (!project.repos.some(r => r.id === repoId)) throw apiError(400, 'VALIDATION', `manifestTarget.repoId 不属于该项目: ${repoId}`)
+        project.manifestTarget = { repoId, path: p.replace(/\\/g, '/') }
+      }
     }
     if (body.externalExclude !== undefined) {
       const arr = body.externalExclude as unknown[]

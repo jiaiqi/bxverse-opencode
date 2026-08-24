@@ -56,7 +56,7 @@ export const api = {
   // 项目
   projects: () => http.get<ProjectDef[]>('/projects'),
   createProject: (body: { name: string; description?: string }) => http.post<ProjectDef>('/projects', body),
-  updateProject: (id: string, body: Partial<Pick<ProjectDef, 'name' | 'description' | 'bump' | 'repoVersionScheme' | 'externalExclude'>>) =>
+  updateProject: (id: string, body: Partial<Pick<ProjectDef, 'name' | 'description' | 'bump' | 'repoVersionScheme' | 'repoVersionFormat' | 'manifestTarget' | 'externalExclude'>>) =>
     http.patch<ProjectDef>(`/projects/${id}`, body),
   deleteProject: (id: string, purge = false) => http.del<{ ok: boolean; purged: boolean }>(`/projects/${id}?purge=${purge}`),
 
@@ -65,7 +65,7 @@ export const api = {
     http.post<RepoDef>(`/projects/${projectId}/repos`, name ? { path, name } : { path }),
   addRepoByUrl: (projectId: string, body: CloneRequest) =>
     http.post<RepoDef>(`/projects/${projectId}/repos`, body),
-  updateRepo: (pid: string, rid: string, body: Partial<Pick<RepoDef, 'name' | 'displayName' | 'buildCommand' | 'outputDir' | 'writeVersionFile' | 'updatePackageVersion' | 'path' | 'artifactDir'>>) =>
+  updateRepo: (pid: string, rid: string, body: Partial<Pick<RepoDef, 'name' | 'displayName' | 'buildCommand' | 'outputDir' | 'writeVersionFile' | 'updatePackageVersion' | 'path' | 'artifactDir' | 'versionSource' | 'packageManager' | 'installCommand' | 'preBuildCommand' | 'buildTimeoutMs' | 'versionSyncCommit'>>) =>
     http.patch<RepoDef>(`/projects/${pid}/repos/${rid}`, body),
   deleteRepo: (pid: string, rid: string, purge = false) =>
     http.del<{ ok: boolean; purged: boolean }>(`/projects/${pid}/repos/${rid}?purge=${purge}`),

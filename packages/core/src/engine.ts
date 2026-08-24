@@ -25,6 +25,7 @@ import { atomicWrite } from './home'
 import { runPreflight } from './preflight'
 import { DataStore, loadAppConfig, versionSafe } from './store'
 import * as version from './version'
+import * as policy from './repo-policy'
 
 // ==================== 变更检测 ====================
 
@@ -112,7 +113,17 @@ export function detectChanged(
 // ==================== 发布计划 ====================
 
 function repoVersionFor(project: ProjectDef, projectVersion: string, stamp: string): string {
+  // 扩展 R26：repoVersionFormat 优先于旧 repoVersionScheme
+  if (project.repoVersionFormat === 'VYYMMDDHHmm') return `V${stamp}`
+  if (project.repoVersionFormat === 'X.Y.Z') return version.semverCore(projectVersion)
+  // 未配置新格式时保持旧行为（兼容 v1.0.0 历史数据与现有单测）
   return project.repoVersionScheme === 'timestamp' ? `v${stamp}` : version.hybridVersion(projectVersion, stamp)
+}
+
+function repoStampFor(project: ProjectDef, usedStamps: Set<string>): string {
+  if (project.repoVersionFormat === 'VYYMMDDHHmm') return version.buildStampMinute(new Date(), usedStamps)
+  if (project.repoVersionFormat === 'X.Y.Z') return version.buildStampMinute(new Date(), usedStamps)
+  return version.buildStamp(new Date(), usedStamps)
 }
 
 /** 计算发布计划（POST /api/publish dryRun 的数据源） */
@@ -162,22 +173,44 @@ export async function planPublish(req: PublishRequest): Promise<PublishPlan> {
   const projectVersion = version.bumpSemver(project.version, bump)
 
   // buildStamp：已有 build tag 的 stamp 集合 + 发布记录占用 → 撞名自动加序号
+  // 扩展 R26：VYYMMDDHHmm 使用 10 位（YYMMDDHHmm），legacy 8 位，容错正则覆盖 8~12 位
   const store = new DataStore({ dataDir: cfg.dataDir })
   const usedStamps = new Set<string>()
   for (const r of changedRepos) {
     for (const t of statuses[r.id].buildTags) {
-      const m = t.match(/(\d{8,10})$/)
+      const m = t.match(/(\d{8,12})$/)
       if (m) usedStamps.add(m[1])
     }
   }
-  const recordTaken = (s: string): boolean =>
-    changedRepos.some(r =>
+  const usesStampInVersion = project.repoVersionFormat === 'VYYMMDDHHmm' || !project.repoVersionFormat
+  const recordTaken = (s: string): boolean => {
+    if (!usesStampInVersion) return false
+    return changedRepos.some(r =>
       fs.existsSync(path.join(store.dataDir, 'releases', r.id, versionSafe(repoVersionFor(project, projectVersion, s)), 'data.json')),
     )
-  let stamp = version.buildStamp(new Date(), usedStamps)
+  }
+  let stamp = repoStampFor(project, usedStamps)
   while (recordTaken(stamp)) {
     usedStamps.add(stamp)
-    stamp = version.buildStamp(new Date(), usedStamps)
+    stamp = repoStampFor(project, usedStamps)
+  }
+
+  // 扩展 R26：packageJson 版本源探测（降级派生）
+  const effectiveModes: Record<string, 'packageJson' | 'derived' | 'downgraded'> = {}
+  const currentVersions: Record<string, string | undefined> = {}
+  for (const repo of changedRepos) {
+    if (repo.versionSource === 'packageJson') {
+      const cur = policy.readPackageVersion(repo.path)
+      currentVersions[repo.id] = cur ?? undefined
+      if (cur === null) {
+        effectiveModes[repo.id] = 'downgraded'
+        warnings.push(`${repo.name} 未找到 package.json，已降级为派生版本模式`)
+      } else {
+        effectiveModes[repo.id] = 'packageJson'
+      }
+    } else {
+      effectiveModes[repo.id] = 'derived'
+    }
   }
 
   // diff 统计（并行；失败降级全 0 + warning）
@@ -205,6 +238,8 @@ export async function planPublish(req: PublishRequest): Promise<PublishPlan> {
       buildCommand: repo.buildCommand,
       diffStat: diffs[repo.id],
       warnings: st.warnings,
+      currentVersion: currentVersions[repo.id],
+      effectiveMode: effectiveModes[repo.id],
     }
   })
 
@@ -214,7 +249,9 @@ export async function planPublish(req: PublishRequest): Promise<PublishPlan> {
       repoId: r.id,
       name: r.name,
       changed: false,
-      version: projectVersion,
+      version: project.repoVersionFormat === 'X.Y.Z' || project.repoVersionFormat === 'VYYMMDDHHmm'
+        ? version.semverCore(projectVersion)
+        : projectVersion,
       from: r.lastPublishCommit ?? null,
       to: statuses[r.id]?.head ?? '',
       commits: [],
@@ -222,7 +259,9 @@ export async function planPublish(req: PublishRequest): Promise<PublishPlan> {
     }))
 
   const now = new Date().toISOString()
-  const milestoneTag = projectVersion
+  const milestoneTag = project.repoVersionFormat === 'X.Y.Z' || project.repoVersionFormat === 'VYYMMDDHHmm'
+    ? version.semverCore(projectVersion)
+    : projectVersion
   const externalDraft = changelog.renderExternal(allCommits, {
     version: projectVersion,
     date: now,
@@ -496,11 +535,62 @@ export async function executePublish(
     const repoReleaseId = store.nextReleaseId('repo', repo.id, planned.version)
     emit('repo-start', `${planned.name} 开始发布 → ${planned.version}`, { repoId: planned.repoId })
     try {
-      // 2.1 构建（失败 → repo-error，未打标签无污染）
+      // 2.1 版本同步（R26：仅 packageJson 模式；写入 X.Y.Z 核心，受控提交）
+      const effectiveMode = (planned as PlannedRepo & { effectiveMode?: string }).effectiveMode
+      const needsVersionSync = repo.versionSource === 'packageJson' && effectiveMode === 'packageJson'
+      if (needsVersionSync) {
+        setStep(planned.repoId, 'version-sync', 'running')
+        try {
+          const core = version.semverCore(plan.projectVersion)
+          const upd = policy.updatePackageVersion(repo.path, core)
+          if (upd.previous !== upd.next) {
+            emit('log', `更新 package.json: ${upd.previous ?? '(无)'} → ${upd.next}`, { repoId: planned.repoId })
+            if ((repo.versionSyncCommit ?? 'package') === 'package') {
+              const cr = await policy.commitVersionFiles(repo.path, `chore(release): ${core}`)
+              if (cr.committed) {
+                emit('log', `已提交版本变更 ${cr.hash ?? ''}`, { repoId: planned.repoId })
+                planned.to = await git.head(repo.path)
+              } else {
+                emit('log', '版本已是最新，无需提交', { repoId: planned.repoId })
+              }
+            } else {
+              emit('log', '已写入 package.json（未提交，受 versionSyncCommit=none 控制）', { repoId: planned.repoId })
+            }
+          } else {
+            emit('log', 'package.json 已是目标版本，跳过写入', { repoId: planned.repoId })
+          }
+          setStep(planned.repoId, 'version-sync', 'done')
+        } catch (e) {
+          throw new Error(`版本同步失败: ${(e as Error).message}`)
+        }
+      } else if (repo.versionSource === 'packageJson' && effectiveMode === 'downgraded') {
+        emit('log', '未找到 package.json，跳过版本同步（已降级为派生模式）', { repoId: planned.repoId })
+      }
+
+      // 2.1b 依赖安装（R26）
+      const installCmd = policy.resolveInstallCommand(repo.path, repo.installCommand, repo.packageManager as unknown as policy.PackageManager | null | undefined)
+      if (installCmd) {
+        setStep(planned.repoId, 'install', 'running')
+        emit('log', `安装依赖: ${installCmd}`, { repoId: planned.repoId })
+        const im = await git.runShell(installCmd, repo.path, line => emit('log', line, { repoId: planned.repoId }), repo.buildTimeoutMs ?? 600_000)
+        if (!im.ok) throw new Error(`依赖安装失败: ${im.stderr.split('\n')[0] || `退出码 ${im.code}`}`)
+        setStep(planned.repoId, 'install', 'done')
+      }
+
+      // 2.1c 前置命令（R26）
+      if (repo.preBuildCommand?.trim()) {
+        setStep(planned.repoId, 'pre-build', 'running')
+        emit('log', `前置命令: ${repo.preBuildCommand}`, { repoId: planned.repoId })
+        const pr = await git.runShell(repo.preBuildCommand, repo.path, line => emit('log', line, { repoId: planned.repoId }), repo.buildTimeoutMs ?? 600_000)
+        if (!pr.ok) throw new Error(`前置命令失败: ${pr.stderr.split('\n')[0] || `退出码 ${pr.code}`}`)
+        setStep(planned.repoId, 'pre-build', 'done')
+      }
+
+      // 2.1d 构建（失败 → repo-error，未打标签无污染）
       if (repo.buildCommand && !req.skipBuild) {
         setStep(planned.repoId, 'build', 'running')
         emit('log', `执行构建: ${repo.buildCommand}`, { repoId: planned.repoId })
-        const r = await git.runShell(repo.buildCommand, repo.path, line => emit('log', line, { repoId: planned.repoId }))
+        const r = await git.runShell(repo.buildCommand, repo.path, line => emit('log', line, { repoId: planned.repoId }), repo.buildTimeoutMs ?? 600_000)
         if (!r.ok) throw new Error(`构建失败: ${r.stderr.split('\n')[0] || `退出码 ${r.code}`}`)
         setStep(planned.repoId, 'build', 'done')
       } else if (repo.buildCommand && req.skipBuild) {
@@ -508,8 +598,13 @@ export async function executePublish(
       }
 
       // 2.2 标签（幂等）
-      const m = planned.version.match(/^v?(\d+)\.(\d+)\.(\d+)/)
-      const milestone = m ? `v${m[1]}.${m[2]}.${m[3]}` : plan.milestoneTag
+      let milestone: string
+      if (project.repoVersionFormat === 'X.Y.Z' || project.repoVersionFormat === 'VYYMMDDHHmm') {
+        milestone = plan.milestoneTag
+      } else {
+        const m = planned.version.match(/^v?(\d+)\.(\d+)\.(\d+)/)
+        milestone = m ? `v${m[1]}.${m[2]}.${m[3]}` : plan.milestoneTag
+      }
       setStep(planned.repoId, 'tag-milestone', 'running')
       await git.createTag(repo.path, milestone, { message: `Release ${milestone}` })
       setStep(planned.repoId, 'tag-milestone', 'done', milestone)
@@ -760,6 +855,33 @@ export async function executePublish(
   setStep(null, 'project-record', 'done', projectRecord.id)
   project.version = plan.projectVersion
   await store.saveProject(project)
+
+  // ---- 4.5 汇总清单自动落盘（R26, manifestTarget） ----
+  if (project.manifestTarget?.repoId && project.manifestTarget?.path) {
+    try {
+      const targetRepo = project.repos.find(r => r.id === project.manifestTarget!.repoId)
+      if (!targetRepo) throw new Error(`目标仓库不存在: ${project.manifestTarget.repoId}`)
+      const relPath = project.manifestTarget.path.trim()
+      if (!relPath.toLowerCase().endsWith('.json')) throw new Error('manifestTarget.path 必须以 .json 结尾')
+      if (path.isAbsolute(relPath) || relPath.split(/[\\/]/).includes('..')) throw new Error('manifestTarget.path 必须是仓库内的相对路径')
+      if (!fs.existsSync(targetRepo.path)) throw new Error(`目标仓库路径不存在: ${targetRepo.path}`)
+      const absTarget = path.resolve(targetRepo.path, relPath)
+      const repoRoot = path.resolve(targetRepo.path)
+      if (absTarget !== repoRoot && !absTarget.startsWith(repoRoot + path.sep)) throw new Error('manifestTarget.path 越界')
+      const items = (projectRecord.repos ?? []).map(r => ({
+        app: r.repoName,
+        name: r.displayName || r.repoName,
+        version: r.version,
+      }))
+      fs.mkdirSync(path.dirname(absTarget), { recursive: true })
+      fs.writeFileSync(absTarget, `${JSON.stringify(items, null, 2)}\n`, 'utf8')
+      emit('log', `汇总清单已写入 ${targetRepo.name}/${relPath}（${items.length} 项）`)
+    } catch (e) {
+      const msg = `汇总清单自动写入失败: ${(e as Error).message}`
+      syncWarnings.push(msg)
+      emit('log', msg)
+    }
+  }
 
   // ---- 5. 数据仓库：里程碑标签 + commit + push ----
   try {

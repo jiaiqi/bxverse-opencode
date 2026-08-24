@@ -143,7 +143,7 @@ async function loadAll() {
   }
 }
 
-// 设置表单
+// 设置表单（扩展 R26：构建流水线与 package.json 版本源）
 const settingsForm = reactive({
   name: '',
   displayName: '',
@@ -151,6 +151,12 @@ const settingsForm = reactive({
   outputDir: 'public',
   writeVersionFile: true,
   artifactDir: '',
+  versionSource: 'derived' as 'derived' | 'packageJson',
+  packageManager: '' as '' | 'pnpm' | 'npm' | 'yarn' | 'bun',
+  installCommand: '',
+  preBuildCommand: '',
+  buildTimeoutMs: 600000,
+  versionSyncCommit: 'package' as 'package' | 'none',
 })
 const saving = ref(false)
 
@@ -162,6 +168,12 @@ function openSettings() {
   settingsForm.outputDir = repo.value.outputDir ?? 'public'
   settingsForm.writeVersionFile = repo.value.writeVersionFile ?? true
   settingsForm.artifactDir = repo.value.artifactDir ?? ''
+  settingsForm.versionSource = repo.value.versionSource ?? 'derived'
+  settingsForm.packageManager = (repo.value.packageManager ?? '') as '' | 'pnpm' | 'npm' | 'yarn' | 'bun'
+  settingsForm.installCommand = repo.value.installCommand ?? ''
+  settingsForm.preBuildCommand = repo.value.preBuildCommand ?? ''
+  settingsForm.buildTimeoutMs = repo.value.buildTimeoutMs ?? 600000
+  settingsForm.versionSyncCommit = repo.value.versionSyncCommit ?? 'package'
 }
 
 async function saveSettings() {
@@ -175,6 +187,12 @@ async function saveSettings() {
       outputDir: settingsForm.outputDir,
       writeVersionFile: settingsForm.writeVersionFile,
       artifactDir: settingsForm.artifactDir.trim() || undefined,
+      versionSource: settingsForm.versionSource,
+      packageManager: settingsForm.packageManager || undefined,
+      installCommand: settingsForm.installCommand || undefined,
+      preBuildCommand: settingsForm.preBuildCommand || undefined,
+      buildTimeoutMs: settingsForm.buildTimeoutMs,
+      versionSyncCommit: settingsForm.versionSyncCommit,
     })
     message.success('设置已保存')
   } catch (e) {
@@ -375,6 +393,41 @@ watch(tab, (t) => {
             <NFormItem label="写入版本文件">
               <NSwitch v-model:value="settingsForm.writeVersionFile" />
               <span class="ml-2 text-xs text-text-3">关闭后不写 version.json / version-history.json（零侵入）</span>
+            </NFormItem>
+            <NDivider class="!my-2">R26 构建流水线与版本源</NDivider>
+            <NFormItem label="版本来源">
+              <NSelect
+                v-model:value="settingsForm.versionSource"
+                :options="[{ label: '派生版本（默认）', value: 'derived' }, { label: 'package.json 权威', value: 'packageJson' }]"
+                class="flex-1"
+              />
+              <span class="ml-2 text-[11px] text-text-3 shrink-0">package.json 写入 X.Y.Z 核心</span>
+            </NFormItem>
+            <NFormItem label="包管理器">
+              <NSelect
+                v-model:value="settingsForm.packageManager"
+                clearable
+                placeholder="自动探测（按锁文件）"
+                :options="[{ label: 'pnpm', value: 'pnpm' }, { label: 'npm', value: 'npm' }, { label: 'yarn', value: 'yarn' }, { label: 'bun', value: 'bun' }]"
+                class="flex-1"
+              />
+            </NFormItem>
+            <NFormItem label="安装命令">
+              <NInput v-model:value="settingsForm.installCommand" placeholder="默认按锁文件推导 frozen 命令；填 skip 可跳过" />
+            </NFormItem>
+            <NFormItem label="前置命令">
+              <NInput v-model:value="settingsForm.preBuildCommand" placeholder="如：pnpm update / codegen（install 之后、build 之前）" />
+            </NFormItem>
+            <NFormItem label="构建超时">
+              <NInputNumber v-model:value="settingsForm.buildTimeoutMs" :min="1000" :max="3600000" :step="1000" class="flex-1" />
+              <span class="ml-2 text-xs text-text-3">毫秒（默认 600000）</span>
+            </NFormItem>
+            <NFormItem label="版本提交">
+              <NSelect
+                v-model:value="settingsForm.versionSyncCommit"
+                :options="[{ label: '自动提交（仅 version 文件）', value: 'package' }, { label: '只写不提交', value: 'none' }]"
+                class="flex-1"
+              />
             </NFormItem>
           </NForm>
           <div class="flex items-center justify-between pt-3 border-t border-border">

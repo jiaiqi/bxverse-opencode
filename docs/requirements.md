@@ -35,6 +35,7 @@
 | R17 | UI/UX | 「UIUX 也要尽可能美观优雅精致大方体验足够好」 |
 | R18 | 版本清单导出（MVP 补充） | 「在 MVP 版本实现：生成一个 JSON 文件，返回该项目下所有仓库的版本，格式为 JSON 数组，字段有 app（仓库英文名）、name（仓库中文名）、version（版本号）」「把这个生成的 JSON 可以自定义放到项目中某个仓库下」——除下载外，还可写入项目下指定仓库的指定相对路径 |
 | R19 | 版本一致性对比与发布备份 | 每次发布自动备份：①源码备份 = git bundle（含全部历史与标签，可完整恢复）+ git archive 快照（仅已跟踪文件，天然遵循 .gitignore）；②产物备份 = 用户按仓库指定的产物目录（`RepoDef.artifactDir`）打包归档 + 哈希清单 manifest.json；③一致性对比：源码级（两 tag/commit 间 git diff）与产物级（两份归档/清单 SHA-256 对比）→ 新增/删除/修改/一致四类差异清单，可导出校验报告；④备份元数据（哈希/大小/commit/tag）入 git 数据仓库审计，大文件存本地 `backups/` 目录不进数据仓库；⑤恢复功能列为远期低优先级 |
+| R26 | 仓库级构建流水线与 package.json 版本源 | ①每个仓库可配置完整构建流水线：包管理器探测/自定义、`installCommand`（默认 frozen）、`preBuildCommand`、`buildCommand`、`buildTimeoutMs`；②版本源可选 `derived`（派生，默认）/`packageJson`（以仓库根 `package.json` 为权威，写入 `X.Y.Z` 核心）；③项目级版本格式 `X.Y.Z`（标准语义）/`VYYMMDDHHmm`（纯时间戳，大写 V + 10 位）；④`V` 格式下仓库版本与 bump 无关，X.Y.Z 核心照常随项目 bump 同步；⑤汇总清单 `version.json` 支持发布时按 `manifestTarget` 自动落盘（手动导出保留）；⑥无 `package.json` 的仓库自动降级派生 |
 
 ## 3. 需求澄清结论（已确认）
 
@@ -89,3 +90,4 @@
 | 2026-08-13 | 新增 R19：版本一致性对比与发布备份——发布时自动备份源码（git bundle + archive 快照，遵循 .gitignore）与产物（按仓库指定 artifactDir 打包 + manifest）；三层次一致性对比（源码 git diff / 产物清单对比 / manifest 校验）；大文件本地 `backups/`、元数据入数据仓库；恢复功能远期低优先级 |
 | 2026-08-17 | 需求补充（R18 导出 + 发布默认值）：导出版本清单可选「**仅日期**」版本号格式（`V` + 8 位时间戳，如 `V26081728`；默认仍为完整 `vX.Y.Z.YYMMDDHH`）；导出**默认文件名** `version.json`；发布向导**默认离线发布、跳过构建命令、不备份源码与产物**（可手动开启） |
 | 2026-08-17 | 需求补充（AI 多供应商 + Git 助手，设计见 `docs/frontend.md` §4.19 / `docs/api.md` §3.10 / `docs/data-model.md` §3.1）：① AI 支持**多供应商**（OpenAI 兼容：DeepSeek 官方 / OpenAI / Ollama 本地 / Kimi coding plan / 小米 MiMo API / MiniMax coding plan / 自定义 baseUrl），可切换当前生效供应商；凭据 **write-only**（存 `credentials.json`，不回显、不落 app.json）② 向导日志「AI 润色」升级多供应商 ③ 后续（阶段二）：仓库 Git 操作面板（状态/diff/提交/stash/推送/拉取/标签）+ **AI 生成提交信息**（conventional 草稿）与 **AI 变更解读**（中文摘要）+ 预检失败 AI 分析——AI 只产草稿，写操作永远用户确认 |
+| 2026-08-24 | 新增 R26：仓库级构建流水线与 package.json 版本源 —— 双格式 `X.Y.Z` / `VYYMMDDHHmm`；仓库流水线 `versionSource`（derived/packageJson）+ `packageManager` + `installCommand`（frozen 默认/skip）+ `preBuildCommand` + `buildTimeoutMs` + `versionSyncCommit`（package/none，受控提交仅 package.json+锁文件）；项目级 `repoVersionFormat` + `manifestTarget` 自动落盘；无 package.json 降级派生；详见 `docs/r26-build-pipeline.md` |

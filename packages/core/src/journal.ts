@@ -8,6 +8,9 @@ import { atomicWrite, resolveHome } from './home'
 
 export type JournalPhase =
   | 'preflight'
+  | 'version-sync'
+  | 'install'
+  | 'pre-build'
   | 'build'
   | 'tag-milestone'
   | 'tag-build'

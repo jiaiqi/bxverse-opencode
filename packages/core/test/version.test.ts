@@ -92,3 +92,101 @@ describe('version.compareSemver', () => {
     expect(version.compareSemver('v1.0.0', 'v1.0.0')).toBe(0)
   })
 })
+
+describe('version.buildStampMinute (R26)', () => {
+  it('生成 YYMMDDHHmm 10 位', () => {
+    const d = new Date(2026, 7, 24, 15, 30)
+    expect(version.buildStampMinute(d)).toBe('2608241530')
+  })
+
+  it('撞名追加两位序号（10→12 位）', () => {
+    const d = new Date(2026, 7, 24, 15, 30)
+    expect(version.buildStampMinute(d, new Set(['2608241530']))).toBe('260824153001')
+    expect(version.buildStampMinute(d, new Set(['2608241530', '260824153001']))).toBe('260824153002')
+  })
+
+  it('序号耗尽抛错', () => {
+    const d = new Date(2026, 7, 24, 15, 30)
+    const used = new Set<string>(['2608241530'])
+    for (let i = 1; i <= 99; i++) used.add(`2608241530${String(i).padStart(2, '0')}`)
+    expect(() => version.buildStampMinute(d, used)).toThrow('BUILD_STAMP_EXHAUSTED')
+  })
+})
+
+describe('version.parseVersionTolerant (R26)', () => {
+  it('X.Y.Z 与 vX.Y.Z', () => {
+    expect(version.parseVersionTolerant('1.2.0')).toEqual({ kind: 'semver', parts: { major: 1, minor: 2, patch: 0 }, raw: '1.2.0' })
+    expect(version.parseVersionTolerant('v1.2.0')).toEqual({ kind: 'semver', parts: { major: 1, minor: 2, patch: 0 }, raw: 'v1.2.0' })
+  })
+
+  it('旧 hybrid vX.Y.Z.YYMMDDHH 兼容', () => {
+    const r = version.parseVersionTolerant('v1.2.0.26081315')
+    expect(r?.kind).toBe('semver')
+    if (r?.kind === 'semver') expect(r.parts.build).toBe(26081315)
+  })
+
+  it('VYYMMDDHHmm', () => {
+    expect(version.parseVersionTolerant('V2608241530')).toEqual({ kind: 'timestamp', stamp: '2608241530', raw: 'V2608241530' })
+    expect(version.parseVersionTolerant('V260824153012')).toEqual({ kind: 'timestamp', stamp: '260824153012', raw: 'V260824153012' })
+  })
+
+  it('旧 timestamp vYYMMDDHH 兼容（小写 v）', () => {
+    expect(version.parseVersionTolerant('v26081315')).toEqual({ kind: 'timestamp', stamp: '26081315', raw: 'v26081315' })
+  })
+
+  it('非法返回 null', () => {
+    expect(version.parseVersionTolerant('abc')).toBeNull()
+    expect(version.parseVersionTolerant('')).toBeNull()
+    expect(version.parseVersionTolerant('V123')).toBeNull()
+  })
+})
+
+describe('version.stripV / semverCore (R26)', () => {
+  it('stripV 去前缀', () => {
+    expect(version.stripV('v1.2.0')).toBe('1.2.0')
+    expect(version.stripV('V1.2.0')).toBe('1.2.0')
+    expect(version.stripV('1.2.0')).toBe('1.2.0')
+  })
+
+  it('semverCore 取 X.Y.Z 核心', () => {
+    expect(version.semverCore('v1.2.3')).toBe('1.2.3')
+    expect(version.semverCore('1.2.3')).toBe('1.2.3')
+    expect(version.semverCore('v1.2.3.26081315')).toBe('1.2.3')
+  })
+})
+
+describe('version.formatRepoVersion (R26)', () => {
+  it('X.Y.Z 格式返回无前缀核心', () => {
+    expect(version.formatRepoVersion('X.Y.Z', 'v1.2.0', '2608241530')).toBe('1.2.0')
+    expect(version.formatRepoVersion('X.Y.Z', '1.2.0', '2608241530')).toBe('1.2.0')
+    expect(version.formatRepoVersion('X.Y.Z', 'v1.2.0.26081315', '2608241530')).toBe('1.2.0')
+  })
+
+  it('VYYMMDDHHmm 格式返回 V + stamp', () => {
+    expect(version.formatRepoVersion('VYYMMDDHHmm', 'v1.2.0', '2608241530')).toBe('V2608241530')
+    expect(version.formatRepoVersion('VYYMMDDHHmm', '1.2.0', '260824153012')).toBe('V260824153012')
+  })
+
+  it('非法 stamp 抛错', () => {
+    expect(() => version.formatRepoVersion('VYYMMDDHHmm', '1.2.0', 'bad')).toThrow('INVALID_STAMP')
+  })
+})
+
+describe('version.compareVersion (R26)', () => {
+  it('semver 间比较', () => {
+    expect(version.compareVersion('1.2.0', '1.10.0')).toBeLessThan(0)
+    expect(version.compareVersion('v2.0.0', '1.9.9')).toBeGreaterThan(0)
+  })
+
+  it('timestamp 间比较', () => {
+    expect(version.compareVersion('V2608241530', 'V2608241531')).toBeLessThan(0)
+    expect(version.compareVersion('V2608241530', 'V2608241530')).toBe(0)
+  })
+
+  it('混合类型 semver < timestamp', () => {
+    expect(version.compareVersion('1.2.0', 'V2608241530')).toBeLessThan(0)
+    expect(version.compareVersion('V2608241530', '1.2.0')).toBeGreaterThan(0)
+  })
+})
+
+

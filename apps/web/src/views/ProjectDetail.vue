@@ -227,7 +227,7 @@ usePolling(async () => {
                 <span class="font-mono text-xs font-bold px-2 py-0.5 rounded bg-surface-alt border border-border text-info">
                   {{ project.version }}
                 </span>
-                <span class="text-xs font-mono text-text-3">方案: {{ project.repoVersionScheme || 'hybrid' }}</span>
+                <span class="text-xs font-mono text-text-3">方案: {{ project.repoVersionFormat ?? project.repoVersionScheme ?? 'hybrid' }}</span>
                 <span class="text-xs font-mono text-text-3">推演: {{ project.bump || 'auto' }}</span>
               </div>
               <p class="text-xs text-text-3 mt-1 m-0 leading-relaxed">{{ project.description || '暂无业务描述' }}</p>

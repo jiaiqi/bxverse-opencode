@@ -138,6 +138,39 @@ export function register(router: import('../http/router').Router, services: Repo
       if (typeof body.writeVersionFile !== 'boolean') throw apiError(400, 'VALIDATION', 'writeVersionFile 必须为布尔')
       repo.writeVersionFile = body.writeVersionFile
     }
+    // 扩展 R26：仓库级构建流水线与 package.json 版本源
+    if (body.versionSource !== undefined) {
+      const v = String(body.versionSource)
+      if (!['derived', 'packageJson'].includes(v)) throw apiError(400, 'VALIDATION', 'versionSource 必须为 derived/packageJson')
+      repo.versionSource = v as RepoDef['versionSource']
+    }
+    if (body.packageManager !== undefined) {
+      const v = String(body.packageManager).trim()
+      if (v === '') repo.packageManager = undefined
+      else {
+        if (!['pnpm', 'npm', 'yarn', 'bun'].includes(v)) throw apiError(400, 'VALIDATION', 'packageManager 必须为 pnpm/npm/yarn/bun')
+        repo.packageManager = v as RepoDef['packageManager']
+      }
+    }
+    if (body.installCommand !== undefined) {
+      const v = String(body.installCommand)
+      // 空字符串表示清除；skip 为显式跳过
+      repo.installCommand = v.trim() === '' ? undefined : v
+    }
+    if (body.preBuildCommand !== undefined) {
+      const v = String(body.preBuildCommand)
+      repo.preBuildCommand = v.trim() === '' ? undefined : v
+    }
+    if (body.buildTimeoutMs !== undefined) {
+      const n = Number(body.buildTimeoutMs)
+      if (!Number.isInteger(n) || n < 1000 || n > 60 * 60 * 1000) throw apiError(400, 'VALIDATION', 'buildTimeoutMs 必须为 1000~3600000 的整数毫秒')
+      repo.buildTimeoutMs = n
+    }
+    if (body.versionSyncCommit !== undefined) {
+      const v = String(body.versionSyncCommit)
+      if (!['package', 'none'].includes(v)) throw apiError(400, 'VALIDATION', 'versionSyncCommit 必须为 package/none')
+      repo.versionSyncCommit = v as RepoDef['versionSyncCommit']
+    }
     if (body.path !== undefined) {
       const repoPath = path.resolve(String(body.path))
       if (!fs.existsSync(repoPath) || !(await git.isRepo(repoPath))) {
