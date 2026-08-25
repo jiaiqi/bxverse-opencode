@@ -807,8 +807,11 @@ export async function executePublish(
   for (const s of plan.syncedOnly) {
     const repo = repoDefOf(s.repoId)
     try {
-      await syncUnchangedVersionFile(repo, plan.projectVersion)
-      emit('log', `${s.name} 同步基版版本号 → ${plan.projectVersion}（未变动，无标签无记录）`)
+      // R26：使用计划内仓库版本（X.Y.Z 格式为无前缀核心，与 changed 仓一致）；
+      // 旧格式下 s.version === plan.projectVersion，行为不变
+      const syncVersion = s.version || plan.projectVersion
+      await syncUnchangedVersionFile(repo, syncVersion)
+      emit('log', `${s.name} 同步基版版本号 → ${syncVersion}（未变动，无标签无记录）`)
     } catch (e) {
       syncWarnings.push(`${s.name} 基版同步失败: ${(e as Error).message}`)
       syncFailedRepos.push(s.repoId)
