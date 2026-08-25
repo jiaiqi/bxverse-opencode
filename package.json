@@ -15,6 +15,7 @@
     "test": "pnpm -r --no-bail test",
     "start": "pnpm --filter @bxverse/server start",
     "seed": "node scripts/seed.mjs",
+    "doctor": "node scripts/doctor.mjs",
     "icons": "node scripts/gen-pwa-icons.cjs"
   },
   "devDependencies": {

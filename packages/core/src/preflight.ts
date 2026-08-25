@@ -41,9 +41,11 @@ export async function runPreflight(repo: RepoDef, plan: PlannedRepo, _project: P
     if (dirty > 0) blocked.push(`工作树有 ${dirty} 个未提交改动（仅统计已跟踪文件），请先提交或 stash`)
     if (plan.changed) {
       // 扩展 R30：里程碑标签含 prerelease 前缀（vX.Y.Z-beta.N）
+      // R26 对齐：repoVersionFormat 为 X.Y.Z/VYYMMDDHHmm 时里程碑无 v 前缀（与 engine.executePublish 一致）
       const parsed = version.parseSemver(plan.version)
       if (parsed) {
-        const milestone = `v${parsed.major}.${parsed.minor}.${parsed.patch}` + (parsed.prerelease ? `-${parsed.prerelease}` : '')
+        const core = `${parsed.major}.${parsed.minor}.${parsed.patch}` + (parsed.prerelease ? `-${parsed.prerelease}` : '')
+        const milestone = _project.repoVersionFormat === 'X.Y.Z' || _project.repoVersionFormat === 'VYYMMDDHHmm' ? core : `v${core}`
         if (await tagExists(repo.path, milestone)) {
           const target = await tagTarget(repo.path, milestone)
           if (target && target !== repoHead) {

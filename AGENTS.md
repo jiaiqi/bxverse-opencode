@@ -68,7 +68,7 @@ packages/core/src/{home.ts, git.ts, version.ts, changelog.ts, store.ts, engine.t
 apps/server/src/{index.ts, http/*, api/*（含 backups.ts）, queue.ts, sse.ts}
 apps/web/src/{main.ts, App.vue, api/*, stores/*, router/, views/（含 BackupManage.vue、RepoDetail.vue）, components/, composables/, pwa/}
 apps/cli/src/index.ts
-scripts/{seed.mjs, gen-pwa-icons.cjs}
+scripts/{seed.mjs, doctor.mjs, gen-pwa-icons.cjs}
 e2e/{prepare-fixture.mjs, wizard-flow.py, resume.mjs, README.md}
 docs/{requirements.md, architecture.md, data-model.md, core-engine.md, api.md, frontend.md, development.md, roadmap.md, r26-build-pipeline.md}  设计文档
 verse/      参考原型，不在 workspace，不参与构建
@@ -125,6 +125,7 @@ apps/@bxverse/cli ──────┘
 ### 4.10 脚本与 e2e
 
 - `scripts/seed.mjs`（根命令 `pnpm seed`）：创建演示项目 + 3 个 fixture 仓库；**对运行中的服务执行**，可选 `--port`/`--project`。
+- `scripts/doctor.mjs`（根命令 `pnpm doctor`）：只读诊断——核对 app.json 的 `lastPublishCommit` 与各仓真实 git 状态（branch/HEAD/dirty/ahead/tags/其他分支），定位「全部显示最新/提交流为空」类问题；可选 `--home`/`--project`。
 - `scripts/gen-pwa-icons.cjs`（根命令 `pnpm icons`）：零依赖生成 PWA 图标到 `apps/web/public/`。
 - `e2e/`：`prepare-fixture.mjs` + `wizard-flow.py`（向导六步全流程，`BX_PORT=18899`）、`resume.mjs`（中断续跑演练，`BX_PORT=18898`）；独立 BX_HOME 不碰真实数据；详见 `e2e/README.md`。
 
