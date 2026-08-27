@@ -453,3 +453,4 @@ architecture §3.2 全部路由可用且经 curl 验证；SSE 通道、单队列
 | 2026-08-26 | M14 命令面板增强：CommandPalette fuzzy 匹配 + WIG a11y 收口；Phase 2 序号 1-5 全部完成（doctor / 失败结构化恢复 / 运维中心 / 驾驶舱 / 命令面板与体验基线） |
 | 2026-08-26 | Phase 3 自举分发阶段 1：cli 看门狗 + update 子命令 + scripts/release.mjs（零依赖 changesets 实现）+ .changeset/README.md；core 测试 145 / typecheck / build / e2e 三场景全过 |
 | 2026-08-26 | Phase 3 自举分发收口：README 增 CLI + 自举 release 两节；development.md §11 协议；core 测试 145 / typecheck / build / e2e 三场景全过；Phase 3 序号 1-3 全部完成 |
+| 2026-08-27 | v1.0.0 tag 落地（首次 major）：docs/v1-checklist.md 8 节全过 + release.mjs 零依赖跑通 + git tag v1.0.0；后续走 1.x 维护更新路径 |
