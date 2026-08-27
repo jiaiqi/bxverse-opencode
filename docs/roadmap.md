@@ -456,3 +456,4 @@ architecture §3.2 全部路由可用且经 curl 验证；SSE 通道、单队列
 | 2026-08-27 | v1.0.0 tag 落地（首次 major）：docs/v1-checklist.md 8 节全过 + release.mjs 零依赖跑通 + git tag v1.0.0；后续走 1.x 维护更新路径 |
 | 2026-08-27 | 方向 B·F2 收口：server validateRequest 显式布尔化 + dry-run 错误分类 TODO(A1) 注释 + 3 条契约测试（40 passed）；typecheck 0 error；e2e 三场景全过 |
 | 2026-08-27 | 方向 B·A1 收口：CoreError + statusForCode 映射 + sendError 序列化 + 20 条单测（60 全过）；typecheck/e2e 全绿 |
+| 2026-08-27 | 方向 B·S4 收口：journal events 持久化 + queue 启动重建 + replay truncated 头帧 4 步实现本就绪 + 4 条 core 契约测试（145→149）；typecheck/e2e 全绿 |

@@ -113,3 +113,4 @@
 | 2026-08-27 | **v1.0.0 tag 落地**（首次 major）—— 验收清单 docs/v1-checklist.md 8 节全过；scripts/release.mjs 0.1.0→1.0.0 自动 bump 6 package + 写 CHANGELOG；git tag v1.0.0 在 commit 10dcb82；API 契约双冻结进入 1.x 维护路径 |
 | 2026-08-27 | 方向 B·F2 收口：server 契约层（缺省=false 裁决落地）+ 3 条契约测试（40 passed）；typecheck/e2e 全绿；剩余 optimization-plan TODO：A1（CoreError 统一错误体系，含 F2 中文嗅探改结构化字段）、S4（SSE 事件持久化到 journal 跨重启回放） |
 | 2026-08-27 | 方向 B·A1 收口：server test/core-error.test.ts 20 条全过（statusForCode 16 表测 + sendError 序列化 4 测）；server 40→60；core 145 / typecheck / build / e2e 三场景全绿；剩余 optimization-plan TODO 仅 S4（SSE 事件持久化到 journal 跨重启回放） |
+| 2026-08-27 | 方向 B·S4 收口：SSE 事件持久化 4 步核心实现（journal appendEvent/loadEvents/queue restoreFromJournal/sse normalizeReplay truncated 头帧）本就绪；新增 4 条 core 契约测试（追加/原序读回/空查询/超 MAX 截断）；core 145→149 全过；typecheck/build/e2e 三场景全过；optimization-plan 4 个 TODO（F2/A1/A2/A3/S4 文档）收口完成；S2/A2/A3 不在 B 范围（性能/索引层） |
