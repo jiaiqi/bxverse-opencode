@@ -22,7 +22,7 @@ export function register(
       changedRepos: [],
     }
     // 并行化：poll.get 用 runWithPool limit 6，listRecords(limit=1) 仅取头部一条（索引快速路径）
-    const allRepos = cfg.projects.flatMap(p => p.repos)
+    const allRepos = cfg.projects.flatMap((p) => p.repos)
     const statusMap = new Map<string, RepoStatus>()
     await runWithPool(allRepos, 6, async (repo) => {
       try {
@@ -34,8 +34,9 @@ export function register(
     })
     const releasesMap = new Map<string, import('@bxverse/shared').ReleaseRecord[]>()
     await Promise.all(
-      cfg.projects.map(async p => {
-        const releases = await services.dataStore.listRecords(p.id, { limit: 1 })
+      cfg.projects.map(async (p) => {
+        // A3：lastRelease 只需 version + date → 用 { full: false } 走 index 摘要快速路径，省一次 data.json IO
+        const releases = await services.dataStore.listRecords(p.id, { limit: 1, full: false })
         releasesMap.set(p.id, releases)
       }),
     )
@@ -112,7 +113,12 @@ export function register(
           const records = await ds.listRecords(p.id, { limit: 100 })
           for (const r of records) {
             const t = new Date(r.date).getTime()
-            if (t >= ws.getTime() && t < we.getTime() && r.kind === 'project' && r.status !== 'failed') {
+            if (
+              t >= ws.getTime() &&
+              t < we.getTime() &&
+              r.kind === 'project' &&
+              r.status !== 'failed'
+            ) {
               weeks[i].releases += 1
               projectSet.add(p.id)
             }
@@ -133,6 +139,13 @@ function isoWeek(d: Date): string {
   const dayNum = (date.getUTCDay() + 6) % 7 // Mon=0..Sun=6
   date.setUTCDate(date.getUTCDate() - dayNum + 3) // Thursday
   const firstThursday = new Date(Date.UTC(date.getUTCFullYear(), 0, 4))
-  const week = 1 + Math.round(((date.getTime() - firstThursday.getTime()) / 86_400_000 - 3 + ((firstThursday.getUTCDay() + 6) % 7)) / 7)
+  const week =
+    1 +
+    Math.round(
+      ((date.getTime() - firstThursday.getTime()) / 86_400_000 -
+        3 +
+        ((firstThursday.getUTCDay() + 6) % 7)) /
+        7,
+    )
   return `${date.getUTCFullYear()}-W${String(week).padStart(2, '0')}`
 }
