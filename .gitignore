@@ -17,6 +17,11 @@ design/*.webp
 docs/bxverse-redevelopment-requirements.md
 docs/optimization-plan.md
 
+# 临时探针（运行/调试脚本输出、回归脚本、点文件）
+design/.diag-tmp/
+e2e/.probe-*.py
+e2e/.probe-*.mjs
+
 # 本地工具与自动生成
 .workbuddy/
 .zcode/
