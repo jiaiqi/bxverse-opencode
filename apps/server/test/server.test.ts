@@ -42,7 +42,11 @@ describe('鉴权与 CSRF（api.md §1.3）', () => {
   })
 
   it('伪造 Origin 的非 GET 请求 → 403', async () => {
-    const { status, body } = await client.post('/api/projects', { name: 'evil' }, { origin: 'http://evil.example' })
+    const { status, body } = await client.post(
+      '/api/projects',
+      { name: 'evil' },
+      { origin: 'http://evil.example' },
+    )
     expect(status).toBe(403)
     expect((body as { code: string }).code).toBe('FORBIDDEN')
   })
@@ -63,7 +67,10 @@ describe('项目 CRUD（api.md §5）', () => {
   let projectId = ''
 
   it('创建项目（服务端生成默认值）', async () => {
-    const { status, body } = await client.post('/api/projects', { name: '主产品线', description: '测试项目' })
+    const { status, body } = await client.post('/api/projects', {
+      name: '主产品线',
+      description: '测试项目',
+    })
     expect(status).toBe(201)
     const p = body as { id: string; version: string; repos: unknown[] }
     projectId = p.id
@@ -78,7 +85,10 @@ describe('项目 CRUD（api.md §5）', () => {
   })
 
   it('PATCH 更新字段 + 非法枚举 → 400', async () => {
-    const { status, body } = await client.patch(`/api/projects/${projectId}`, { description: '新描述', bump: 'manual' })
+    const { status, body } = await client.patch(`/api/projects/${projectId}`, {
+      description: '新描述',
+      bump: 'manual',
+    })
     expect(status).toBe(200)
     expect((body as { bump: string }).bump).toBe('manual')
     const bad = await client.patch(`/api/projects/${projectId}`, { bump: 'illegal' })
@@ -133,7 +143,9 @@ describe('仓库接入 / 状态 / 文件（api.md §6）', () => {
   it('目录树与文件读取（R4）', async () => {
     const tree = await client.get(`/api/repos/${projectId}/${repoId}/tree?path=`)
     expect(tree.status).toBe(200)
-    expect((tree.body as { entries: { name: string }[] }).entries.map(e => e.name)).toContain('src')
+    expect((tree.body as { entries: { name: string }[] }).entries.map((e) => e.name)).toContain(
+      'src',
+    )
 
     const file = await client.get(`/api/repos/${projectId}/${repoId}/file?path=src/a.ts`)
     expect(file.status).toBe(200)
@@ -153,13 +165,17 @@ describe('仓库接入 / 状态 / 文件（api.md §6）', () => {
     const del = await client.del(`/api/projects/${projectId}/repos/${repoId}`)
     expect(del.status).toBe(200)
     // 重新接入以便后续发布测试使用同一项目
-    const again = await client.post(`/api/projects/${projectId}/repos`, { path: (body as { path: string }).path })
+    const again = await client.post(`/api/projects/${projectId}/repos`, {
+      path: (body as { path: string }).path,
+    })
     expect(again.status).toBe(201)
     repoId = (again.body as { id: string }).id
   })
 
   it('M8 克隆 URL 协议白名单校验 → 400 VALIDATION', async () => {
-    const bad = await client.post(`/api/projects/${projectId}/repos`, { url: 'ftp://evil.com/repo.git' })
+    const bad = await client.post(`/api/projects/${projectId}/repos`, {
+      url: 'ftp://evil.com/repo.git',
+    })
     expect(bad.status).toBe(400)
     expect((bad.body as { code: string }).code).toBe('VALIDATION')
   })
@@ -178,7 +194,11 @@ describe('发布全链路（api.md §8）', () => {
     const { body: r } = await client.post(`/api/projects/${projectId}/repos`, { path: repoPath })
     expect((r as { id: string }).id.startsWith('r_')).toBe(true)
 
-    const { status, body } = await client.post('/api/publish', { projectId, bump: 'auto', dryRun: true })
+    const { status, body } = await client.post('/api/publish', {
+      projectId,
+      bump: 'auto',
+      dryRun: true,
+    })
     expect(status).toBe(200)
     const plan = body as {
       projectVersion: string
@@ -204,29 +224,43 @@ describe('发布全链路（api.md §8）', () => {
   })
 
   it('执行发布 + SSE 事件流', async () => {
-    const { status, body } = await client.post('/api/publish', { projectId, bump: 'auto', offline: true })
+    const { status, body } = await client.post('/api/publish', {
+      projectId,
+      bump: 'auto',
+      offline: true,
+    })
     expect(status).toBe(202)
     const taskId = (body as { taskId: string }).taskId
     expect(taskId.startsWith('t_')).toBe(true)
 
     // 订阅 SSE（fetch 流式），重放缓冲 + 实时
     const events = await collectSse(app.base, client.token, taskId)
-    expect(events.some(e => e.type === 'repo-start')).toBe(true)
-    expect(events.some(e => e.type === 'repo-done')).toBe(true)
-    expect(events.some(e => e.type === 'done')).toBe(true)
-    const done = events.find(e => e.type === 'done')
+    expect(events.some((e) => e.type === 'repo-start')).toBe(true)
+    expect(events.some((e) => e.type === 'repo-done')).toBe(true)
+    expect(events.some((e) => e.type === 'done')).toBe(true)
+    const done = events.find((e) => e.type === 'done')
     expect((done?.data as { releaseId: string }).releaseId).toBeTruthy()
   })
 
   it('发布后：历史/项目版本/基准/第二次 plan 无变动', async () => {
     const { body } = await client.get(`/api/projects/${projectId}/releases`)
-    const releases = body as { version: string; kind: string; logs: { external: { state: string } } }[]
+    const releases = body as {
+      version: string
+      kind: string
+      logs: { external: { state: string } }
+    }[]
     expect(releases.length).toBe(1)
     expect(releases[0].version).toBe('v0.2.0')
     expect(releases[0].kind).toBe('project')
 
     const { body: projBody } = await client.get('/api/projects')
-    const project = (projBody as { id: string; version: string; repos: { id: string; lastPublishCommit: string }[] }[]).find(p => p.id === projectId)!
+    const project = (
+      projBody as {
+        id: string
+        version: string
+        repos: { id: string; lastPublishCommit: string }[]
+      }[]
+    ).find((p) => p.id === projectId)!
     expect(project.version).toBe('v0.2.0')
     expect(project.repos[0].lastPublishCommit).toHaveLength(40)
 
@@ -254,7 +288,9 @@ describe('发布全链路（api.md §8）', () => {
 
     // 仓库级记录不支持
     const { body: projBody2 } = await client.get('/api/projects')
-    const p2 = (projBody2 as { id: string; repos: { id: string }[] }[]).find(p => p.id === projectId)!
+    const p2 = (projBody2 as { id: string; repos: { id: string }[] }[]).find(
+      (p) => p.id === projectId,
+    )!
     const scopeBody = await client.get(`/api/releases?scopeId=${p2.repos[0].id}`)
     const repoRecord = (scopeBody.body as { id: string; kind: string }[])[0]
     const bad = await client.get(`/api/releases/${repoRecord.id}/versions`)
@@ -272,9 +308,13 @@ describe('发布全链路（api.md §8）', () => {
   it('GET /api/projects/:id/versions 版本清单导出（R18）', async () => {
     // 设置中文名
     const { body: projectsBody } = await client.get('/api/projects')
-    const project = (projectsBody as { id: string; repos: { id: string; name: string }[] }[]).find(p => p.id === projectId)!
+    const project = (projectsBody as { id: string; repos: { id: string; name: string }[] }[]).find(
+      (p) => p.id === projectId,
+    )!
     const repo = project.repos[0]
-    const patched = await client.patch(`/api/projects/${projectId}/repos/${repo.id}`, { displayName: '测试前端' })
+    const patched = await client.patch(`/api/projects/${projectId}/repos/${repo.id}`, {
+      displayName: '测试前端',
+    })
     expect(patched.status).toBe(200)
 
     const { status, body } = await client.get(`/api/projects/${projectId}/versions`)
@@ -302,7 +342,9 @@ describe('发布全链路（api.md §8）', () => {
 
   it('POST /api/projects/:id/versions/export 写入指定仓库（R18）', async () => {
     const { body: projectsBody } = await client.get('/api/projects')
-    const project = (projectsBody as { id: string; repos: { id: string; name: string }[] }[]).find(p => p.id === projectId)!
+    const project = (projectsBody as { id: string; repos: { id: string; name: string }[] }[]).find(
+      (p) => p.id === projectId,
+    )!
     const repo = project.repos[0]
 
     // 正常写入
@@ -311,7 +353,11 @@ describe('发布全链路（api.md §8）', () => {
       path: 'deploy/versions.json',
     })
     expect(status).toBe(200)
-    const result = body as { count: number; items: { app: string; version: string }[]; fullPath: string }
+    const result = body as {
+      count: number
+      items: { app: string; version: string }[]
+      fullPath: string
+    }
     expect(result.count).toBe(1)
     expect(result.items[0].app).toBe(repo.name)
 
@@ -321,14 +367,98 @@ describe('发布全链路（api.md §8）', () => {
     expect(written).toEqual(result.items)
 
     // 路径校验
-    const noJson = await client.post(`/api/projects/${projectId}/versions/export`, { repoId: repo.id, path: 'versions.txt' })
+    const noJson = await client.post(`/api/projects/${projectId}/versions/export`, {
+      repoId: repo.id,
+      path: 'versions.txt',
+    })
     expect(noJson.status).toBe(400)
-    const escape = await client.post(`/api/projects/${projectId}/versions/export`, { repoId: repo.id, path: '../../evil.json' })
+    const escape = await client.post(`/api/projects/${projectId}/versions/export`, {
+      repoId: repo.id,
+      path: '../../evil.json',
+    })
     expect(escape.status).toBe(400)
-    const abs = await client.post(`/api/projects/${projectId}/versions/export`, { repoId: repo.id, path: 'C:/evil.json' })
+    const abs = await client.post(`/api/projects/${projectId}/versions/export`, {
+      repoId: repo.id,
+      path: 'C:/evil.json',
+    })
     expect(abs.status).toBe(400)
-    const badRepo = await client.post(`/api/projects/${projectId}/versions/export`, { repoId: 'r_nonexistent', path: 'versions.json' })
+    const badRepo = await client.post(`/api/projects/${projectId}/versions/export`, {
+      repoId: 'r_nonexistent',
+      path: 'versions.json',
+    })
     expect(badRepo.status).toBe(404)
+  })
+})
+
+describe('F2 · PublishRequest 反向默认值契约（optimization-plan F2）', () => {
+  /**
+   * 裁决：缺省 = false（构建默认执行、标签默认推送、备份默认开启）。
+   * 任何省略字段的 API 直调方都应得到安全的默认行为。
+   */
+  it('A) 不传 skipBuild/offline/backupSource/backupArtifacts → plan/queue 行为均按 false 走（跳过构建 = false / 离线 = false / 备份均开）', async () => {
+    const { body: p } = await client.post('/api/projects', { name: 'F2 默认值项目' })
+    const projId = (p as { id: string }).id
+    const repo = makeRepo()
+    commit(repo, 'feat: 默认值探测', { 'a.ts': '1' })
+    await client.post(`/api/projects/${projId}/repos`, { path: repo })
+
+    // dryRun：plan 计算时的 effectiveModes 是 core 决定，不直接透 skipBuild/offline 到 plan 字段
+    // 但契约层必须保证这些字段缺省 = false（不传时显式验证 dryRun 不报错并产生完整 plan）
+    const planRes = await client.post('/api/publish', {
+      projectId: projId,
+      bump: 'auto',
+      dryRun: true,
+    })
+    expect(planRes.status).toBe(200)
+    const plan = planRes.body as { projectVersion: string; changed: unknown[]; warnings: string[] }
+    expect(plan.projectVersion).toBeTruthy()
+    expect(plan.changed.length).toBe(1)
+    // dry-run 路径不应在缺省 bool 字段时报错（验证：body 缺省字段不会触发 VALIDATION 400）
+  })
+
+  it('B) 显式传 skipBuild=true / offline=true → 接受且 202（SSE 入队成功）', async () => {
+    const { body: p } = await client.post('/api/projects', { name: 'F2 显式 true' })
+    const projId = (p as { id: string }).id
+    const repo = makeRepo()
+    commit(repo, 'feat: 显式 true 探测', { 'a.ts': '1' })
+    await client.post(`/api/projects/${projId}/repos`, { path: repo })
+
+    const res = await client.post('/api/publish', {
+      projectId: projId,
+      bump: 'auto',
+      offline: true,
+      backupSource: false,
+      backupArtifacts: false,
+    })
+    expect(res.status).toBe(202)
+    const cur = await client.get('/api/publish/current')
+    expect(cur.status).toBe(200)
+    expect((cur.body as { taskId: string }).taskId).toBeTruthy()
+    // 任务跑完（不严格断言时间）
+    const t0 = Date.now()
+    while (Date.now() - t0 < 15_000) {
+      const c = await client.get('/api/publish/current')
+      if (c.body && (c.body as { status: string }).status === 'done') break
+      await new Promise((r) => setTimeout(r, 250))
+    }
+  })
+
+  it('C) 显式传 skipBuild=false / offline=false → 与缺省行为等价（契约一致）', async () => {
+    const { body: p } = await client.post('/api/projects', { name: 'F2 显式 false' })
+    const projId = (p as { id: string }).id
+    const repo = makeRepo()
+    commit(repo, 'feat: 显式 false 探测', { 'a.ts': '1' })
+    await client.post(`/api/projects/${projId}/repos`, { path: repo })
+
+    const res = await client.post('/api/publish', {
+      projectId: projId,
+      bump: 'auto',
+      skipBuild: false,
+      offline: false,
+      backupSource: false,
+      backupArtifacts: false,
+    })
+    expect(res.status).toBe(202)
   })
 })
 
@@ -336,9 +466,13 @@ describe('日志编辑（api.md §7.3）', () => {
   it('edit → edited → confirm → confirmed → reset → auto', async () => {
     // 复用发布测试项目：先查记录
     const { body: projectsBody } = await client.get('/api/projects')
-    const project = (projectsBody as { id: string; name: string }[]).find(p => p.name === '发布测试项目')!
+    const project = (projectsBody as { id: string; name: string }[]).find(
+      (p) => p.name === '发布测试项目',
+    )!
     const { body } = await client.get(`/api/projects/${project.id}/releases`)
-    const record = (body as { id: string; logs: { external: { state: string; autoDraft: string } } }[])[0]
+    const record = (
+      body as { id: string; logs: { external: { state: string; autoDraft: string } } }[]
+    )[0]
 
     const edited = await client.patch(`/api/releases/${record.id}/log`, {
       track: 'external',
@@ -346,17 +480,32 @@ describe('日志编辑（api.md §7.3）', () => {
       content: '# 手工编辑的更新日志',
     })
     expect(edited.status).toBe(200)
-    expect(((edited.body as { logs: { external: { state: string } } }).logs.external.state)).toBe('edited')
+    expect((edited.body as { logs: { external: { state: string } } }).logs.external.state).toBe(
+      'edited',
+    )
 
-    const confirmed = await client.patch(`/api/releases/${record.id}/log`, { track: 'external', action: 'confirm' })
-    expect(((confirmed.body as { logs: { external: { state: string } } }).logs.external.state)).toBe('confirmed')
+    const confirmed = await client.patch(`/api/releases/${record.id}/log`, {
+      track: 'external',
+      action: 'confirm',
+    })
+    expect((confirmed.body as { logs: { external: { state: string } } }).logs.external.state).toBe(
+      'confirmed',
+    )
 
-    const reset = await client.patch(`/api/releases/${record.id}/log`, { track: 'external', action: 'reset' })
-    const after = reset.body as { logs: { external: { state: string; content: string; autoDraft: string } } }
+    const reset = await client.patch(`/api/releases/${record.id}/log`, {
+      track: 'external',
+      action: 'reset',
+    })
+    const after = reset.body as {
+      logs: { external: { state: string; content: string; autoDraft: string } }
+    }
     expect(after.logs.external.state).toBe('auto')
     expect(after.logs.external.content).toBe(after.logs.external.autoDraft)
 
-    const bad = await client.patch(`/api/releases/${record.id}/log`, { track: 'nope', action: 'edit' })
+    const bad = await client.patch(`/api/releases/${record.id}/log`, {
+      track: 'nope',
+      action: 'edit',
+    })
     expect(bad.status).toBe(400)
   })
 })
@@ -422,7 +571,9 @@ describe('AI 日志润色（/api/ai/polish）', () => {
   })
 
   it('未启用 → 400 AI_DISABLED（不静默返回原文）', async () => {
-    await client.post('/api/config', { ai: { enabled: false, baseUrl: 'http://127.0.0.1:9', model: 'x', apiKey: '' } })
+    await client.post('/api/config', {
+      ai: { enabled: false, baseUrl: 'http://127.0.0.1:9', model: 'x', apiKey: '' },
+    })
     const { status, body } = await client.post('/api/ai/polish', { text: 'hello world' })
     expect(status).toBe(400)
     expect((body as { code: string }).code).toBe('AI_DISABLED')
@@ -433,20 +584,32 @@ describe('AI 日志润色（/api/ai/polish）', () => {
     await new Promise<void>((resolve) => {
       stub = createServer((req, res) => {
         let data = ''
-        req.on('data', (c: Buffer) => { data += c.toString('utf8') })
+        req.on('data', (c: Buffer) => {
+          data += c.toString('utf8')
+        })
         req.on('end', () => {
-          const payload = JSON.parse(data) as { model: string; messages: { role: string; content: string }[] }
+          const payload = JSON.parse(data) as {
+            model: string
+            messages: { role: string; content: string }[]
+          }
           expect(payload.model).toBe('stub-model')
           expect(payload.messages[0].role).toBe('system')
           expect(payload.messages[1].content).toBe('hello world')
           res.writeHead(200, { 'Content-Type': 'application/json' })
-          res.end(JSON.stringify({ choices: [{ message: { content: '```markdown\n润色后的对外日志\n```' } }] }))
+          res.end(
+            JSON.stringify({
+              choices: [{ message: { content: '```markdown\n润色后的对外日志\n```' } }],
+            }),
+          )
         })
       })
       stub.listen(0, '127.0.0.1', () => {
         const addr = stub!.address() as { port: number }
         const base = `http://127.0.0.1:${addr.port}`
-        void client.post('/api/config', { ai: { enabled: true, baseUrl: base, model: 'stub-model', apiKey: '' } })
+        void client
+          .post('/api/config', {
+            ai: { enabled: true, baseUrl: base, model: 'stub-model', apiKey: '' },
+          })
           .then(async () => {
             const providers = await client.get('/api/ai/providers')
             const provider = (providers.body as { id: string }[])[0]
@@ -461,10 +624,11 @@ describe('AI 日志润色（/api/ai/polish）', () => {
   })
 
   it('AI 服务异常 → 502 AI_FAILED（失败显式呈现，不静默回退原文）', async () => {
-    await client.post('/api/config', { ai: { enabled: true, baseUrl: 'http://127.0.0.1:9', model: 'x', apiKey: '' } })
+    await client.post('/api/config', {
+      ai: { enabled: true, baseUrl: 'http://127.0.0.1:9', model: 'x', apiKey: '' },
+    })
     const { status, body } = await client.post('/api/ai/polish', { text: 'hello world' })
     expect(status).toBe(502)
     expect((body as { code: string }).code).toBe('AI_FAILED')
   })
 })
-

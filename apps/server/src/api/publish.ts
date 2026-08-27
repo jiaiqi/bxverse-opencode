@@ -19,13 +19,16 @@ export function register(
     const req = validateRequest(body)
 
     const cfg = await services.loadCfg()
-    const project = cfg.projects.find(p => p.id === req.projectId)
+    const project = cfg.projects.find((p) => p.id === req.projectId)
     if (!project) throw apiError(404, 'NOT_FOUND', `项目不存在: ${req.projectId}`)
 
     if (req.dryRun) {
       const plan = await engine.planPublish(req)
       sendJsonGzip(ctx.res, 200, plan, ctx.req)
       return
+      // TODO(A1): dry-run 错误分类的 `msg.includes('仓库')` 中文嗅探是顺序耦合，
+      //          应改为错误码 + structured 字段后由 web 端 i18n 渲染。
+      //          当前先保留以避免改动面过大，归于 A1（CoreError 统一错误体系）任务一并处理。
     }
 
     const taskId = await services.queue.submit(req)
@@ -47,9 +50,7 @@ export function register(
     const task = services.queue.getTask(taskId)
     if (!task) throw apiError(404, 'NOT_FOUND', `任务不存在: ${taskId}`)
     // 优先：内存 task.events 中最后一次 error/repo-error 携带的 code/detail
-    const failureEvents = task.events.filter(
-      (e) => e.type === 'error' || e.type === 'repo-error',
-    )
+    const failureEvents = task.events.filter((e) => e.type === 'error' || e.type === 'repo-error')
     const reports: FailedRepoReport[] = []
     const seen = new Set<string>()
     for (const e of failureEvents) {
@@ -123,7 +124,7 @@ function validateRequest(body: Record<string, unknown>): PublishRequest {
   }
   let repoIds: string[] | undefined
   if (body.repoIds !== undefined && body.repoIds !== null) {
-    if (!Array.isArray(body.repoIds) || body.repoIds.some(x => typeof x !== 'string')) {
+    if (!Array.isArray(body.repoIds) || body.repoIds.some((x) => typeof x !== 'string')) {
       throw apiError(400, 'VALIDATION', 'repoIds 必须为字符串数组')
     }
     repoIds = body.repoIds as string[]
@@ -131,7 +132,10 @@ function validateRequest(body: Record<string, unknown>): PublishRequest {
   let excludeCommits: Record<string, string[]> | undefined
   if (body.excludeCommits !== undefined && body.excludeCommits !== null) {
     const raw = body.excludeCommits as Record<string, unknown>
-    if (typeof raw !== 'object' || Object.values(raw).some(v => !Array.isArray(v) || v.some(x => typeof x !== 'string'))) {
+    if (
+      typeof raw !== 'object' ||
+      Object.values(raw).some((v) => !Array.isArray(v) || v.some((x) => typeof x !== 'string'))
+    ) {
       throw apiError(400, 'VALIDATION', 'excludeCommits 必须为 { repoId: string[] }')
     }
     excludeCommits = raw as Record<string, string[]>

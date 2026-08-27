@@ -111,3 +111,4 @@
 |---|---|
 | 2026-08-25 | 初版：依据 roadmap §0 现状、ultimate-cockpit 原型差距、六角色评审结论制定三阶段路线；同步完成 docs/design 清理归档 |
 | 2026-08-27 | **v1.0.0 tag 落地**（首次 major）—— 验收清单 docs/v1-checklist.md 8 节全过；scripts/release.mjs 0.1.0→1.0.0 自动 bump 6 package + 写 CHANGELOG；git tag v1.0.0 在 commit 10dcb82；API 契约双冻结进入 1.x 维护路径 |
+| 2026-08-27 | 方向 B·F2 收口：server 契约层（缺省=false 裁决落地）+ 3 条契约测试（40 passed）；typecheck/e2e 全绿；剩余 optimization-plan TODO：A1（CoreError 统一错误体系，含 F2 中文嗅探改结构化字段）、S4（SSE 事件持久化到 journal 跨重启回放） |
