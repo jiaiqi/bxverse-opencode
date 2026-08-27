@@ -457,3 +457,4 @@ architecture §3.2 全部路由可用且经 curl 验证；SSE 通道、单队列
 | 2026-08-27 | 方向 B·F2 收口：server validateRequest 显式布尔化 + dry-run 错误分类 TODO(A1) 注释 + 3 条契约测试（40 passed）；typecheck 0 error；e2e 三场景全过 |
 | 2026-08-27 | 方向 B·A1 收口：CoreError + statusForCode 映射 + sendError 序列化 + 20 条单测（60 全过）；typecheck/e2e 全绿 |
 | 2026-08-27 | 方向 B·S4 收口：journal events 持久化 + queue 启动重建 + replay truncated 头帧 4 步实现本就绪 + 4 条 core 契约测试（145→149）；typecheck/e2e 全绿 |
+| 2026-08-27 | 方向 C·A2 收口：DataStore 索引增量 3 步实现本就绪 + 8 条契约测试（149→157）；typecheck/e2e 全绿；store 0 测试债务清零 |
