@@ -1,0 +1,667 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>bxverse 终极状态愿景原型 · Ultimate State</title>
+<!--
+  bxverse 终极状态愿景原型（2026-08 全角色体检后的目标形态）
+  设计语言：WenXi「夜航翠光」深色玻璃拟态（docs/theme-spec-wenxi.md）
+  在既有 cockpit 原型之上，补齐体检报告定义的产品缺口：
+    (1) 首次使用引导 Onboarding（M5-08）
+    (2) 发布失败 -> 结构化恢复流程（诊断 -> 重试/接管/回滚）
+    (3) 备份恢复一等化（M7 收口：白名单/冲突策略/二次确认）
+    (4) 运维中心 OpsCenter（深健康探针/引擎日志/数据迁移/日志治理/
+        进程指标/bxverse 自身版本自举）
+  以及体验基线修正：文本可选中、导航真链接语义、a11y 标注。
+  零外部依赖，双击离线打开即可交互；顶栏「注解增量」开关可高亮新增能力。
+-->
+<style>
+  :root{
+    --wx-bg:#050507; --wx-bg2:#0A0B0E;
+    --wx-surface:rgba(255,255,255,.045); --wx-hover:rgba(255,255,255,.08);
+    --wx-strong:#14161A; --wx-border:rgba(255,255,255,.08); --wx-borderS:rgba(255,255,255,.16);
+    --wx-t1:#F4F6F5; --wx-t2:#B0B6B3; --wx-t3:#6E7571;
+    --wx-accent:#00C96E; --wx-accentH:#2BF095; --wx-accentP:#00B160;
+    --wx-accentSoft:rgba(0,201,110,.14); --wx-glow:rgba(0,201,110,.28);
+    --wx-danger:#FF4D4F; --wx-warn:#FFA940; --wx-info:#3B82F6; --wx-purple:#A855F7;
+    --wx-r-card:18px; --wx-r-panel:12px; --wx-r-tag:7px;
+    --mono:'Cascadia Code',Consolas,'JetBrains Mono',ui-monospace,monospace;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  html,body{background:var(--wx-bg);color:var(--wx-t1);
+    font-family:-apple-system,'Segoe UI','PingFang SC','HarmonyOS Sans SC','Microsoft YaHei',sans-serif;
+    font-size:13px;line-height:1.55;height:100%}
+  button{-webkit-user-select:none;user-select:none}
+  ::selection{background:rgba(0,201,110,.32)}
+  ::-webkit-scrollbar{width:6px;height:6px}
+  ::-webkit-scrollbar-track{background:transparent}
+  ::-webkit-scrollbar-thumb{background:rgba(255,255,255,.12);border-radius:4px}
+  a{color:var(--wx-accent);text-decoration:none}
+
+  .ambience{position:fixed;inset:0;pointer-events:none;
+    background:radial-gradient(60% 40% at 50% 0%,rgba(0,201,110,.05),transparent)}
+  .glass{background:linear-gradient(160deg,rgba(255,255,255,.06),rgba(255,255,255,.02));
+    border:1px solid var(--wx-border);backdrop-filter:blur(18px) saturate(140%);
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.06),0 12px 32px rgba(0,0,0,.35);
+    border-radius:var(--wx-r-card)}
+  .glass-hover{transition:border-color .15s ease-out,transform .15s ease-out}
+  .glass-hover:hover{border-color:var(--wx-borderS);transform:translateY(-2px)}
+
+  .app{display:grid;grid-template-columns:216px 1fr;grid-template-rows:56px 1fr;height:100vh;
+    grid-template-areas:"side top" "side main"}
+  aside{grid-area:side;background:rgba(10,11,14,.75);border-right:1px solid var(--wx-border);
+    display:flex;flex-direction:column;padding:14px 10px;gap:2px}
+  .logo{display:flex;align-items:center;gap:9px;padding:6px 10px 16px;font-weight:600;font-size:14px}
+  .logo-mark{width:26px;height:26px;border-radius:8px;background:linear-gradient(135deg,#00C96E,#00794a);
+    display:grid;place-items:center;color:#04120b;font-weight:700;font-size:12px}
+  .nav-item{display:flex;align-items:center;gap:10px;padding:8px 12px;border-radius:10px;
+    color:var(--wx-t2);cursor:pointer;position:relative;border:none;background:none;width:100%;
+    font-size:13px;text-align:left;font-family:inherit}
+  .nav-item:hover{background:var(--wx-hover);color:var(--wx-t1)}
+  .nav-item.active{background:var(--wx-accentSoft);color:var(--wx-accent);font-weight:500}
+  .nav-item.active::before{content:'';position:absolute;left:-10px;top:20%;height:60%;width:2px;
+    background:var(--wx-accent);border-radius:2px}
+  .nav-item svg{flex:none}
+  .nav-new{margin-left:auto;background:var(--wx-accentSoft);color:var(--wx-accent);
+    font-size:10px;padding:1px 7px;border-radius:999px}
+  .nav-group{font-size:11px;color:var(--wx-t3);padding:12px 12px 4px}
+  .side-foot{margin-top:auto;display:flex;flex-direction:column;gap:2px}
+
+  header.topbar{grid-area:top;display:flex;align-items:center;gap:14px;padding:0 24px;
+    background:rgba(10,11,14,.6);border-bottom:1px solid var(--wx-border);backdrop-filter:blur(12px)}
+  .page-title{font-size:15px;font-weight:600}
+  .searchbox{display:flex;align-items:center;gap:8px;background:var(--wx-surface);
+    border:1px solid var(--wx-border);border-radius:999px;padding:6px 14px;color:var(--wx-t3);
+    width:300px;margin-left:auto}
+  .kbd{border:1px solid var(--wx-border);border-radius:5px;font-size:10px;padding:0 5px;
+    color:var(--wx-t3);font-family:var(--mono)}
+  .chip{display:inline-flex;align-items:center;gap:6px;padding:3px 11px;border-radius:999px;
+    font-size:11px;font-weight:500;border:1px solid var(--wx-border);color:var(--wx-t2)}
+  .chip.ok{color:var(--wx-accent);background:var(--wx-accentSoft);border-color:transparent}
+  .dot{width:6px;height:6px;border-radius:99px;display:inline-block;flex:none}
+  .pulse{animation:pulse 2s infinite cubic-bezier(.4,0,.6,1)}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.45}}
+
+  main{grid-area:main;overflow-y:auto;padding:22px 26px 48px;position:relative;z-index:1}
+  .page{display:none;max-width:1180px;margin:0 auto}
+  .page.on{display:block;animation:fadein .18s ease-out}
+  @keyframes fadein{from{opacity:0;transform:translateY(6px)}to{opacity:1}}
+
+  h1.pg{font-size:22px;font-weight:600;margin-bottom:4px}
+  .pg-sub{color:var(--wx-t3);font-size:12px;margin-bottom:20px}
+  .row{display:flex;gap:14px}.col{display:flex;flex-direction:column;gap:14px}
+  .grow{flex:1}.mt{margin-top:14px}
+
+  .metric{padding:16px 18px;display:flex;flex-direction:column;gap:2px;min-width:150px}
+  .metric .num{font-size:34px;font-weight:700;font-variant-numeric:tabular-nums;line-height:1.15}
+  .metric .lbl{font-size:11px;color:var(--wx-t3);display:flex;align-items:center;gap:7px}
+  .metric.hot .num{color:var(--wx-accent);text-shadow:0 0 18px var(--wx-glow)}
+
+  .card{padding:18px 20px}
+  .card h3{font-size:15px;font-weight:600;display:flex;align-items:center;gap:8px;margin-bottom:12px}
+  .muted{color:var(--wx-t3)}.t2{color:var(--wx-t2)}
+  .mono{font-family:var(--mono)}
+
+  .tag{border-radius:var(--wx-r-tag);padding:1px 8px;font-size:11px;font-weight:500;display:inline-flex;align-items:center;gap:4px}
+  .tag.g{background:var(--wx-accentSoft);color:var(--wx-accent)}
+  .tag.r{background:rgba(255,77,79,.14);color:var(--wx-danger)}
+  .tag.y{background:rgba(255,169,64,.14);color:var(--wx-warn)}
+  .tag.b{background:rgba(59,130,246,.14);color:var(--wx-info)}
+  .tag.p{background:rgba(168,85,247,.14);color:var(--wx-purple)}
+  .tag.gr{background:rgba(255,255,255,.07);color:var(--wx-t3)}
+
+  .btn-p,.btn-g,.btn-d{border-radius:999px;padding:7px 18px;font-size:12.5px;font-weight:600;
+    cursor:pointer;font-family:inherit;border:1px solid transparent;
+    transition:background .15s ease-out,border-color .15s ease-out,color .15s ease-out,box-shadow .15s ease-out;
+    display:inline-flex;align-items:center;gap:7px}
+  .btn-p{background:var(--wx-accent);color:#04120b}
+  .btn-p:hover{background:var(--wx-accentH);box-shadow:0 0 24px -2px var(--wx-glow)}
+  .btn-g{border-color:rgba(255,255,255,.14);color:var(--wx-t2);background:transparent}
+  .btn-g:hover{border-color:rgba(255,255,255,.28);color:var(--wx-t1);background:rgba(255,255,255,.04)}
+  .btn-d{border-color:rgba(255,77,79,.4);color:var(--wx-danger);background:transparent}
+  .btn-d:hover{background:rgba(255,77,79,.12)}
+  .btn-sm{padding:4px 13px;font-size:11.5px}
+  .icon-btn{width:30px;height:30px;border-radius:9px;display:grid;place-items:center;
+    background:none;border:none;color:var(--wx-t3);cursor:pointer}
+  .icon-btn:hover{background:var(--wx-hover);color:var(--wx-t1)}
+
+  table.tb{width:100%;border-collapse:collapse;font-size:12.5px}
+  .tb th{text-align:left;color:var(--wx-t3);font-weight:500;font-size:11px;padding:8px 10px;border-bottom:1px solid var(--wx-border)}
+  .tb td{padding:10px;border-bottom:1px solid rgba(255,255,255,.05);vertical-align:middle}
+  .tb tr:last-child td{border-bottom:none}
+  .tb tbody tr{transition:background .15s ease-out}
+  .tb tbody tr:hover{background:var(--wx-hover)}
+
+  .probe{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:10px;transition:background .15s ease-out}
+  .probe:hover{background:var(--wx-hover)}
+  .probe+.probe{margin-top:2px}
+  .probe .nm{width:170px;flex:none}
+  .probe .dt{margin-left:auto;font-size:11px;color:var(--wx-t3)}
+
+  .logbox{background:#07080A;border:1px solid var(--wx-border);border-radius:var(--wx-r-panel);
+    padding:12px 14px;font-family:var(--mono);font-size:11.5px;max-height:280px;overflow-y:auto;line-height:1.7}
+  .lg{white-space:pre-wrap;word-break:break-all}
+  .lg .tm{color:var(--wx-t3)} .lg .lv-i{color:var(--wx-info)} .lg .lv-w{color:var(--wx-warn)}
+  .lg .lv-e{color:var(--wx-danger)} .lg .src{color:var(--wx-purple)}
+  .seg{display:inline-flex;background:var(--wx-surface);border:1px solid var(--wx-border);border-radius:999px;padding:2px}
+  .seg button{border:none;background:none;color:var(--wx-t3);font-size:11px;padding:3px 12px;
+    border-radius:999px;cursor:pointer;font-family:inherit}
+  .seg button.on{background:var(--wx-accentSoft);color:var(--wx-accent)}
+
+  .steps{display:flex;align-items:center;gap:0;margin:6px 0 20px}
+  .step{display:flex;align-items:center;gap:7px;font-size:12px;color:var(--wx-t3)}
+  .step .ic{width:22px;height:22px;border-radius:99px;border:1.5px solid rgba(255,255,255,.2);
+    display:grid;place-items:center;font-size:11px}
+  .step.done{color:var(--wx-accent)} .step.done .ic{background:var(--wx-accentSoft);border-color:transparent}
+  .step.cur{color:var(--wx-t1);font-weight:600}
+  .step.cur .ic{background:var(--wx-accent);border-color:transparent;color:#04120b;box-shadow:0 0 16px -2px var(--wx-glow)}
+  .step-line{width:44px;height:1.5px;background:rgba(255,255,255,.12);margin:0 10px}
+  .step-line.done{background:var(--wx-accent)}
+
+  .failcard{border-color:rgba(255,77,79,.35)}
+  .diag{border-top:1px dashed rgba(255,77,79,.25);margin-top:14px;padding-top:14px}
+  .diag-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px 22px;font-size:12px}
+  .kv{display:flex;justify-content:space-between;padding:6px 10px;border-radius:8px;background:rgba(255,255,255,.03)}
+  .recover-actions{display:flex;gap:10px;margin-top:14px;flex-wrap:wrap}
+
+  .overlay{position:fixed;inset:0;background:rgba(0,0,0,.62);backdrop-filter:blur(4px);
+    display:none;place-items:center;z-index:50}
+  .overlay.on{display:grid}
+  .modal{width:min(560px,92vw);max-height:86vh;overflow-y:auto;padding:24px 26px}
+  .field{margin-bottom:14px}
+  .field label{display:block;font-size:12px;color:var(--wx-t2);margin-bottom:6px}
+  .input{width:100%;background:var(--wx-strong);border:1px solid var(--wx-border);border-radius:var(--wx-r-panel);
+    padding:9px 12px;color:var(--wx-t1);font-size:13px;font-family:inherit;outline:none;
+    transition:border-color .15s ease-out}
+  .input:focus{border-color:var(--wx-borderS)}
+  .hintline{font-size:11px;color:var(--wx-t3);margin-top:5px}
+  .radio-row{display:flex;gap:10px;flex-wrap:wrap}
+  .radio-pill{border:1px solid var(--wx-border);border-radius:10px;padding:8px 14px;cursor:pointer;
+    font-size:12px;color:var(--wx-t2);transition:border-color .15s ease-out,color .15s ease-out}
+  .radio-pill:hover{border-color:var(--wx-borderS)}
+  .radio-pill.on{border-color:var(--wx-accent);color:var(--wx-accent);background:var(--wx-accentSoft)}
+
+  #obOverlay .modal{width:min(680px,92vw);text-align:left}
+  .ob-hero{display:grid;place-items:center;padding:8px 0 18px;text-align:center}
+  .ob-hero .big{font-size:21px;font-weight:700;margin-top:14px}
+  .ob-steps{display:flex;justify-content:center;gap:8px;margin:18px 0 6px}
+  .ob-dot{width:26px;height:4px;border-radius:99px;background:rgba(255,255,255,.12);transition:background .15s ease-out}
+  .ob-dot.on{background:var(--wx-accent)}
+  .ob-body{min-height:190px}
+  .ob-opt{display:flex;gap:12px;align-items:flex-start;padding:14px;border:1px solid var(--wx-border);
+    border-radius:var(--wx-r-panel);cursor:pointer;margin-top:10px;transition:border-color .15s ease-out}
+  .ob-opt:hover{border-color:var(--wx-borderS)}
+  .ob-opt.on{border-color:var(--wx-accent);background:var(--wx-accentSoft)}
+
+  body.note-on [data-note]{outline:1.5px dashed rgba(59,130,246,.55);outline-offset:3px;position:relative}
+  body.note-on [data-note]::after{content:attr(data-note);position:absolute;top:-9px;right:6px;
+    background:var(--wx-info);color:#fff;font-size:10px;padding:1px 8px;border-radius:999px;z-index:5;font-weight:500}
+  .note-tip{position:fixed;left:50%;transform:translateX(-50%);bottom:18px;z-index:60;
+    background:var(--wx-strong);border:1px solid var(--wx-borderS);border-radius:999px;
+    padding:8px 20px;font-size:12px;color:var(--wx-t2);display:none;box-shadow:0 12px 40px rgba(0,0,0,.6)}
+  body.note-on .note-tip{display:block}
+
+  .spark{display:flex;align-items:flex-end;gap:2px;height:44px}
+  .spark i{width:5px;background:linear-gradient(180deg,var(--wx-accent),rgba(0,201,110,.25));
+    border-radius:2px 2px 0 0;opacity:.85}
+  .sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+  svg{stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+</style>
+</head>
+<body>
+<div class="ambience" aria-hidden="true"></div>
+
+<div class="app">
+  <aside>
+    <div class="logo"><span class="logo-mark">BX</span>版本管理台 <span class="tag gr mono" style="margin-left:4px">v1.4.2</span></div>
+    <button class="nav-item active" data-go="dashboard">
+      <svg width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg>
+      总览</button>
+    <div class="nav-group">项目</div>
+    <button class="nav-item" data-go="project">
+      <svg width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+      主产品线 <span class="dot pulse" style="background:var(--wx-warn)" aria-hidden="true"></span></button>
+    <button class="nav-item" style="padding-left:34px">
+      <svg width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9 12l2 2 4-4"/></svg>
+      web-front <span class="tag y" style="margin-left:auto">待发布</span></button>
+    <button class="nav-item" style="padding-left:34px">
+      <svg width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9 12l2 2 4-4"/></svg>
+      api-service</button>
+    <button class="nav-item" style="padding-left:34px">
+      <svg width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9 12l2 2 4-4"/></svg>
+      mp-weixin</button>
+    <div class="nav-group">工作台</div>
+    <button class="nav-item" data-go="wizard">
+      <svg width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+      发布向导</button>
+    <button class="nav-item" data-go="backup">
+      <svg width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><ellipse cx="12" cy="5.5" rx="8" ry="2.8"/><path d="M4 5.5V18c0 1.6 3.6 2.9 8 2.9s8-1.3 8-2.9V5.5M4 12c0 1.6 3.6 2.9 8 2.9s8-1.3 8-2.9"/></svg>
+      备份中心</button>
+    <button class="nav-item" data-go="ops">
+      <svg width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l8 3v6c0 5-3.4 7.8-8 9-4.6-1.2-8-4-8-9V6z"/><path d="M9 12l2 2 4-4"/></svg>
+      运维中心<span class="nav-new">新</span></button>
+    <div class="side-foot">
+      <button class="nav-item" id="replayOb">
+        <svg width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8v4l3 2"/></svg>
+        重看新手引导</button>
+      <button class="nav-item" data-go="settings">
+        <svg width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3.2"/><path d="M19 12a7 7 0 0 0-.1-1.2l2-1.5-2-3.4-2.3 1a7 7 0 0 0-2-1.2L14.2 3h-4L9.7 5.7a7 7 0 0 0-2 1.2l-2.4-1-2 3.5 2 1.5a7 7 0 0 0 0 2.3l-2 1.5 2 3.4 2.3-1a7 7 0 0 0 2 1.2l.5 2.7h4l.5-2.7a7 7 0 0 0 2-1.2l2.3 1 2-3.4-2-1.5c.1-.4.1-.8.1-1.2z"/></svg>
+        设置</button>
+    </div>
+  </aside>
+
+  <header class="topbar">
+    <span class="page-title" id="pageTitle">总览</span>
+    <span class="searchbox">
+      <svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" style="color:var(--wx-t3)"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+      搜索项目 / 仓库 / 版本…
+      <span class="kbd">Ctrl K</span></span>
+    <span class="chip ok"><span class="dot" style="background:var(--wx-accent)" aria-hidden="true"></span>服务正常 · 8899</span>
+    <label class="chip" style="cursor:pointer" title="切换注解模式：蓝色虚线标注本原型的能力增量">
+      <input type="checkbox" id="noteToggle" class="sr-only" /> 注解增量</label>
+    <button class="btn-p btn-sm">
+      <svg width="13" height="13" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>新建项目</button>
+  </header>
+
+  <main>
+    <!-- ① 总览：指标 + 服务深探针 -->
+    <section class="page on" id="page-dashboard">
+      <h1 class="pg">总览</h1>
+      <p class="pg-sub">早上好。今天有 1 个项目待发布，服务已连续运行 6 天。</p>
+      <div class="row">
+        <div class="glass glass-hover metric grow"><span class="num">3</span><span class="lbl">项目</span></div>
+        <div class="glass glass-hover metric grow"><span class="num">12</span><span class="lbl">仓库</span></div>
+        <div class="glass glass-hover metric hot grow"><span class="num">1</span><span class="lbl">待发布变更</span></div>
+        <div class="glass glass-hover metric grow"><span class="num">27</span><span class="lbl">本月发布</span></div>
+      </div>
+
+      <div class="row mt" data-note="新增：服务健康深探针卡（数据仓库/journal/凭据/远端/磁盘）">
+        <div class="glass card grow">
+          <h3><svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true" style="color:var(--wx-accent)"><path d="M3 12h4l2-6 4 12 2-6h6"/></svg>服务健康
+            <span class="tag g" style="margin-left:auto">全部通过 · 10 秒前自动巡检</span></h3>
+          <div class="probe"><span class="nm t2">数据仓库完整性</span><span class="tag g">git fsck 通过 · 索引一致</span><span class="dt mono">self-heal ready</span></div>
+          <div class="probe"><span class="nm t2">发布任务 journal</span><span class="tag g">无中断任务残留</span><span class="dt mono">scanned 09:32:07</span></div>
+          <div class="probe"><span class="nm t2">凭据文件</span><span class="tag g">可读 · 权限受限</span><span class="dt mono">0600</span></div>
+          <div class="probe"><span class="nm t2">数据仓库远端同步</span><span class="tag g">与 origin 一致</span><span class="dt mono">2 小时前</span></div>
+          <div class="probe"><span class="nm t2">磁盘占用</span><span class="tag gr">backups 2.1 GB · logs 38 MB（30 天内）</span><span class="dt mono">限额 20 GB</span></div>
+        </div>
+        <div class="glass card" style="width:330px" data-note="新增：进程级可观测（内存/Uptime/事件循环延迟/watchdog）">
+          <h3>运行时</h3>
+          <div style="display:flex;justify-content:space-between;font-size:12px" class="t2">
+            <span>进程内存</span><b class="mono" style="color:var(--wx-t1)">142 MB</b></div>
+          <div class="spark mt" aria-hidden="true">
+            <i style="height:38%"></i><i style="height:42%"></i><i style="height:40%"></i><i style="height:46%"></i><i style="height:52%"></i><i style="height:49%"></i><i style="height:55%"></i><i style="height:58%"></i><i style="height:54%"></i><i style="height:60%"></i><i style="height:57%"></i><i style="height:63%"></i><i style="height:66%"></i><i style="height:62%"></i><i style="height:68%"></i><i style="height:71%"></i><i style="height:67%"></i><i style="height:72%"></i><i style="height:74%"></i><i style="height:78%"></i>
+          </div>
+          <div class="probe mt"><span class="nm t2">Uptime</span><b class="mono">6d 14h</b></div>
+          <div class="probe"><span class="nm t2">事件循环延迟 p95</span><b class="mono">3.2 ms</b></div>
+          <div class="probe"><span class="nm t2">Node</span><b class="mono">v22.11.0（满足 ≥20）</b></div>
+          <div class="probe"><span class="nm t2">崩溃自动拉起</span><span class="tag g">watchdog 已启用</span></div>
+        </div>
+      </div>
+
+      <div class="glass card mt">
+        <h3>项目动态</h3>
+        <table class="tb">
+          <thead><tr><th>仓库</th><th>状态</th><th>最新构建</th><th>上次发布</th><th></th></tr></thead>
+          <tbody>
+            <tr><td><b>web-front</b> <span class="mono muted">V2608251030</span></td><td><span class="tag y">3 个提交未发布</span></td><td class="mono t2">build/V2608241530 ✓</td><td class="mono t2">v1.3.0 · 昨天</td><td><a href="#wizard" data-go="wizard">去发布 →</a></td></tr>
+            <tr><td><b>api-service</b> <span class="mono muted">v2.1.0</span></td><td><span class="tag g">已同步</span></td><td class="mono t2">build/V2608230900 ✓</td><td class="mono t2">v2.1.0 · 3 天前</td><td><a href="#project" data-go="project">详情 →</a></td></tr>
+            <tr><td><b>mp-weixin</b> <span class="mono muted">V2608211834</span></td><td><span class="tag b">分支对齐巡检中</span></td><td class="mono t2">—</td><td class="mono t2">V2608211834 · 4 天前</td><td><a href="#project" data-go="project">详情 →</a></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ② 项目页 -->
+    <section class="page" id="page-project">
+      <h1 class="pg">主产品线 <span class="tag y" style="vertical-align:middle">1 项待发布</span></h1>
+      <p class="pg-sub">项目版本 <b class="mono" style="color:var(--wx-t1)">v1.3.0 → 建议 v1.4.0</b>（feat 变更触发 minor）· 双轨日志已确认</p>
+      <div class="col">
+        <div class="glass card" data-note="改进：卡片为真链接语义（中键新开）；文本全部可选中复制">
+          <h3>web-front <span class="tag gr mono">G:\code\web-front · main</span>
+            <a class="btn-g btn-sm" href="#wizard" style="margin-left:auto" data-go="wizard">进入发布 →</a></h3>
+          <div class="diag-grid">
+            <div class="kv"><span class="t2">检测到的变更</span><b>3 提交 · 2 文件 dirty</b></div>
+            <div class="kv"><span class="t2">版本方案</span><b class="mono">X.Y.Z + build/VYYMMDDHHmm</b></div>
+            <div class="kv"><span class="t2">建议版本</span><b class="mono" style="color:var(--wx-accent)">v1.4.0 / V2608251030</b></div>
+            <div class="kv"><span class="t2">构建流水线</span><b>pnpm build · 42s（上次）</b></div>
+            <div class="kv"><span class="t2">发布后动作</span><b>tag ×2 · 备份 · version.json · push</b></div>
+            <div class="kv"><span class="t2">对外分发</span><b>GitHub Release ✓ Gitee Release ✓ Webhook ✓</b></div>
+          </div>
+        </div>
+        <div class="glass card">
+          <h3>最近发布记录</h3>
+          <table class="tb">
+            <thead><tr><th>项目版本</th><th>web-front</th><th>轨道</th><th>产物</th><th>审计</th></tr></thead>
+            <tbody>
+              <tr><td class="mono">v1.3.0</td><td class="mono">V2608241530</td><td><span class="tag g">internal+external 已归档</span></td><td><span class="tag b">源码备份 ✓ 产物 3 个</span></td><td><a href="#backup" data-go="backup">备份 →</a></td></tr>
+              <tr><td class="mono">v1.2.1</td><td class="mono">V2608221112</td><td><span class="tag g">internal+external 已归档</span></td><td><span class="tag b">源码备份 ✓ 产物 3 个</span></td><td><a href="#backup" data-go="backup">备份 →</a></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ③ 发布向导 · 失败恢复（核心新场景） -->
+    <section class="page" id="page-wizard">
+      <h1 class="pg">发布向导 · api-service</h1>
+      <p class="pg-sub">快速通道：复用上次配置（R28）· 门禁不可绕过</p>
+      <div class="steps" aria-label="发布进度">
+        <span class="step done"><span class="ic">✓</span>检测</span><span class="step-line done"></span>
+        <span class="step done"><span class="ic">✓</span>版本</span><span class="step-line done"></span>
+        <span class="step done"><span class="ic">✓</span>日志</span><span class="step-line done"></span>
+        <span class="step done"><span class="ic">✓</span>预演</span><span class="step-line done"></span>
+        <span class="step cur"><span class="ic">5</span>执行</span><span class="step-line"></span>
+        <span class="step"><span class="ic">6</span>完成</span>
+      </div>
+
+      <div class="glass card failcard" data-note="核心新增：失败不再只是红字——一键结构化诊断 + 三条恢复出路 + 诊断包导出">
+        <h3><span class="dot" style="background:var(--wx-danger)" aria-hidden="true"></span>执行中断 · 1/3 仓库失败
+          <span class="tag r" style="margin-left:auto">TAG_CONFLICT</span></h3>
+        <div class="logbox mt" style="max-height:150px">
+<div class="lg"><span class="tm">[10:31:02.114]</span> <span class="src">engine</span> <span class="lv-i">repo-start</span>   api-service · mode=pipeline tag=v2.2.0+build/V2608251028</div>
+<div class="lg"><span class="tm">[10:31:05.870]</span> <span class="src">engine</span> <span class="lv-i">step ok</span>       install -&gt; pre-build -&gt; build (41.2s)</div>
+<div class="lg"><span class="tm">[10:31:06.402]</span> <span class="src">engine</span> <span class="lv-e">repo-error</span>  api-service · TAG_CONFLICT: 标签 v2.2.0 已存在于其他 commit（a3f2e91 ≠ 当前 f7c01bb）</div>
+<div class="lg"><span class="tm">[10:31:06.404]</span> <span class="src">engine</span> <span class="lv-w">隔离继续</span>     其余仓库不受影响 · failedRepos=[api-service]</div>
+<div class="lg"><span class="tm">[10:31:07.900]</span> <span class="src">server</span>  <span class="lv-i">done</span>         releaseId=r-20260825-1031 · failedRepos=1 · journal 可续跑</div>
+        </div>
+
+        <div class="diag" id="diagPanel" hidden>
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+            <b style="font-size:13px">结构化诊断</b><span class="tag g">doctor 内核 · 只读</span>
+            <span class="muted" style="font-size:11px;margin-left:auto">诊断于 10:32:14</span></div>
+          <div class="diag-grid">
+            <div class="kv"><span class="t2">当前分支</span><b class="mono">release/v2.2.0</b></div>
+            <div class="kv"><span class="t2">HEAD</span><b class="mono">f7c01bb</b></div>
+            <div class="kv"><span class="t2">工作区</span><b>干净（0 dirty）✓</b></div>
+            <div class="kv"><span class="t2">领先 origin</span><b class="mono">ahead 1</b></div>
+            <div class="kv"><span class="t2">标签 v2.2.0 指向</span><b class="mono" style="color:var(--wx-warn)">a3f2e91（≠ HEAD）</b></div>
+            <div class="kv"><span class="t2">该标签来源</span><b>8 月 19 日手动创建 · 未走发布</b></div>
+            <div class="kv"><span class="t2">本次已落库</span><b>tag build/V2608251028 ✓ · 备份 ✓</b></div>
+            <div class="kv"><span class="t2">journal 状态</span><b class="mono">interrupted → 可接管续跑</b></div>
+          </div>
+          <p class="hintline" style="margin-top:10px">
+            结论：远端存在一个<b style="color:var(--wx-warn)">手工打的同名里程碑标签 v2.2.0</b>，指向旧提交。建议改用 v2.2.1，
+            或将手工标签废弃后重发（写入废弃审计 R24）。</p>
+        </div>
+
+        <div class="recover-actions">
+          <button class="btn-g btn-sm" id="btnDiag">
+            <svg width="13" height="13" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5M8.5 11h5"/></svg>
+            <span id="btnDiagTxt">结构化诊断</span></button>
+          <button class="btn-p btn-sm" data-note="出路①：换版本号幂等重试，仅补跑失败仓库，成功仓库不重复打标">
+            改用 v2.2.1 重试失败仓库</button>
+          <button class="btn-g btn-sm" data-note="出路②：接管 interrupted 任务原样续跑（既有能力的 UI 化）">
+            接管并续跑</button>
+          <button class="btn-d btn-sm" data-note="出路③：安全回滚本次副作用（标签/记录），写废弃审计 R24">
+            回滚本次副作用…</button>
+          <button class="btn-g btn-sm" style="margin-left:auto">导出诊断包（.zip）</button>
+        </div>
+      </div>
+
+      <div class="glass card mt">
+        <h3>这条链路为什么可信</h3>
+        <div class="diag-grid">
+          <div class="kv"><span class="t2">引擎侧结构化日志</span><span class="tag g">每步 git 起止均落 logs/（新）</span></div>
+          <div class="kv"><span class="t2">失败隔离</span><span class="tag g">单仓失败不阻塞他仓</span></div>
+          <div class="kv"><span class="t2">幂等保障</span><span class="tag g">同 commit 同名 tag 跳过 · 版本只前进一次</span></div>
+          <div class="kv"><span class="t2">断点续跑</span><span class="tag g">journal 锁存 plan · 中断可接管</span></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ④ 备份中心：恢复一等化 -->
+    <section class="page" id="page-backup">
+      <h1 class="pg">备份中心</h1>
+      <p class="pg-sub">源码 bundle/archive + 构建产物归档 · sha256 清单校验 · 大文件存本地 backups/ 不进数据仓库</p>
+      <div class="glass card">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
+          <h3 style="margin:0">备份列表 <span class="tag gr">共 47 份 · 2.1 GB</span></h3>
+          <div style="margin-left:auto;display:flex;gap:8px;align-items:center">
+            <span class="seg" role="group" aria-label="筛选类型">
+              <button class="on">全部</button><button>源码</button><button>产物</button>
+            </span>
+            <button class="btn-g btn-sm">清理策略：保留 90 天 / 20 GB</button>
+          </div>
+        </div>
+        <table class="tb">
+          <thead><tr><th>时间</th><th>类型</th><th>关联发布</th><th>大小</th><th>清单校验</th><th style="text-align:right">操作</th></tr></thead>
+          <tbody>
+            <tr>
+              <td class="mono">2026-08-25 10:31</td><td><span class="tag b">源码 archive</span></td>
+              <td class="mono">r-20260825-1031 · v2.2.0 尝试</td><td class="mono t2">184 MB</td>
+              <td><span class="tag g">sha256 ✓</span></td>
+              <td style="text-align:right;white-space:nowrap">
+                <button class="btn-p btn-sm" onclick="openRestore()">恢复…</button>
+                <button class="btn-g btn-sm">下载</button><button class="icon-btn" aria-label="删除备份"><svg width="14" height="14" viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3m-8 0l1 13h8l1-13"/></svg></button>
+              </td></tr>
+            <tr>
+              <td class="mono">2026-08-24 15:31</td><td><span class="tag b">产物 tar.gz ×3</span></td>
+              <td class="mono">v1.3.0 / V2608241530</td><td class="mono t2">36 MB</td>
+              <td><span class="tag g">sha256 ✓</span></td>
+              <td style="text-align:right;white-space:nowrap">
+                <button class="btn-p btn-sm" onclick="openRestore()" data-note="恢复升级为一等操作（M7）：白名单目录/冲突策略/输入版本号二次确认">恢复…</button>
+                <button class="btn-g btn-sm">下载</button><button class="icon-btn" aria-label="删除备份"><svg width="14" height="14" viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3m-8 0l1 13h8l1-13"/></svg></button>
+              </td></tr>
+            <tr>
+              <td class="mono">2026-08-22 11:13</td><td><span class="tag p">bundle</span></td>
+              <td class="mono">v1.2.1 / V2608221112</td><td class="mono t2">97 MB</td>
+              <td><span class="tag y">未校验 · 点击核验</span></td>
+              <td style="text-align:right;white-space:nowrap">
+                <button class="btn-p btn-sm" onclick="openRestore()">恢复…</button>
+                <button class="btn-g btn-sm">下载</button><button class="icon-btn" aria-label="删除备份"><svg width="14" height="14" viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3m-8 0l1 13h8l1-13"/></svg></button>
+              </td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+    <!-- ⑤ 运维中心（全新页面） -->
+    <section class="page" id="page-ops">
+      <h1 class="pg">运维中心 <span class="tag g" style="vertical-align:middle">新</span></h1>
+      <p class="pg-sub">把散落在命令行的 doctor / 日志 / 迁移能力产品化，让「能跑」变成「可运营」</p>
+      <div class="row">
+        <div class="glass card grow" data-note="doctor.mjs 从 CLI 脚本升级为产品能力，支持每日自动巡检">
+          <h3>一致性体检（doctor）<span class="tag g" style="margin-left:auto">上次：今天 09:32 · 0 异常</span></h3>
+          <p class="t2" style="font-size:12px">核对 app.json 的 lastPublishCommit 与各仓真实 git 状态，专治「全部显示最新 / 提交流为空」。</p>
+          <div class="probe mt"><span class="nm t2">web-front</span><span class="tag g">base 可达 · ahead 3 符合预期</span></div>
+          <div class="probe"><span class="nm t2">api-service</span><span class="tag r">标签 v2.2.0 指向非 HEAD（见向导诊断）</span></div>
+          <div class="probe"><span class="nm t2">mp-weixin</span><span class="tag y">存在其他分支 feat-x（仅提示）</span></div>
+          <div class="recover-actions" style="margin-top:12px">
+            <button class="btn-p btn-sm">立即全量体检</button><button class="btn-g btn-sm">导出报告</button>
+            <label class="chip" style="margin-left:auto;cursor:pointer"><input type="checkbox" checked class="sr-only" /><span class="dot" style="background:var(--wx-accent)" aria-hidden="true"></span>每日自动巡检</label>
+          </div>
+        </div>
+        <div class="glass card" style="width:360px" data-note="schema 迁移注册表：迁移前强制快照、失败可见可重试、逐步执行">
+          <h3>数据迁移</h3>
+          <div class="kv mt"><span class="t2">当前 schemaVersion</span><b class="mono">v2（最新）</b></div>
+          <div class="kv mt"><span class="t2">迁移历史</span><b>v1→v2 projects 拆分 · 成功</b></div>
+          <div class="kv mt"><span class="t2">迁移前自动快照</span><b class="tag g">app.json.bak-mig ✓</b></div>
+          <p class="hintline mt">未来 schema 升级将在此列出待执行迁移：逐步执行、失败即停、可回滚。</p>
+        </div>
+      </div>
+
+      <div class="glass card mt">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:10px">
+          <h3 style="margin:0">引擎日志流</h3>
+          <span class="seg" role="group" aria-label="日志级别过滤" id="logFilter">
+            <button class="on" data-lv="all">全部</button><button data-lv="info">info</button>
+            <button data-lv="warn">warn</button><button data-lv="error">error</button>
+          </span>
+          <span class="muted" style="font-size:11px;margin-left:auto">logs/server-2026-08-25.log · 38 MB / 30 天滚动保留（新）</span>
+        </div>
+        <div class="logbox" id="logView" data-note="引擎侧结构化日志全覆盖（git.spawn/engine.step/queue/webhook），级别过滤+滚动清理">
+<div class="lg" data-lv="info"><span class="tm">[10:31:02.101]</span> <span class="lv-i">INFO </span> <span class="src">git.spawn</span>    cmd="status --porcelain=v1" repo=api-service dur=212ms</div>
+<div class="lg" data-lv="info"><span class="tm">[10:31:05.870]</span> <span class="lv-i">INFO </span> <span class="src">engine.step</span>  api-service build 完成 dur=41.2s exit=0</div>
+<div class="lg" data-lv="warn"><span class="tm">[10:31:06.402]</span> <span class="lv-e">ERROR</span> <span class="src">engine.tag</span>   api-service TAG_CONFLICT v2.2.0@a3f2e91≠f7c01bb</div>
+<div class="lg" data-lv="info"><span class="tm">[10:31:07.900]</span> <span class="lv-i">INFO </span> <span class="src">queue</span>      release r-20260825-1031 done failedRepos=1</div>
+<div class="lg" data-lv="info"><span class="tm">[10:31:08.112]</span> <span class="lv-i">INFO </span> <span class="src">webhook</span>     飞书群通知投递成功 dur=380ms</div>
+<div class="lg" data-lv="warn"><span class="tm">[09:58:41.006]</span> <span class="lv-w">WARN </span> <span class="src">poll</span>        mp-weixin 轮询超时，下轮重试（第 2 次）</div>
+<div class="lg" data-lv="error"><span class="tm">[09:12:19.338]</span> <span class="lv-e">ERROR</span> <span class="src">sync</span>        数据仓库 pull --ff-only 失败：non-fast-forward（已告警不阻断）</div>
+        </div>
+      </div>
+
+      <div class="glass card mt" data-note="自举：bxverse 自身版本工程化（changesets），自身更新日志与发布记录同构复用">
+        <h3>关于 bxverse
+          <span class="mono" style="color:var(--wx-accent);margin-left:6px">v1.4.2</span>
+          <span class="tag g" style="margin-left:8px">已是最新</span>
+          <button class="btn-g btn-sm" style="margin-left:auto">检查更新</button>
+          <button class="btn-g btn-sm">查看自身更新日志</button></h3>
+        <div class="diag-grid">
+          <div class="kv"><span class="t2">安装方式</span><b>pnpm 全局 · bx-manager start</b></div>
+          <div class="kv"><span class="t2">数据目录</span><b class="mono" title="可在资源管理器打开" style="cursor:pointer;text-decoration:underline dotted">C:\Users\me\.bxverse</b></div>
+          <div class="kv"><span class="t2">watchdog 守护</span><b class="tag g">崩溃 3s 后自动拉起（新）</b></div>
+          <div class="kv"><span class="t2">卸载清理指引</span><b><a href="#" onclick="return false">导出数据 / 安全移除步骤 →</a></b></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ⑥ 设置（节选示意） -->
+    <section class="page" id="page-settings">
+      <h1 class="pg">设置</h1>
+      <p class="pg-sub">此处仅示意与本愿景相关的增量项</p>
+      <div class="glass card">
+        <h3>安全</h3>
+        <div class="probe"><span class="nm t2">访问令牌</span><b class="mono">bxk_••••••••（轮换于 12 天前）</b>
+          <button class="btn-g btn-sm" style="margin-left:auto">轮换</button></div>
+        <div class="probe"><span class="nm t2">引导期 token 明文下发</span>
+          <span class="tag g">仅在未初始化时允许（新）</span><span class="dt">初始化后自动脱敏</span></div>
+        <div class="probe"><span class="nm t2">AI 接口地址限制</span>
+          <label class="chip" style="margin-left:auto;cursor:pointer"><input type="checkbox" checked class="sr-only" /><span class="dot" style="background:var(--wx-accent)" aria-hidden="true"></span>禁止内网地址段（新）</label></div>
+      </div>
+      <div class="glass card mt">
+        <h3>无障碍与文本</h3>
+        <div class="probe"><span class="nm t2">文本选择</span><b>全局可选中文本，仅按钮禁选（新）</b></div>
+        <div class="probe"><span class="nm t2">卡片导航</span><b>真实链接：支持中键 / 新标签打开（新）</b></div>
+        <div class="probe"><span class="nm t2">SSE 断线重连</span><b>指数退避 1s→30s（新）</b></div>
+      </div>
+    </section>
+</main>
+</div>
+
+<!-- 恢复对话框 -->
+<div class="overlay" id="restoreOverlay" role="dialog" aria-modal="true" aria-labelledby="rsTitle">
+  <div class="glass modal">
+    <h3 id="rsTitle" style="font-size:16px">恢复备份
+      <span class="tag b" style="margin-left:8px">产物 tar.gz ×3</span>
+      <span class="mono muted" style="font-size:11px;margin-left:8px">v1.3.0 · 2026-08-24 15:31</span></h3>
+    <p class="t2" style="font-size:12px;margin:8px 0 16px">恢复前自动校验 sha256 清单；目标目录必须位于 BX_HOME 白名单内。</p>
+    <div class="field">
+      <label for="rsTarget">恢复到目录</label>
+      <input class="input mono" id="rsTarget" value="G:\restore\v1.3.0\" autocomplete="off" spellcheck="false" />
+      <p class="hintline">在 BX_HOME 允许范围内 · 目录不存在将自动创建 · 不触碰业务仓库（零侵入）</p>
+    </div>
+    <div class="field">
+      <label>同名文件冲突策略</label>
+      <div class="radio-row" role="radiogroup" aria-label="冲突策略">
+        <span class="radio-pill on">跳过已存在</span><span class="radio-pill">覆盖</span><span class="radio-pill">中止</span>
+      </div>
+    </div>
+    <div class="field">
+      <label for="rsConfirm">二次确认：输入要恢复的版本号 <b class="mono">v1.3.0</b> 以解锁恢复按钮</label>
+      <input class="input mono" id="rsConfirm" placeholder="v1.3.0…" autocomplete="off" spellcheck="false"
+             oninput="document.getElementById('rsGo').disabled=this.value.trim()!=='v1.3.0'" />
+    </div>
+    <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:18px">
+      <button class="btn-g" onclick="closeRestore()">取消</button>
+      <button class="btn-p" id="rsGo" disabled onclick="closeRestore();alert('原型演示：开始流式解包恢复（进度经 SSE 推送）')">确认恢复</button>
+    </div>
+  </div>
+</div>
+
+<!-- 首次引导 Onboarding（M5-08） -->
+<div class="overlay on" id="obOverlay" role="dialog" aria-modal="true" aria-labelledby="obTitle">
+  <div class="glass modal">
+    <div class="ob-hero">
+      <span class="logo-mark" style="width:52px;height:52px;border-radius:15px;font-size:20px">BX</span>
+      <div class="big" id="obTitle">欢迎使用 bxverse 版本管理台</div>
+      <p class="muted" style="margin-top:6px">四步完成初始化，全程约一分钟。</p>
+    </div>
+    <div class="ob-steps" aria-hidden="true">
+      <span class="ob-dot on" data-ob="0"></span><span class="ob-dot" data-ob="1"></span>
+      <span class="ob-dot" data-ob="2"></span><span class="ob-dot" data-ob="3"></span>
+    </div>
+    <div class="ob-body" id="obBody"></div>
+    <div style="display:flex;gap:10px;margin-top:16px">
+      <button class="btn-g" onclick="closeOb()" style="margin-right:auto">跳过引导</button>
+      <button class="btn-g" id="obPrev" hidden onclick="obStep--;renderOb()">上一步</button>
+      <button class="btn-p" id="obNext" onclick="obNext()">下一步</button>
+    </div>
+  </div>
+</div>
+
+<div class="note-tip">注解模式已开启：<span style="color:var(--wx-info)">蓝色虚线</span> = 本愿景相对现状的能力增量</div>
+
+<script>
+/* 视图路由 */
+var titles={dashboard:'总览',project:'主产品线',wizard:'发布向导 · api-service',backup:'备份中心',ops:'运维中心',settings:'设置'};
+function go(k){
+  document.querySelectorAll('.page').forEach(function(p){p.classList.remove('on')});
+  var el=document.getElementById('page-'+k); if(el)el.classList.add('on');
+  document.querySelectorAll('.nav-item[data-go]').forEach(function(b){b.classList.toggle('active',b.dataset.go===k)});
+  document.getElementById('pageTitle').textContent=titles[k]||'';
+  location.hash=k; window.scrollTo({top:0});
+}
+document.addEventListener('click',function(e){
+  var t=e.target.closest('[data-go]'); if(t){e.preventDefault();go(t.dataset.go)}
+});
+var h=location.hash.slice(1); if(h&&titles[h])go(h);
+
+/* 注解模式 */
+document.getElementById('noteToggle').addEventListener('change',function(e){
+  document.body.classList.toggle('note-on',e.target.checked);
+});
+
+/* 诊断展开 */
+document.getElementById('btnDiag').addEventListener('click',function(){
+  var p=document.getElementById('diagPanel'),t=document.getElementById('btnDiagTxt');
+  p.hidden=!p.hidden; t.textContent=p.hidden?'结构化诊断':'收起诊断';
+});
+
+/* 日志过滤 */
+document.querySelectorAll('#logFilter button').forEach(function(b){b.addEventListener('click',function(){
+  document.querySelectorAll('#logFilter button').forEach(function(x){x.classList.remove('on')});
+  b.classList.add('on'); var lv=b.dataset.lv;
+  document.querySelectorAll('#logView .lg').forEach(function(l){l.style.display=(lv==='all'||l.dataset.lv===lv)?'':'none'});
+})});
+
+/* 恢复对话框 */
+function openRestore(){document.getElementById('restoreOverlay').classList.add('on')}
+function closeRestore(){document.getElementById('restoreOverlay').classList.remove('on')}
+document.querySelectorAll('.radio-pill').forEach(function(p){p.addEventListener('click',function(){
+  p.parentElement.querySelectorAll('.radio-pill').forEach(function(x){x.classList.remove('on')});p.classList.add('on');
+})});
+document.getElementById('restoreOverlay').addEventListener('click',function(e){if(e.target===e.currentTarget)closeRestore()});
+
+/* Onboarding 四步：欢迎 -> 访问令牌 -> 建项目/接仓库 -> 首次发布/演示模式 */
+var obStep=0;
+var obPages=[
+ {t:'欢迎使用 bxverse 版本管理台',
+  d:'<p class="t2">bxverse 帮你把多个项目的<b>版本号与更新日志</b>统一管理：<br/>检测变更 → 自动建议版本 → 双轨日志确认 → 预演 → 发布。</p>'+
+    '<p class="t2" style="margin-top:10px">所有数据保存在本机 <b class="mono">~/.bxverse</b>，发布历史即审计档案。</p>'},
+ {t:'第一步 · 保护你的服务',
+  d:'<p class="t2">服务启动时已生成随机访问令牌。你可以：</p>'+
+    '<div class="ob-opt"><svg width="18" height="18" viewBox="0 0 24 24" style="flex:none;margin-top:2px;color:var(--wx-accent)"><rect x="4" y="10" width="16" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg><div><b>复制访问令牌</b><p class="muted" style="font-size:11.5px">粘贴到浏览器提示框，仅本机有效</p></div></div>'+
+    '<div class="ob-opt on"><svg width="18" height="18" viewBox="0 0 24 24" style="flex:none;margin-top:2px;color:var(--wx-accent)"><path d="M12 3l8 3v6c0 5-3.4 7.8-8 9-4.6-1.2-8-4-8-9V6z"/><path d="M9 12l2 2 4-4"/></svg><div><b>信任本机，免令牌使用</b><p class="muted" style="font-size:11.5px">仅监听 127.0.0.1 时推荐；随时可在设置中收紧</p></div></div>'},
+ {t:'第二步 · 创建项目并接入仓库',
+  d:'<p class="t2">项目 = 一组相关仓库的集合（例如「主产品线」下挂前端 / 后端 / 小程序）。</p>'+
+    '<div class="ob-opt"><div style="flex:none;width:26px;height:26px;border-radius:8px;background:var(--wx-accentSoft);color:var(--wx-accent);display:grid;place-items:center;font-weight:700">1</div><div><b>新建项目「主产品线」</b><p class="muted" style="font-size:11.5px">设置项目级版本方案：X.Y.Z 或 vX.Y.Z.YYMMDDHH</p></div></div>'+
+    '<div class="ob-opt"><div style="flex:none;width:26px;height:26px;border-radius:8px;background:var(--wx-accentSoft);color:var(--wx-accent);display:grid;place-items:center;font-weight:700">2</div><div><b>添加仓库：本地路径或 git 地址</b><p class="muted" style="font-size:11.5px">支持克隆白名单协议 https / ssh / git@；bxverse 永不改动你的提交历史</p></div></div>'},
+ {t:'第三步 · 完成第一次发布',
+  d:'<p class="t2">向导会自动检测变更、建议版本号、生成双轨日志草稿——你只需逐轨确认。</p>'+
+    '<div class="ob-opt"><svg width="18" height="18" viewBox="0 0 24 24" style="flex:none;margin-top:2px;color:var(--wx-accent)"><path d="M13 2L4 14h6l-1 8 9-12h-6z"/></svg><div><b>用演示数据体验完整流程</b><p class="muted" style="font-size:11.5px">一键创建演示项目与 3 个示例仓库，随时可删</p></div></div>'+
+    '<div class="ob-opt"><svg width="18" height="18" viewBox="0 0 24 24" style="flex:none;margin-top:2px;color:var(--wx-t3)"><path d="M5 12h14M13 6l6 6-6 6"/></svg><div><b>直接接入真实仓库开始使用</b><p class="muted" style="font-size:11.5px">首次发布前可先跑 dry-run 预演，不产生任何副作用</p></div></div>'}
+];
+function renderOb(){
+  document.getElementById('obBody').innerHTML='<h3 style="font-size:15px;margin-bottom:8px">'+obPages[obStep].t+'</h3>'+obPages[obStep].d;
+  document.querySelectorAll('.ob-dot').forEach(function(d,i){d.classList.toggle('on',i<=obStep)});
+  document.getElementById('obPrev').hidden=obStep===0;
+  document.getElementById('obNext').textContent=obStep===3?'完成':'下一步';
+}
+function obNext(){ if(obStep>=3){closeOb();return} obStep++; renderOb(); }
+function closeOb(){document.getElementById('obOverlay').classList.remove('on')}
+document.getElementById('replayOb').addEventListener('click',function(){obStep=0;renderOb();document.getElementById('obOverlay').classList.add('on')});
+renderOb();
+</script>
+</body>
+</html>

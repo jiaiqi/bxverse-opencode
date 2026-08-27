@@ -105,6 +105,16 @@ preflight → version-sync(写 X.Y.Z 核心 + 受控提交) → install(frozen) 
 - `repoVersionScheme: 'hybrid' | 'timestamp'` 保留，`repoVersionFormat` 存在时优先
 - 历史 `v` 前缀数据双向可读
 
+### 7.1 无工程化（纯静态）仓库适配（2026-08-25 补充裁决）
+
+原生 html/js/jquery 等**无 package.json** 的仓库是一等公民：
+
+- `repo-policy.detectRepoKind()`：有 package.json → `nodejs`，否则 → `static`；`RepoStatus.repoKind` 于 `collectChanges` 实时计算透出（不落盘，随仓库演进自动翻转）
+- 版本：`versionSource=packageJson` 时 plan 阶段降级 derived + warning（既有语义）；默认 derived 本来就适配
+- install：自动探测只看锁文件，静态仓库天然跳过；构建同理（仅在显式配置命令时执行）
+- 护栏：静态仓库**显式配置了** install/pre-build/build 命令时，plan 阶段追加 warning（命令仍会执行，提醒可留空）
+- UI：RepoDetail 流水线区对 static 仓库展示降级提示横幅（派生版本、产物备份可直接把源码目录设为 artifactDir）
+
 ---
 
 ## 8. 实施拆解

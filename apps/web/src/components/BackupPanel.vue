@@ -6,7 +6,6 @@ import { api } from '../api'
 import EmptyState from './EmptyState.vue'
 import { formatDateTime, formatSize } from '../utils/format'
 import { useBackup } from '../composables/useBackup'
-import { useFsAccess } from '../composables/useFsAccess'
 import { h } from 'vue'
 import { useProjectsStore } from '../stores/projects'
 import { useDialog, useMessage } from 'naive-ui'
@@ -18,7 +17,6 @@ const projectsStore = useProjectsStore()
 const project = computed(() => projectsStore.byId(pid.value))
 const dialog = useDialog()
 const message = useMessage()
-const fsAccess = useFsAccess()
 
 const {
   backupsByRepo,
@@ -220,12 +218,39 @@ const compareRows = computed(() =>
   })),
 )
 
-// 恢复
-const restoreState = reactive({ open: false, kind: '' as string, targetDir: '', loading: false, ref: null as RepoBackupRef | null })
+// 恢复（M7 收口：默认路径/白名单提示/冲突策略/版本号二次确认/恢复审计）
+const restoreState = reactive({
+  open: false,
+  kind: '' as string,
+  targetDir: '',
+  overwrite: false,
+  confirm: '',
+  loading: false,
+  ref: null as RepoBackupRef | null,
+})
+const bxHome = ref('')
+onMounted(async () => {
+  try {
+    const h = await api.health()
+    bxHome.value = h.home ?? ''
+  } catch {
+    // 获取失败时留空，用户手动输入绝对路径
+  }
+})
+/** 版本号二次确认通过才解锁恢复按钮 */
+const restoreConfirmed = computed(
+  () => !!restoreState.ref && restoreState.confirm.trim() === restoreState.ref.version,
+)
 function openRestore(ref: RepoBackupRef) {
   restoreState.ref = ref
   restoreState.kind = ref.items.find(i => ['source-bundle', 'source-archive', 'artifact'].includes(i.kind))?.kind ?? ''
-  restoreState.targetDir = ''
+  // 默认恢复到 BX_HOME/restores/{version}-{repoName}（服务端白名单要求位于 BX_HOME 内）
+  const safe = (s: string) => s.replace(/[\\/:*?"<>|]/g, '-')
+  restoreState.targetDir = bxHome.value
+    ? `${bxHome.value}\\restores\\${safe(ref.version)}-${safe(ref.repoName)}`
+    : ''
+  restoreState.overwrite = false
+  restoreState.confirm = ''
   restoreState.open = true
 }
 async function doRestore() {
@@ -233,27 +258,31 @@ async function doRestore() {
     message.warning('请选择类型并填写目标绝对路径')
     return
   }
+  if (!restoreConfirmed.value) {
+    message.warning(`请输入版本号 ${restoreState.ref.version} 以确认恢复`)
+    return
+  }
   restoreState.loading = true
   try {
-    await api.backupRestore({ releaseId: restoreState.ref.releaseId, repoId: restoreState.ref.repoId, kind: restoreState.kind, targetDir: restoreState.targetDir.trim() })
-    message.success(`已恢复到 ${restoreState.targetDir.trim()}`)
+    const r = await api.backupRestore({
+      releaseId: restoreState.ref.releaseId,
+      repoId: restoreState.ref.repoId,
+      kind: restoreState.kind,
+      targetDir: restoreState.targetDir.trim(),
+      overwrite: restoreState.overwrite,
+    })
+    message.success(`已恢复到 ${restoreState.targetDir.trim()}（第 ${r.restores} 次恢复，已入审计）`)
     restoreState.open = false
+    await reload()
   } catch (e) {
     message.error((e as Error).message)
   } finally {
     restoreState.loading = false
   }
 }
-async function pickDirectory() {
-  const handle = await fsAccess.pickDirectory()
-  if (handle) {
-    // 浏览器无法直接拿到绝对路径，保持预填留空，由用户手动输入绝对路径
-    if (!restoreState.targetDir) {
-      message.info('请选择后手动输入目标绝对路径')
-    }
-  } else {
-    // 不支持或取消时不做预填，用户手动输入
-  }
+function pickDirectory() {
+  // 浏览器无法拿到目录绝对路径（File System Access 只给句柄），保留为提示性入口
+  message.info('浏览器无法读取目录绝对路径，请手动输入（须位于 BX_HOME 白名单内）')
 }
 </script>
 
@@ -334,6 +363,9 @@ async function pickDirectory() {
                 </div>
                 <div class="flex items-center gap-2 mt-1 flex-wrap">
                   <span v-for="item in r.items" :key="item.kind" class="chip">{{ KIND_LABEL[item.kind] ?? item.kind }} · {{ formatSize(item.size) }}</span>
+                  <span v-if="r.restores?.length" class="chip chip-brand" :title="`最近恢复：${formatDateTime(r.restores[r.restores.length - 1].at)} → ${r.restores[r.restores.length - 1].targetDir}`">
+                    已恢复 ×{{ r.restores.length }}
+                  </span>
                 </div>
               </div>
               <div class="flex items-center gap-1 shrink-0">
@@ -368,10 +400,13 @@ async function pickDirectory() {
       </template>
     </NModal>
 
-    <!-- 恢复 -->
-    <NModal v-model:show="restoreState.open" preset="card" title="恢复备份到本地目录" style="width: min(90vw, 520px)" :bordered="false">
+    <!-- 恢复（M7 收口） -->
+    <NModal v-model:show="restoreState.open" preset="card" title="恢复备份到本地目录" style="width: min(90vw, 560px)" :bordered="false" aria-label="恢复备份">
       <div class="space-y-3">
-        <div class="text-xs text-text-3">将把所选备份解包/克隆到目标绝对路径（需为空目录）</div>
+        <div class="text-xs text-text-3 leading-relaxed">
+          目标目录须位于 BX_HOME 白名单内{{ bxHome ? `（${bxHome} 及子目录）` : '' }}，不存在将自动创建；
+          不触碰业务仓库（零侵入）。恢复成功会写入审计记录。
+        </div>
         <div>
           <div class="text-xs text-text-2 mb-1">备份：{{ restoreState.ref?.repoName }} {{ restoreState.ref?.version }}</div>
           <NRadioGroup v-model:value="restoreState.kind">
@@ -383,15 +418,30 @@ async function pickDirectory() {
         <div>
           <div class="text-xs text-text-2 mb-1">目标绝对路径</div>
           <div class="flex gap-2">
-            <NInput v-model:value="restoreState.targetDir" placeholder="输入绝对路径，如 D:\backups\restored…" class="flex-1" />
+            <NInput v-model:value="restoreState.targetDir" placeholder="BX_HOME 内的绝对路径…" class="flex-1" autocomplete="off" spellcheck="false" />
             <NButton secondary @click="pickDirectory">选择目录</NButton>
           </div>
+        </div>
+        <NCheckbox v-if="restoreState.kind !== 'source-bundle'" v-model:checked="restoreState.overwrite">
+          目标目录非空时覆盖同名文件（快照/产物适用；bundle 走 git clone 仍要求空目录）
+        </NCheckbox>
+        <div>
+          <div class="text-xs text-text-2 mb-1">
+            二次确认：输入版本号 <span class="font-mono text-text-1">{{ restoreState.ref?.version }}</span> 解锁恢复
+          </div>
+          <NInput
+            v-model:value="restoreState.confirm"
+            :placeholder="`${restoreState.ref?.version ?? ''}…`"
+            autocomplete="off"
+            spellcheck="false"
+            :status="restoreState.confirm && !restoreConfirmed ? 'error' : undefined"
+          />
         </div>
       </div>
       <template #footer>
         <div class="flex justify-end gap-2">
           <NButton @click="restoreState.open = false">取消</NButton>
-          <NButton type="primary" :loading="restoreState.loading" @click="doRestore">开始恢复</NButton>
+          <NButton type="primary" :loading="restoreState.loading" :disabled="!restoreConfirmed" @click="doRestore">开始恢复</NButton>
         </div>
       </template>
     </NModal>

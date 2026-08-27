@@ -237,6 +237,7 @@ export function register(
     const repoId = String(body.repoId ?? '').trim()
     const kind = String(body.kind ?? '').trim() as 'source-bundle' | 'source-archive' | 'artifact'
     const targetDir = String(body.targetDir ?? '').trim()
+    const overwrite = body.overwrite === true && kind !== 'source-bundle'
     const cfg = await services.loadCfg()
     const meta = await services.getDataStore().readBackupMeta(releaseId, repoId)
     if (!meta) throw apiError(404, 'NOT_FOUND', '备份元数据不存在')
@@ -260,8 +261,11 @@ export function register(
         throw apiError(400, 'VALIDATION', `targetDir 无法访问: ${(e as Error).message}`)
       }
       if (!stat.isDirectory()) throw apiError(400, 'VALIDATION', 'targetDir 已存在且不是目录')
-      const entries = fs.readdirSync(resolvedTarget)
-      if (entries.length > 0) throw apiError(400, 'VALIDATION', `targetDir 必须为空目录: ${targetDir}（请先清空或另选路径）`)
+      // M7 冲突策略：overwrite 仅对快照/产物生效；bundle 恢复（git clone）仍要求空目录
+      if (!overwrite) {
+        const entries = fs.readdirSync(resolvedTarget)
+        if (entries.length > 0) throw apiError(400, 'VALIDATION', `targetDir 必须为空目录: ${targetDir}（请先清空、另选路径，或对快照/产物使用 overwrite）`)
+      }
     } else {
       try {
         fs.mkdirSync(resolvedTarget, { recursive: true })
@@ -273,7 +277,7 @@ export function register(
       if (kind === 'source-bundle') {
         await backup.restoreBundle(srcFile, targetDir)
       } else {
-        await backup.restoreArchive(srcFile, targetDir)
+        await backup.restoreArchive(srcFile, targetDir, overwrite)
       }
     } catch (e) {
       // 透传已分类的 400（如目录非空），其余归 500
@@ -284,7 +288,12 @@ export function register(
       }
       throw apiError(500, 'RESTORE_FAILED', `恢复失败: ${msg}`)
     }
-    sendJson(ctx.res, 200, { ok: true, targetDir })
+    // M7 恢复审计：追加 restores 记录并入数据仓库（历史即审计）
+    const ds = services.getDataStore()
+    meta.restores = [...(meta.restores ?? []), { at: new Date().toISOString(), kind, targetDir: resolvedTarget, overwrite }]
+    await ds.writeBackupMeta(meta)
+    await ds.commitRecords(`chore: backup restore (${meta.repoName} ${meta.version} ${kind})`)
+    sendJson(ctx.res, 200, { ok: true, targetDir, restores: meta.restores.length })
   })
 
   // ---------- 源码级对比 ----------

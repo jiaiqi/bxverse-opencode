@@ -1,6 +1,6 @@
 {
   "name": "bxverse",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
   "description": "BX 版本管理台：项目/仓库两级版本与更新日志统一管理（本地 Web + 可选 PWA）",
   "type": "module",
@@ -13,14 +13,30 @@
     "build": "pnpm --filter @bxverse/shared build && pnpm --filter @bxverse/core build && pnpm --filter @bxverse/server build && pnpm --filter @bxverse/cli build && pnpm --filter @bxverse/web build",
     "typecheck": "pnpm -r typecheck",
     "test": "pnpm -r --no-bail test",
+    "lint": "oxlint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
     "start": "pnpm --filter @bxverse/server start",
     "seed": "node scripts/seed.mjs",
     "doctor": "node scripts/doctor.mjs",
-    "icons": "node scripts/gen-pwa-icons.cjs"
+    "icons": "node scripts/gen-pwa-icons.cjs",
+    "release": "node scripts/release.mjs",
+    "release:dry": "node scripts/release.mjs --dry-run",
+    "test:e2e": "node e2e/run.mjs",
+    "prepare": "husky"
+  },
+  "lint-staged": {
+    "*.{js,mjs,cjs,ts,mts,cts,vue,json,jsonc,css,scss,html,yml,yaml}": [
+      "prettier --write"
+    ]
   },
   "devDependencies": {
     "@vitest/coverage-v8": "^4.1.11",
     "concurrently": "^9.1.2",
+    "husky": "^9.1.7",
+    "lint-staged": "^17.3.0",
+    "oxlint": "^1.80.0",
+    "prettier": "^3.9.6",
     "typescript": "^5.8.3"
   },
   "pnpm": {

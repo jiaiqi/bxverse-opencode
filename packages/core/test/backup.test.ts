@@ -72,6 +72,38 @@ describe('backup：源码与产物备份（R19）', () => {
     expect(sha.trim().split('\n')).toHaveLength(2)
   })
 
+  it('恢复快照：默认要求空目录，overwrite 允许覆盖同名文件（M7 冲突策略）', async () => {
+    const repoPath = makeRepo()
+    commit(repoPath, 'feat: 初始', { 'src/a.ts': 'aaa', 'README.md': 'readme' })
+    const outDir = path.join(process.env.BX_HOME!, 'backups', 'p1', 'r1', 'v1.0.1')
+    fs.mkdirSync(outDir, { recursive: true })
+    const head = await git(['rev-parse', 'HEAD'], { cwd: repoPath })
+    const commitHash = head.ok ? head.stdout.trim() : 'HEAD'
+    await backup.backupRepo({
+      projectId: 'p1', repoId: 'r1', repoName: 'repo1', repoPath,
+      version: 'v1.0.1', releaseId: 'rel_y', commit: commitHash,
+      backupDir: path.join(process.env.BX_HOME!, 'backups'),
+      source: true, artifact: false,
+    })
+    const archive = path.join(outDir, 'source.tar.gz')
+    expect(fs.existsSync(archive)).toBe(true)
+
+    // 1) 空目录恢复成功
+    const target = path.join(process.env.BX_HOME!, 'restores', 'r1')
+    const n = await backup.restoreArchive(archive, target)
+    expect(n).toBeGreaterThanOrEqual(2)
+    expect(fs.readFileSync(path.join(target, 'src/a.ts'), 'utf8')).toBe('aaa')
+
+    // 2) 非空目录默认拒绝
+    await expect(backup.restoreArchive(archive, target)).rejects.toThrow('目标目录非空')
+
+    // 3) overwrite 后允许，且覆盖同名文件
+    fs.writeFileSync(path.join(target, 'src', 'a.ts'), 'dirty-local-change')
+    const n2 = await backup.restoreArchive(archive, target, true)
+    expect(n2).toBeGreaterThanOrEqual(2)
+    expect(fs.readFileSync(path.join(target, 'src/a.ts'), 'utf8')).toBe('aaa')
+  })
+
   it('产物备份：tar.gz + manifest，未配置目录返回 null', async () => {
     const repoPath = makeRepo()
     commit(repoPath, 'feat: 初始', { 'src/a.ts': 'aaa' })

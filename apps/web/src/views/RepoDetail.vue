@@ -414,6 +414,16 @@ watch(tab, (t) => {
               <span class="ml-2 text-xs text-text-3">关闭后不写 version.json / version-history.json（零侵入）</span>
             </NFormItem>
             <NDivider class="!my-2">R26 构建流水线与版本源</NDivider>
+            <div
+              v-if="status?.repoKind === 'static'"
+              class="mb-3 flex items-start gap-2 rounded-lg border border-border bg-surface-alt px-3 py-2 text-xs text-text-2"
+            >
+              <i aria-hidden="true" class="i-carbon-information text-info text-14px mt-0.5 shrink-0" />
+              <span>
+                检测到该仓库无 package.json（原生静态仓库，如 html / js / jquery）：版本走派生模式；
+                未配置 install / 构建命令时自动跳过，产物备份可把源码目录直接设为产物目录。
+              </span>
+            </div>
             <NFormItem label="版本来源">
               <NSelect
                 v-model:value="settingsForm.versionSource"

@@ -137,6 +137,12 @@ export function detectPackageManager(repoPath: string): PackageManager | null {
   return null
 }
 
+/** 仓库工程化类型：有 package.json 为 nodejs；无则 static（原生 html/js/jquery 等，版本走派生模式，install/build 自动探测跳过） */
+export type RepoKind = 'nodejs' | 'static'
+export function detectRepoKind(repoPath: string): RepoKind {
+  return fs.existsSync(packagePath(repoPath)) ? 'nodejs' : 'static'
+}
+
 /** 列出已存在的锁文件（相对仓库根路径） */
 export function listLockFiles(repoPath: string): string[] {
   const out: string[] = []

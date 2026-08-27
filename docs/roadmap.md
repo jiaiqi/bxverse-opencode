@@ -10,9 +10,17 @@
 | R18 版本清单导出（下载/写仓库/本地目录） | ✅ 完成 | 2026-08-13 |
 | M4 发布向导六步 + 双轨日志编辑器 + SSE 控制台 + 前端轮询刷新 | ✅ 完成（向导 e2e + 中断续跑演练通过） | 2026-08-13 |
 | WIG 整改 + 四项目借鉴（realpath 加固 / RuntimeStatus / 提交级排除 / seed+icons 脚本） | ✅ 完成 | 2026-08-13 |
-| M5 自动化 / PWA 运行时启用 / AI / 收尾 | 🟡 部分完成（M5-01 PWA 运行时注册 ✅；AI/引导/兼容回归待做） | 2026-08-13 |
+| M5 自动化 / PWA / AI / 收尾 | ✅ 完成：M5-01 PWA 运行时注册；AI 多供应商/R20 双主题/R21 视觉语言/R22 Git 面板此前已落地；**M5-08 首次使用引导已完成**（四步引导组件 OnboardingWizard + 空项目自动弹出 + 侧栏/命令面板重看 + e2e/onboarding.py） | 2026-08-25 |
 | M6 版本一致性对比与发布备份（R19） | ✅ 完成（core 单测 + API E2E 全通过） | 2026-08-13 |
-| M7 备份恢复（R19 低优先级，远期） | ⏸ 暂缓 | — |
+| M7 备份恢复（R19 低优先级） | ✅ 完成：引擎/API + 恢复向导 UI 全收口（默认路径预填 BX_HOME/restores、冲突策略空目录/覆盖、版本号二次确认、恢复审计 restores 入数据仓库；e2e wizard-flow 步骤 7 全流程覆盖） | 2026-08-25 |
+| M8 多项目看板与仓库治理中枢 | ✅ 完成：M8-01 看板 store 聚合、M8-02 看板页（KPI 五卡 + 筛选/空状态）、M8-03 双模式接入弹窗（路径/克隆 + 协议白名单 + shallow + 120s 超时）、M8-04 仓库治理（RepoCard 设置菜单含「编辑仓库设置…/从项目移除」+ displayName/buildCommand/artifactDir 在 RepoDetail 6 字段流水线）、M8-05 接入校验（路径 .git 校验/协议白名单/.. 逃逸拦截）、M8-06 看板联调（脏仓 KPI + ProjectCard 脏仓标记 + 相对时间「N 天前」+ lastRelease.daysAgo） | 2026-08-26 |
+| v1.0.0 基础规格（R1–R22） | ✅ 定稿发布（里程碑 Tag `v1.0.0`） | 2026-08-17 |
+| R23 AI 场景特化路由 / R24 发布废弃审计 / R25 分支协同巡检 | ✅ 已实现（`dfe8e6d`，文档追认；M9–M11 任务分解章节待补） | 2026-08-17 |
+| R26 仓库级构建流水线与双格式 | ✅ 完成（详见 `docs/r26-build-pipeline.md`） | 2026-08-24 |
+| R27 Release 分发 / R28 快速发布 / R29 Webhook / R30 prerelease | ✅ 完成（optimization-plan N1–N4） | 2026-08-24 |
+| 工程保障基线：CI + lint/format + husky + e2e 编排（`pnpm test:e2e`）+ credentials 容错 | ✅ 完成（P0 加固批次） | 2026-08-25 |
+
+> 注：M9–M13（分支巡检/AI 场景路由/废弃审计/仪表盘/R26 流水线）此前仅有追溯矩阵一行、无任务分解章节——其中对应能力已分别以 R25/R23/R24/R26 落地，任务分解章节按「已交付能力回补」低优先级处理。
 
 ---
 
@@ -359,7 +367,7 @@ architecture §3.2 全部路由可用且经 curl 验证；SSE 通道、单队列
 
 ### 7.5.3 验收标准
 
-- [ ] 看板显示多项目卡片（版本/仓库数/变动数/末次发布）与变动仓库聚合
+- [x] 看板显示多项目卡片（版本/仓库数/变动数/末次发布+脏仓/相对时间）与变动仓库聚合
 - [ ] 本地路径接入校验 `.git`，Git 地址白名单 `https/ssh/git@` 且 `shallow` 可选，失败提示明确
 - [ ] 仓库卡片可配置 `buildCommand` 与 `artifactDir`（树选），未配置产物目录时备份跳过提示
 - [ ] `pnpm typecheck` / `pnpm build` 通过；`pnpm --filter @bxverse/server test` 接入用例全绿
@@ -430,8 +438,18 @@ architecture §3.2 全部路由可用且经 curl 验证；SSE 通道、单队列
 | 2026-08-17 | v1.0.0 正式定稿：发布里程碑 Tag `v1.0.0`，全面覆盖 R1–R22 基础规格；启动 v2 架构重构，规划 M8–M12 进阶里程碑（分支协同巡检、AI场景特化路由、发版废弃纠偏、多项目治理、三栏沉浸式仪表盘） |
 | 2026-08-17 | 追认 R23-R25：R23 AI 场景特化路由（M10 ai.routes）、R24 发布废弃审计（M11 deprecate）、R25 分支协同巡检与批量对齐（M9 branch-alignment），实现已在 `dfe8e6d` 落地，文档滞后追认 |
 | 2026-08-21 | P1 优化收敛：`AppConfig.publish.concurrency` 仓库级并发（默认1，上限5，批量落盘竞态安全）、`openapi.json`/`validate.ts` 契约与运行时校验、`useBackup`/`usePublishPlan` 前端收敛、`BackupPanel` 复用、`enforceRetention`/`restore` 闭环 |
-| 2026-08-17 | 追认 R23-R25：R23 AI 场景特化路由（M10）、R24 发布废弃审计（M11）、R25 分支协同巡检与批量对齐（M9），实现已在 dfe8e6d 落地，文档滞后追认 |
 | 2026-08-24 | 新增 R26/M13：仓库级构建流水线与 package.json 双格式（`X.Y.Z`/`VYYMMDDHHmm` + `versionSource`/`packageManager`/`installCommand`/`preBuildCommand`/`buildTimeoutMs`/`versionSyncCommit` + `manifestTarget` 自动落盘），core 单测 15+8 项、engine 流水线、API/前端三处，发布后真实 fixture 验证通过 |
 | 2026-08-24 | 新增 R29/N4：发布 webhook 通知（`AppConfig.notifications.webhooks[]`，https 校验+events 白名单，done/error 时 POST `{event,projectId,version,failedRepos,timestamp}`，5s 超时重试 1 次，structuredLog 不影响主流程），stub server 断言 done/error 两种 payload 全过 |
 | 2026-08-24 | 新增 R30/N3 prerelease 灰度收口：①子 PR① 契约层 `prerelease?:string`（`PRERELEASE_RE`/`SEMVER_PRERELEASE_RE`，`build` 统一 `6~12` 位）；②子 PR② 版本引擎 `resolvePrerelease` 同标识递增 `beta.1→beta.2`（`beta→beta.2`）、异标识覆盖，里程碑 `vX.Y.Z-beta.N`（`X.Y.Z` 亦 `1.2.0-beta.1`，`VYYMMDDHHmm` 不受影响）、排序引入 prerelease；③子 PR③ 向导 UI `StepVersion.vue` 选择器（正式版/Beta/RC/自定义，`PRERELEASE_RE` 校验、实时预览 `previewVersion`/`buildTagPreview`、400ms 防抖 `rePlan`）；④子 PR④ 文档全套回写（`requirements`/`data-model`/`api`/`frontend`/`roadmap`），`pnpm typecheck` 通过 |
-
+| 2026-08-25 | P0 工程保障批次：①新增 GitHub Actions CI（typecheck+build+test，ubuntu/windows 双矩阵）；②oxlint+prettier+husky pre-commit 基线（0 错误起步）；③core `loadCredentials` 容错——credentials.json 损坏不再裸抛 SyntaxError 导致全站不可用（备份坏文件+抢救字段+轮换 token，含 3 个新单测）；④e2e 去硬编码路径/端口（环境变量化）+ 编排器 `e2e/run.mjs`（根命令 `pnpm test:e2e`，Python 缺失自动跳过向导场景）；⑤requirements.md 追认补录 R20/R21/R22 定义、§0 状态表对齐实际进度（M5 仅剩引导、M7 恢复部分落地、M8 进行中）、清理变更记录重复行；⑥前端移除全局 select-none、项目/仓库卡片改 RouterLink 真链接。愿景原型：`design/bxverse-ultimate-state.html` |
+| 2026-08-25 | M5-08 首次使用引导完成：OnboardingWizard 四步（欢迎/令牌保护/建项目接仓库/首次发布），空项目首次启动自动弹出（localStorage 完成标记），侧栏+命令面板可重看，e2e/onboarding.py 入编排器；R26 适配无工程化仓库：shared RepoStatus 扩展 repoKind（nodejs/static），core detectRepoKind + collectChanges 透出 + plan 阶段静态仓库已配流水线命令时告警，RepoDetail 流水线区静态提示横幅；顺手修复并行会话遗留：ProjectDetail/AppLayout 多语句 @click 缺分号导致 vite build 失败、e2e wizard-flow 按钮名未跟上「统一发版」改名 |
+| 2026-08-25 | M7 恢复收口：shared 扩展 RestoreRecord + RepoBackupRef.restores；core restoreArchive/extractTarGz 支持 overwrite（bundle 仍要求空目录）；server restore 端点 overwrite + 恢复审计（writeBackupMeta + commitRecords）、health 透出 home；web BackupPanel 恢复对话框升级（默认路径/白名单提示/覆盖开关/版本号二次确认/已恢复×N chip）；e2e wizard-flow 步骤 7（bundle 克隆落盘/非空拒绝/overwrite 覆盖/审计 chip）；core 单测 134→135 绿 |
+| 2026-08-26 | M8 收口：①shared OverviewData 扩展 dirtyRepoCount（顶层 + 项目级）+ lastRelease.daysAgo（前端据此渲染「今天/N 天前」）；②server overview 端点透出脏仓计数 + 末次发布距今天数；③web Dashboard 4 卡变 5 卡（新增「工作区脏」统计）+ ProjectCard 脏仓徽标 + 相对时间文案；④RepoCard 治理中枢——设置菜单（刷新/打开 Git/编辑/移除，含二次确认弹窗，store.removeRepo 复用），整卡是 RouterLink 所有交互 .stop 防误导航；⑤StatCard color 扩展 orange 类型。M8 验收清单全部 ✅ |
+| 2026-08-26 | M11(doctor) 第一段：core/doctor.ts（零依赖纯函数 + runWithPool 6 仓并行 + 复用 core/git 封装）+ server /api/ops/doctor + scripts/doctor.mjs 改调 core 产物（保留原人类可读行为 + 新增 --json 结构化输出 + 退出码 error=2/ok=0）；8 个单测；core 测试 135→143 绿；typecheck/build/e2e 三场景全过 |
+| 2026-08-26 | M11(失败结构化恢复)后端第一段：core engine 失败时落结构化 failedReports + rollbackFailedPublish；shared FailedRepoReport + PublishEvent.code/detail；errors 增 5 个新 code；server /api/publish/:taskId/failure + /rollback；web store 透 failedReports + api 暴露 publishFailure/publishRollback；core 单测 143→145 全过；typecheck/build 全绿；e2e 三场景全过；UI 失败卡片（向导执行步失败卡 + 诊断面板 + 三出路 + 诊断包导出）放下一段单做 |
+| 2026-08-26 | M11 UI 段：FailureRecoveryCard.vue（失败头卡 + 错误码 chip + 结构化诊断面板 + 三出路按钮 + 诊断包导出）+ StepResult 集成 + wizard retry-bump/resume handlers；typecheck/build/e2e 三场景全过；M11 整体（后端+UI）完成 |
+| 2026-08-26 | M12 运维中心：core 补 export resolveHome；server /api/ops/process + /api/ops/logs；web OpsCenter.vue（一致性体检/数据迁移/引擎日志流/关于 bxverse 4 卡）+ /ops 路由 + 30s 自动刷新 + doctor.md 报告导出；core 测试 145 全过；typecheck/build/e2e 三场景全过 |
+| 2026-08-26 | M13 驾驶舱增强：server /api/overview/weekly + Dashboard 8 周发布节奏柱状图 + 分支巡检入口；typecheck/build/e2e 三场景全过 |
+| 2026-08-26 | M14 命令面板增强：CommandPalette fuzzy 匹配 + WIG a11y 收口；Phase 2 序号 1-5 全部完成（doctor / 失败结构化恢复 / 运维中心 / 驾驶舱 / 命令面板与体验基线） |
+| 2026-08-26 | Phase 3 自举分发阶段 1：cli 看门狗 + update 子命令 + scripts/release.mjs（零依赖 changesets 实现）+ .changeset/README.md；core 测试 145 / typecheck / build / e2e 三场景全过 |
+| 2026-08-26 | Phase 3 自举分发收口：README 增 CLI + 自举 release 两节；development.md §11 协议；core 测试 145 / typecheck / build / e2e 三场景全过；Phase 3 序号 1-3 全部完成 |

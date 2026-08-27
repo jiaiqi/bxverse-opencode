@@ -179,6 +179,17 @@ export interface BackupItem {
   files?: number
 }
 
+// 扩展：M7 恢复审计（每次成功恢复追加一条，随备份元数据入数据仓库）
+export interface RestoreRecord {
+  /** ISO 时间 */
+  at: string
+  kind: BackupItem['kind']
+  /** 恢复目标（绝对路径，BX_HOME 白名单内） */
+  targetDir: string
+  /** 是否覆盖已存在文件（source-bundle 恒为 false，git clone 要求空目录） */
+  overwrite: boolean
+}
+
 export interface RepoBackupRef {
   releaseId: string
   repoId: string
@@ -191,6 +202,8 @@ export interface RepoBackupRef {
   tag?: string
   date: string
   items: BackupItem[]
+  /** 扩展：M7 恢复审计历史 */
+  restores?: RestoreRecord[]
 }
 
 export interface BackupRetention {
@@ -327,6 +340,29 @@ export interface PublishRequest {
   excludeCommits?: Record<string, string[]>
 }
 
+/** 扩展：M11 发布失败结构化恢复——单仓失败诊断（前端「结构化诊断」面板 + 诊断包导出用） */
+export interface FailedRepoReport {
+  repoId: string
+  repoName: string
+  /** 错误码（沿用 CoreErrorCode 字符串，如 TAG_CONFLICT/BASE_UNREACHABLE/BUILD_FAILED） */
+  code: string
+  message: string
+  /** 当前 HEAD 短 8 位 */
+  head: string
+  /** 本次发布的目标 commit（= planned.to） */
+  target: string
+  /** 该仓 lastPublishCommit（= base）；null 表示从未发布 */
+  lastPublishCommit: string | null
+  /** 失败的里程碑标签名（TAG_CONFLICT 等标签类错误时存在） */
+  tag?: string
+  /** 该标签当前指向的 commit（与 target 不一致 = 冲突） */
+  tagTarget?: string
+  /** 标签来源说明（如「8 天前手动创建 · 未走发布」） */
+  tagSource?: string
+  /** 前端可渲染的恢复建议（如「改用下一版本号重试 / 接管续跑 / 回滚」） */
+  suggestions: string[]
+}
+
 export interface PublishEvent {
   /** 扩展：任务内单调递增序号，用于 SSE 重放去重 */
   seq?: number
@@ -334,6 +370,18 @@ export interface PublishEvent {
   message: string
   repoId?: string
   data?: unknown
+  /** 扩展：M11 repo-error 携带的错误码（与 data.code 同步方便 SSE 重放时前端直读） */
+  code?: string
+  /** 扩展：M11 repo-error 携带的结构化明细（与 FailedRepoReport 子集对齐） */
+  detail?: {
+    head?: string
+    target?: string
+    lastPublishCommit?: string | null
+    tag?: string
+    tagTarget?: string
+    tagSource?: string
+    suggestions?: string[]
+  }
 }
 
 // ==================== 状态 / 文件树 ====================
@@ -360,6 +408,8 @@ export interface RepoStatus {
   warnings?: string[]
   /** 扩展：提交列表是否因上限被截断 */
   truncated?: boolean
+  /** 扩展：R26 适配无工程化仓库——无 package.json 时为 'static'（原生 html/js/jquery 等），UI 据此做流水线降级提示；计算于 collectChanges，不落盘 */
+  repoKind?: 'nodejs' | 'static'
   commits: CommitInfo[]
 }
 
@@ -388,13 +438,18 @@ export interface OverviewData {
   projectCount: number
   repoCount: number
   changedRepoCount: number
+  /** 扩展：M8 看板——脏仓库计数（status.dirty > 0） */
+  dirtyRepoCount: number
   projects: {
     id: string
     name: string
     version: string
     repoCount: number
     changedRepoCount: number
-    lastRelease: { version: string; date: string } | null
+    /** 扩展：M8 看板——脏仓库计数（status.dirty > 0） */
+    dirtyRepoCount: number
+    lastRelease: { version: string; date: string; /** 扩展：M8 看板——距今天数（0=今天，>0=过去）；前端据此渲染 "今天/3 天前" */
+    daysAgo: number } | null
   }[]
   changedRepos: {
     projectId: string

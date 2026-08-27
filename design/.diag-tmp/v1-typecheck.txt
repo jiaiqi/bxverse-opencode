@@ -1,0 +1,15 @@
+
+> bxverse@0.1.0 typecheck G:\vibecoding\bxverse-opencode
+> pnpm -r typecheck
+
+Scope: 5 of 6 workspace projects
+packages/shared typecheck$ tsc --noEmit
+packages/shared typecheck: Done
+apps/web typecheck$ vue-tsc --noEmit
+packages/core typecheck$ tsc --noEmit
+packages/core typecheck: Done
+apps/web typecheck: Done
+apps/cli typecheck$ tsc --noEmit
+apps/server typecheck$ tsc --noEmit
+apps/cli typecheck: Done
+apps/server typecheck: Done

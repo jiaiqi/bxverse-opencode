@@ -3,10 +3,16 @@ import { execFileSync, spawn } from 'node:child_process'
 import { appendFileSync, mkdirSync, mkdtempSync, readdirSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 
 const HOME = process.env.BX_HOME
-const BASE = 'http://127.0.0.1:18898'
-const SERVER = 'G:/vibecoding/bxverse-opencode/apps/server/dist/index.js'
+const PORT = process.env.BX_PORT || '18898'
+const BASE = `http://127.0.0.1:${PORT}`
+const SERVER = fileURLToPath(new URL('../apps/server/dist/index.js', import.meta.url))
+if (!HOME) {
+  console.error('请先设置隔离环境变量 BX_HOME（勿指向真实数据目录）')
+  process.exit(1)
+}
 const gitEnv = { ...process.env, LC_ALL: 'C.UTF-8' }
 
 function makeRepo() {
@@ -36,15 +42,17 @@ const slowBuild = `node -e "setTimeout(()=>{},15000)"`
 function startServer() {
   const child = spawn('node', [SERVER], {
     stdio: 'ignore',
-    env: { ...process.env, BX_HOME: HOME, BX_PORT: '18898' },
+    env: { ...process.env, BX_HOME: HOME, BX_PORT: PORT },
   })
   return child
 }
 function kill(child) {
-  try { child.kill('SIGKILL') } catch {}
+  try {
+    child.kill('SIGKILL')
+  } catch {}
 }
 
-const sleep = (ms) => new Promise(r => setTimeout(r, ms))
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 
 async function waitServer() {
   for (let i = 0; i < 40; i++) {
@@ -71,7 +79,12 @@ async function api(path, method = 'GET', body) {
   return res.json()
 }
 
-const tags = (dir) => execFileSync('git', ['tag', '-l'], { cwd: dir, env: gitEnv }).toString().trim().split(/\r?\n/).filter(Boolean)
+const tags = (dir) =>
+  execFileSync('git', ['tag', '-l'], { cwd: dir, env: gitEnv })
+    .toString()
+    .trim()
+    .split(/\r?\n/)
+    .filter(Boolean)
 
 // ============ 主流程 ============
 let server = startServer()
@@ -85,7 +98,11 @@ const repoBDef = await api(`/api/projects/${project.id}/repos`, 'POST', { path: 
 await api(`/api/projects/${project.id}/repos/${repoBDef.id}`, 'PATCH', { buildCommand: slowBuild })
 
 // 1. 发起发布（A 快、B 慢），3s 后 kill（B 正在构建）
-const t1 = await api('/api/publish', 'POST', { projectId: project.id, bump: 'minor', offline: true })
+const t1 = await api('/api/publish', 'POST', {
+  projectId: project.id,
+  bump: 'minor',
+  offline: true,
+})
 console.log('task1:', t1.taskId)
 await sleep(3000)
 kill(server)
@@ -98,14 +115,21 @@ await waitServer()
 console.log('server restarted')
 
 // 3. 重新发起同项目发布 → 续跑
-const t2 = await api('/api/publish', 'POST', { projectId: project.id, bump: 'minor', offline: true })
+const t2 = await api('/api/publish', 'POST', {
+  projectId: project.id,
+  bump: 'minor',
+  offline: true,
+})
 console.log('task2（续跑）:', t2.taskId)
 
 // 4. 等完成（B 构建 15s + 重跑开销）
 let done = false
 for (let i = 0; i < 60; i++) {
   const cur = await api('/api/publish/current')
-  if (cur.status === 'done') { done = true; break }
+  if (cur.status === 'done') {
+    done = true
+    break
+  }
   if (cur.status === 'failed') throw new Error('续跑失败')
   await sleep(2000)
 }
@@ -116,18 +140,20 @@ const tagsA = tags(repoA)
 const tagsB = tags(repoB)
 console.log('A tags:', tagsA)
 console.log('B tags:', tagsB)
-if (tagsA.filter(t => t.startsWith('build/')).length !== 1) throw new Error(`A build 标签数 != 1: ${tagsA}`)
-if (tagsA.filter(t => t === 'v0.2.0').length !== 1) throw new Error('A 里程碑标签异常')
-if (tagsB.filter(t => t.startsWith('build/')).length !== 1) throw new Error(`B build 标签数 != 1: ${tagsB}`)
-if (tagsB.filter(t => t === 'v0.2.0').length !== 1) throw new Error('B 里程碑标签异常')
+if (tagsA.filter((t) => t.startsWith('build/')).length !== 1)
+  throw new Error(`A build 标签数 != 1: ${tagsA}`)
+if (tagsA.filter((t) => t === 'v0.2.0').length !== 1) throw new Error('A 里程碑标签异常')
+if (tagsB.filter((t) => t.startsWith('build/')).length !== 1)
+  throw new Error(`B build 标签数 != 1: ${tagsB}`)
+if (tagsB.filter((t) => t === 'v0.2.0').length !== 1) throw new Error('B 里程碑标签异常')
 
 const releases = await api(`/api/projects/${project.id}/releases`)
-if (releases.filter(r => r.kind === 'project').length !== 1) throw new Error('项目记录数 != 1')
+if (releases.filter((r) => r.kind === 'project').length !== 1) throw new Error('项目记录数 != 1')
 const projects = await api('/api/projects')
-const p = projects.find(x => x.id === project.id)
+const p = projects.find((x) => x.id === project.id)
 if (p.version !== 'v0.2.0') throw new Error(`项目版本: ${p.version}`)
 
-const journalFiles = readdirSync(path.join(HOME, 'journal')).filter(f => f.endsWith('.json'))
+const journalFiles = readdirSync(path.join(HOME, 'journal')).filter((f) => f.endsWith('.json'))
 const j = JSON.parse(readFileSync(path.join(HOME, 'journal', journalFiles[0]), 'utf8'))
 console.log('journal status:', j.status, 'steps:', j.steps.length)
 

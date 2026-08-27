@@ -3,7 +3,7 @@
 
 import { defineStore } from 'pinia'
 import { markRaw } from 'vue'
-import type { BumpType, LogState, PublishPlan, PublishRequest } from '@bxverse/shared'
+import type { BumpType, FailedRepoReport, LogState, PublishPlan, PublishRequest } from '@bxverse/shared'
 import { api } from '../api'
 import type { PublishEventLike } from '../api'
 
@@ -41,7 +41,7 @@ export const usePublishStore = defineStore('publish', {
     taskId: null as string | null,
     phase: 'idle' as WizardPhase,
     events: [] as PublishEventLike[],
-    result: null as { releaseId: string | null; version: string; failedRepos: string[]; syncFailedRepos?: string[] } | null,
+    result: null as { releaseId: string | null; version: string; failedRepos: string[]; failedReports?: FailedRepoReport[]; syncFailedRepos?: string[] } | null,
     error: '',
     /** 步骤 1 选择与生成 plan 时的集合是否一致（不一致需重新生成计划） */
     planDirty: false,
@@ -188,11 +188,12 @@ export const usePublishStore = defineStore('publish', {
     pushEvent(e: PublishEventLike) {
       this.events.push(e)
       if (e.type === 'done') {
-        const data = (e.data ?? {}) as { releaseId?: string | null; version?: string; failedRepos?: string[]; syncFailedRepos?: string[] }
+        const data = (e.data ?? {}) as { releaseId?: string | null; version?: string; failedRepos?: string[]; failedReports?: FailedRepoReport[]; syncFailedRepos?: string[] }
         this.result = {
           releaseId: data.releaseId ?? null,
           version: data.version ?? this.plan?.projectVersion ?? '',
           failedRepos: data.failedRepos ?? [],
+          failedReports: data.failedReports,
           syncFailedRepos: data.syncFailedRepos,
         }
         this.phase = 'done'

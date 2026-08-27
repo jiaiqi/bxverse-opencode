@@ -12,6 +12,7 @@ import type {
   CommitType,
   CompareResult,
   FileContent,
+  FailedRepoReport,
   GitFileDiff,
   GitStatus,
   OverviewData,
@@ -45,10 +46,15 @@ export const api = {
   config: () => http.get<ConfigPayload>('/config'),
   saveConfig: (body: Partial<Pick<AppConfig, 'theme' | 'themeStyle' | 'pwa' | 'pollInterval' | 'ai' | 'backup'>>) =>
     http.post<{ config: AppConfig }>('/config', body),
-  health: () => http.get<{ ok: boolean; version: string }>('/health'),
+  health: () => http.get<{ ok: boolean; version: string; home?: string }>('/health'),
 
   // 总览
   overview: () => http.get<OverviewData>('/overview'),
+  // M9 驾驶舱增强：近 8 周发布节奏
+  overviewWeekly: () => http.get<{
+    weeks: Array<{ week: string; releases: number; projects: number }>
+    generatedAt: string
+  }>('/overview/weekly'),
 
   // 版本清单导出（R18）
   projectVersions: (projectId: string) => http.get<RepoVersionItem[]>(`/projects/${projectId}/versions`),
@@ -101,6 +107,38 @@ export const api = {
   // 发布
   publish: (body: PublishRequest) => http.post<PublishPlan | { taskId: string; queued: boolean }>('/publish', body),
   publishCurrent: () => http.get<{ taskId: string | null; status?: string; projectId?: string }>('/publish/current'),
+  // M11：失败结构化诊断与回滚
+  publishFailure: (taskId: string) => http.get<{
+    taskId: string; projectId: string; status: string; failedRepos: string[]; reports: FailedRepoReport[]
+  }>(`/publish/${encodeURIComponent(taskId)}/failure`),
+  // 运维中心
+  opsDoctor: (project?: string) =>
+    http.get<{
+      home: string; at: string; counts: { ok: number; warn: number; error: number }; overall: 'ok' | 'warn' | 'error' | 'checking';
+      projects: Array<{
+        projectId: string; projectName: string; projectVersion: string;
+        repos: Array<{ repoId: string; repoName: string; head: string; branch: string; lastPublishCommit: string | null; dirty: number; ahead: number; baseAncestor: boolean; otherBranches: string[]; buildTagsRecent: string[]; vTagsCount: number; vTagLatest: string | null; plainTagsCount: number; plainTagsRecent: string[]; packageJsonLastCommit: string | null; state: 'ok' | 'warn' | 'error' | 'checking'; hints: string[] }>;
+      }>;
+    }>(`/ops/doctor${project ? `?project=${encodeURIComponent(project)}` : ''}`),
+  opsProcess: () =>
+    http.get<{
+      version: string; home: string; memMB: number; uptimeSec: number;
+      nodeVersion: string; platform: string; startedAt: string; now: string;
+    }>('/ops/process'),
+  opsLogs: (level: 'all' | 'info' | 'warn' | 'error' = 'all') =>
+    http.get<{
+      file: string; total: number;
+      lines: Array<{ ts: string; level: string; message: string; fields: Record<string, unknown> }>;
+    }>(`/ops/logs?level=${level}`),
+  publishRollback: (taskId: string, body: { repoIds?: string[] }) =>
+    http.post<{
+      ok: boolean
+      deletedBuildTags: { repoId: string; tag: string }[]
+      deprecatedReleases: string[]
+      deletedMilestoneTags: { repoId: string; tag: string }[]
+      warnings: string[]
+    }>(`/publish/${encodeURIComponent(taskId)}/rollback`, body),
+  // M11：接管续跑（基于 server 已有的 resume 端点，无新接口）
 
   // 同步
   sync: (action: string, extra: Record<string, unknown> = {}) => http.post<Record<string, unknown>>('/sync', { action, ...extra }),
@@ -160,8 +198,8 @@ export const api = {
   },
   backupCleanup: (body: { projectId?: string; repoId?: string; retention?: BackupRetention; dryRun?: boolean }) =>
     http.post<BackupCleanupResult>('/backups/cleanup', body),
-  backupRestore: (body: { releaseId: string; repoId: string; kind: string; targetDir: string }) =>
-    http.post<{ ok: boolean; targetDir: string }>('/backups/restore', body),
+  backupRestore: (body: { releaseId: string; repoId: string; kind: string; targetDir: string; overwrite?: boolean }) =>
+    http.post<{ ok: boolean; targetDir: string; restores: number }>('/backups/restore', body),
 
   // R27 external 分发至 Release
   publishReleaseNote: (releaseId: string, body: { repoId: string; provider: 'github' | 'gitee'; body: string }) =>

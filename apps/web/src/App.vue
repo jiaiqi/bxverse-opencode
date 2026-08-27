@@ -5,10 +5,11 @@ import { RouterView } from 'vue-router'
 import { darkTheme, NConfigProvider, NDialogProvider, NMessageProvider, NNotificationProvider, useOsTheme } from 'naive-ui'
 import { darkThemeOverrides, lightThemeOverrides, wenxiThemeOverrides } from './theme'
 import { useAppStore } from './stores/app'
-import { useUiStore } from './stores/ui'
+import { useUiStore, ONBOARDING_DONE_KEY } from './stores/ui'
 import { useProjectsStore } from './stores/projects'
 import AppLayout from './layouts/AppLayout.vue'
 import CommandPalette from './components/CommandPalette.vue'
+import OnboardingWizard from './components/OnboardingWizard.vue'
 import { applyPwa } from './pwa/register'
 
 const appStore = useAppStore()
@@ -31,6 +32,10 @@ onMounted(async () => {
     // PWA 运行时开关（M5-01）：启动即按配置注册/注销 SW
     void applyPwa(appStore.config?.pwa.enabled ?? true)
     await Promise.allSettled([projectsStore.load(), projectsStore.loadOverview()])
+    // M5-08：首次启动（尚无项目且未完成过引导）自动弹出新手引导
+    if (projectsStore.items.length === 0 && !localStorage.getItem(ONBOARDING_DONE_KEY)) {
+      uiStore.toggleOnboarding(true)
+    }
   } catch (e) {
     bootError.value = (e as Error).message
   } finally {
@@ -100,6 +105,7 @@ onMounted(() => {
               </RouterView>
             </AppLayout>
             <CommandPalette />
+            <OnboardingWizard />
           </NNotificationProvider>
         </NDialogProvider>
       </NMessageProvider>

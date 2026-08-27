@@ -24,7 +24,7 @@ commit('feat(ui): 新增向导页面', { 'src/wizard.ts': 'export {};\n' })
 commit('fix: 修复日志状态机', { 'src/state.ts': 'export {};\n' })
 commit('docs: 更新说明', { 'README.md': '# wiz\n' })
 
-const base = 'http://127.0.0.1:18899'
+const base = process.env.BX_BASE || `http://127.0.0.1:${process.env.BX_PORT || '18899'}`
 const init = await (await fetch(`${base}/api/config`)).json()
 const token = init.token
 const post = async (p, body) => {

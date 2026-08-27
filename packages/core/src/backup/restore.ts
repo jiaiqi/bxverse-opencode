@@ -12,13 +12,16 @@ function ensureEmptyDir(dir: string): void {
   if (entries.length > 0) throw new Error(`目标目录非空: ${dir}（请先清空或另选路径）`)
 }
 
-/** 将 gzip 压缩的 tar 按 512 块解析并落盘（支持 GNU LongLink） */
-export async function extractTarGz(tarGzFile: string, destDir: string): Promise<number> {
+/** 将 gzip 压缩的 tar 按 512 块解析并落盘（支持 GNU LongLink）；overwrite=true 时允许目标目录非空并覆盖同名文件 */
+export async function extractTarGz(tarGzFile: string, destDir: string, overwrite = false): Promise<number> {
   const gzData = fs.readFileSync(tarGzFile)
   const tarData: Buffer = await new Promise((resolve, reject) => {
     zlib.gunzip(gzData, (err, buf) => (err ? reject(err) : resolve(buf)))
   })
   fs.mkdirSync(destDir, { recursive: true })
+  if (!overwrite && fs.readdirSync(destDir).length > 0) {
+    throw new Error(`目标目录非空: ${destDir}（请先清空或另选路径）`)
+  }
   let offset = 0
   let longName: string | null = null
   let count = 0
@@ -75,8 +78,8 @@ export async function restoreBundle(bundleFile: string, targetDir: string): Prom
   })
 }
 
-/** 快照/产物恢复：解压 tar.gz 到目标目录 */
-export async function restoreArchive(tarGzFile: string, targetDir: string): Promise<number> {
-  ensureEmptyDir(targetDir)
-  return extractTarGz(tarGzFile, targetDir)
+/** 快照/产物恢复：解压 tar.gz 到目标目录；overwrite=true 时允许非空目录并覆盖同名文件 */
+export async function restoreArchive(tarGzFile: string, targetDir: string, overwrite = false): Promise<number> {
+  if (!overwrite) ensureEmptyDir(targetDir)
+  return extractTarGz(tarGzFile, targetDir, overwrite)
 }

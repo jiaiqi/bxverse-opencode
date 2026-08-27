@@ -37,6 +37,10 @@ export function assertRestoreBody(body: Record<string, unknown>): void {
   if (!['source-bundle', 'source-archive', 'artifact'].includes(String(body.kind))) {
     throw apiError(400, 'VALIDATION', 'kind 必须为 source-bundle/source-archive/artifact')
   }
+  // 扩展：M7 冲突策略——overwrite 仅对快照/产物生效（bundle 走 git clone，必须空目录）
+  if (body.overwrite !== undefined && typeof body.overwrite !== 'boolean') {
+    throw apiError(400, 'VALIDATION', 'overwrite 必须为布尔')
+  }
   const targetDir = String(body.targetDir)
   // 基础路径校验：必须为绝对路径且不为根
   const isAbsolute = /^[a-zA-Z]:[\\/]/.test(targetDir) || targetDir.startsWith('/')

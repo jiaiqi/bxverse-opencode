@@ -9,6 +9,7 @@ import type { AppConfig, ProjectDef, ReleaseRecord, RepoBackupRef } from '@bxver
 import { atomicWrite, ensureDirs, resolveHome } from './home'
 import { ensureOk, git } from './git'
 import { CoreError, CORE_ERROR_CODES } from './errors'
+import { structuredLog } from './logger'
 
 export { resolveHome }
 
@@ -37,13 +38,23 @@ function deepMergeDefault(raw: Partial<AppConfig>): AppConfig {
   return {
     ...DEFAULT_APP_CONFIG,
     ...raw,
-    schemaVersion: (raw as Record<string, unknown>).schemaVersion != null ? Number((raw as Record<string, unknown>).schemaVersion) : DEFAULT_APP_CONFIG.schemaVersion,
+    schemaVersion:
+      (raw as Record<string, unknown>).schemaVersion != null
+        ? Number((raw as Record<string, unknown>).schemaVersion)
+        : DEFAULT_APP_CONFIG.schemaVersion,
     pwa: { ...DEFAULT_APP_CONFIG.pwa, ...(raw.pwa ?? {}) },
     ai: { ...DEFAULT_APP_CONFIG.ai, ...(raw.ai ?? {}) },
-    backup: raw.backup ? { ...DEFAULT_APP_CONFIG.backup!, ...raw.backup, retention: raw.backup.retention ? { ...raw.backup.retention } : undefined } : DEFAULT_APP_CONFIG.backup,
-    notifications: (raw as Record<string, unknown>).notifications != null
-      ? (raw as unknown as { notifications: AppConfig['notifications'] }).notifications
-      : (DEFAULT_APP_CONFIG as AppConfig).notifications,
+    backup: raw.backup
+      ? {
+          ...DEFAULT_APP_CONFIG.backup!,
+          ...raw.backup,
+          retention: raw.backup.retention ? { ...raw.backup.retention } : undefined,
+        }
+      : DEFAULT_APP_CONFIG.backup,
+    notifications:
+      (raw as Record<string, unknown>).notifications != null
+        ? (raw as unknown as { notifications: AppConfig['notifications'] }).notifications
+        : (DEFAULT_APP_CONFIG as AppConfig).notifications,
     dataDir: raw.dataDir ?? DEFAULT_APP_CONFIG.dataDir,
   }
 }
@@ -55,14 +66,16 @@ function projectsDirPath(): string {
 function readProjectsFromDir(): ProjectDef[] | null {
   const dir = projectsDirPath()
   if (!fs.existsSync(dir)) return null
-  const files = fs.readdirSync(dir).filter(f => f.endsWith('.json'))
+  const files = fs.readdirSync(dir).filter((f) => f.endsWith('.json'))
   if (files.length === 0) return null
   const out: ProjectDef[] = []
   for (const f of files) {
     try {
       const p = JSON.parse(fs.readFileSync(path.join(dir, f), 'utf8')) as ProjectDef
       if (p?.id) out.push(p)
-    } catch { /* 跳过损坏文件 */ }
+    } catch {
+      /* 跳过损坏文件 */
+    }
   }
   return out
 }
@@ -84,7 +97,9 @@ export async function loadAppConfig(): Promise<AppConfig> {
   try {
     raw = JSON.parse(fs.readFileSync(APP_JSON, 'utf8'))
   } catch (e) {
-    throw new CoreError(CORE_ERROR_CODES.VALIDATION, `无法解析 app.json: ${(e as Error).message}`, { cause: (e as Error).message })
+    throw new CoreError(CORE_ERROR_CODES.VALIDATION, `无法解析 app.json: ${(e as Error).message}`, {
+      cause: (e as Error).message,
+    })
   }
   const cfg = deepMergeDefault(raw as Partial<AppConfig>)
   // 迁移：旧版 app.json 内嵌 projects → projects/ 目录（幂等）
@@ -95,15 +110,27 @@ export async function loadAppConfig(): Promise<AppConfig> {
     if ((raw as Record<string, unknown>).schemaVersion == null) {
       cfg.schemaVersion = 2
       // 尽力写回，避免下次重复迁移
-      try { atomicWrite(APP_JSON, JSON.stringify({ ...raw as object, schemaVersion: 2 }, null, 2)) } catch { /* best-effort */ }
+      try {
+        atomicWrite(APP_JSON, JSON.stringify({ ...(raw as object), schemaVersion: 2 }, null, 2))
+      } catch {
+        /* best-effort */
+      }
     }
   } else if (cfg.projects.length > 0) {
     // 首次拆分：把内存中的 projects 落盘
     for (const p of cfg.projects) {
-      try { writeProjectToDir(p) } catch { /* best-effort */ }
+      try {
+        writeProjectToDir(p)
+      } catch {
+        /* best-effort */
+      }
     }
     if ((raw as Record<string, unknown>).schemaVersion == null) {
-      try { atomicWrite(APP_JSON, JSON.stringify({ ...(raw as object), schemaVersion: 2 }, null, 2)) } catch { /* best-effort */ }
+      try {
+        atomicWrite(APP_JSON, JSON.stringify({ ...(raw as object), schemaVersion: 2 }, null, 2))
+      } catch {
+        /* best-effort */
+      }
       cfg.schemaVersion = 2
     }
   }
@@ -116,17 +143,27 @@ export async function saveAppConfig(cfg: AppConfig): Promise<void> {
   try {
     const dir = projectsDirPath()
     fs.mkdirSync(dir, { recursive: true })
-    const wanted = new Set(cfg.projects.map(p => `${p.id}.json`))
+    const wanted = new Set(cfg.projects.map((p) => `${p.id}.json`))
     for (const p of cfg.projects) {
-      try { writeProjectToDir(p) } catch { /* best-effort */ }
+      try {
+        writeProjectToDir(p)
+      } catch {
+        /* best-effort */
+      }
     }
     for (const f of fs.readdirSync(dir)) {
       if (!f.endsWith('.json')) continue
       if (!wanted.has(f)) {
-        try { fs.rmSync(path.join(dir, f), { force: true }) } catch { /* best-effort */ }
+        try {
+          fs.rmSync(path.join(dir, f), { force: true })
+        } catch {
+          /* best-effort */
+        }
       }
     }
-  } catch { /* best-effort，目录同步失败不影响主流程 */ }
+  } catch {
+    /* best-effort，目录同步失败不影响主流程 */
+  }
 }
 
 // ==================== 凭据 ====================
@@ -150,8 +187,46 @@ export async function loadCredentials(): Promise<Credentials> {
     await saveCredentials(cred)
     return cred
   }
-  const cred = JSON.parse(fs.readFileSync(CRED_JSON, 'utf8')) as Credentials
-  return { token: cred.token ?? '', dataRemote: cred.dataRemote ?? null, aiKeys: cred.aiKeys ?? {}, releaseTokens: cred.releaseTokens ?? {} }
+  let cred: Partial<Credentials> | null = null
+  let tokenValid = false
+  try {
+    const parsed = JSON.parse(fs.readFileSync(CRED_JSON, 'utf8')) as unknown
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      cred = parsed as Partial<Credentials>
+      tokenValid = typeof cred.token === 'string'
+    }
+  } catch {
+    /* 损坏文件走下方恢复流程 */
+  }
+  if (!cred || !tokenValid) {
+    // 容错：credentials.json 损坏/非法时不再裸抛 SyntaxError 导致全站不可用——
+    // 备份坏文件后重新生成；能抢救的字段（dataRemote/aiKeys/releaseTokens）尽量保留，
+    // 仅轮换访问令牌（旧令牌随坏文件备份留存）
+    const backup = `${CRED_JSON}.corrupt-${Date.now()}`
+    try {
+      fs.copyFileSync(CRED_JSON, backup)
+    } catch {
+      /* best-effort */
+    }
+    structuredLog('warn', 'credentials.json 无法解析，已备份并重新生成访问令牌', {
+      backup,
+      salvaged: Boolean(cred),
+      hint: '若数据仓库远端(dataRemote)或密钥丢失，请在设置中重新配置',
+    })
+    const fresh: Credentials = { token: generateToken(), dataRemote: cred?.dataRemote ?? null }
+    await saveCredentials(fresh)
+    return {
+      ...fresh,
+      aiKeys: cred?.aiKeys ?? {},
+      releaseTokens: cred?.releaseTokens ?? {},
+    }
+  }
+  return {
+    token: cred.token ?? '',
+    dataRemote: cred.dataRemote ?? null,
+    aiKeys: cred.aiKeys ?? {},
+    releaseTokens: cred.releaseTokens ?? {},
+  }
 }
 
 export async function saveCredentials(cred: Credentials): Promise<void> {
@@ -179,7 +254,12 @@ export function versionSafe(version: string): string {
 
 // ==================== 同步结果 ====================
 
-export type SyncResult = { action: string; ok: boolean; message?: string; warning?: string } & Record<string, unknown>
+export type SyncResult = {
+  action: string
+  ok: boolean
+  message?: string
+  warning?: string
+} & Record<string, unknown>
 
 // ==================== 数据仓库 ====================
 
@@ -233,24 +313,32 @@ export class DataStore {
   }
 
   async getProject(id: string): Promise<ProjectDef | undefined> {
-    return (await this.listProjects()).find(p => p.id === id)
+    return (await this.listProjects()).find((p) => p.id === id)
   }
 
   async saveProject(p: ProjectDef): Promise<void> {
     const cfg = await loadAppConfig()
-    const idx = cfg.projects.findIndex(x => x.id === p.id)
+    const idx = cfg.projects.findIndex((x) => x.id === p.id)
     const stamped = { ...p, updatedAt: new Date().toISOString() }
     if (idx === -1) cfg.projects.push(stamped)
     else cfg.projects[idx] = stamped
     await saveAppConfig(cfg)
-    try { writeProjectToDir(stamped) } catch { /* best-effort */ }
+    try {
+      writeProjectToDir(stamped)
+    } catch {
+      /* best-effort */
+    }
   }
 
   async deleteProject(id: string): Promise<void> {
     const cfg = await loadAppConfig()
-    cfg.projects = cfg.projects.filter(p => p.id !== id)
+    cfg.projects = cfg.projects.filter((p) => p.id !== id)
     await saveAppConfig(cfg)
-    try { fs.rmSync(path.join(projectsDirPath(), `${id}.json`), { force: true }) } catch { /* best-effort */ }
+    try {
+      fs.rmSync(path.join(projectsDirPath(), `${id}.json`), { force: true })
+    } catch {
+      /* best-effort */
+    }
   }
 
   // ---------- 发布记录（数据仓库） ----------
@@ -271,7 +359,11 @@ export class DataStore {
     if (fs.existsSync(dataPath)) {
       const existing = fs.readFileSync(dataPath, 'utf8')
       if (existing === incoming) return
-      throw new CoreError(CORE_ERROR_CODES.RECORD_IMMUTABLE, `发布记录已存在且内容不一致（不可变）: ${dataPath}`, { dataPath })
+      throw new CoreError(
+        CORE_ERROR_CODES.RECORD_IMMUTABLE,
+        `发布记录已存在且内容不一致（不可变）: ${dataPath}`,
+        { dataPath },
+      )
     }
     fs.mkdirSync(dir, { recursive: true })
     atomicWrite(path.join(dir, 'internal.md'), record.logs.internal.content)
@@ -289,7 +381,13 @@ export class DataStore {
   async readRecord(id: string): Promise<ReleaseRecord | null> {
     const parsed = this.parseReleaseId(id)
     if (parsed) {
-      const dataPath = path.join(this.dataDir, 'releases', parsed.scopeId, parsed.versionSafe, 'data.json')
+      const dataPath = path.join(
+        this.dataDir,
+        'releases',
+        parsed.scopeId,
+        parsed.versionSafe,
+        'data.json',
+      )
       try {
         if (fs.existsSync(dataPath)) {
           const raw = fs.readFileSync(dataPath, 'utf8')
@@ -302,9 +400,15 @@ export class DataStore {
       // 索引快速定位兜底：通过 global index 精确到 scope/version
       try {
         const idx = this.readGlobalIndexSync()
-        const hit = idx?.releases.find(r => r.id === id)
+        const hit = idx?.releases.find((r) => r.id === id)
         if (hit) {
-          const altPath = path.join(this.dataDir, 'releases', hit.scopeId, versionSafe(hit.version), 'data.json')
+          const altPath = path.join(
+            this.dataDir,
+            'releases',
+            hit.scopeId,
+            versionSafe(hit.version),
+            'data.json',
+          )
           if (fs.existsSync(altPath)) {
             const rec = JSON.parse(fs.readFileSync(altPath, 'utf8')) as ReleaseRecord
             if (rec.id === id) return rec
@@ -324,13 +428,23 @@ export class DataStore {
    */
   async updateRecord(record: ReleaseRecord): Promise<void> {
     const existing = await this.readRecord(record.id)
-    if (!existing) throw new CoreError(CORE_ERROR_CODES.NOT_FOUND, `发布记录不存在: ${record.id}`, { recordId: record.id })
+    if (!existing)
+      throw new CoreError(CORE_ERROR_CODES.NOT_FOUND, `发布记录不存在: ${record.id}`, {
+        recordId: record.id,
+      })
     if (existing.version !== record.version || existing.scopeId !== record.scopeId) {
-      throw new CoreError(CORE_ERROR_CODES.RECORD_IMMUTABLE, `发布记录不可变字段被改动（id/version/scopeId）: ${record.id}`, { recordId: record.id })
+      throw new CoreError(
+        CORE_ERROR_CODES.RECORD_IMMUTABLE,
+        `发布记录不可变字段被改动（id/version/scopeId）: ${record.id}`,
+        { recordId: record.id },
+      )
     }
     const dir = path.join(this.dataDir, 'releases', record.scopeId, versionSafe(record.version))
     const dataPath = path.join(dir, 'data.json')
-    if (!fs.existsSync(dataPath)) throw new CoreError(CORE_ERROR_CODES.NOT_FOUND, `发布记录数据文件缺失: ${dataPath}`, { dataPath })
+    if (!fs.existsSync(dataPath))
+      throw new CoreError(CORE_ERROR_CODES.NOT_FOUND, `发布记录数据文件缺失: ${dataPath}`, {
+        dataPath,
+      })
     atomicWrite(path.join(dir, 'internal.md'), record.logs.internal.content)
     atomicWrite(path.join(dir, 'external.md'), record.logs.external.content)
     atomicWrite(dataPath, JSON.stringify(record, null, 2))
@@ -339,12 +453,15 @@ export class DataStore {
   /** 标记发布记录为已废弃（存入 Git 审计仓库） */
   async deprecateRecord(releaseId: string, reason: string): Promise<ReleaseRecord> {
     const existing = await this.readRecord(releaseId)
-    if (!existing) throw new CoreError(CORE_ERROR_CODES.NOT_FOUND, `发布记录不存在: ${releaseId}`, { releaseId })
+    if (!existing)
+      throw new CoreError(CORE_ERROR_CODES.NOT_FOUND, `发布记录不存在: ${releaseId}`, { releaseId })
     existing.deprecated = true
     existing.deprecateReason = reason.trim() || '人为标为废弃'
     existing.deprecatedAt = new Date().toISOString()
     await this.updateRecord(existing)
-    await this.commitRecords(`audit(release): deprecate ${existing.version}: ${existing.deprecateReason}`)
+    await this.commitRecords(
+      `audit(release): deprecate ${existing.version}: ${existing.deprecateReason}`,
+    )
     return existing
   }
 
@@ -358,7 +475,8 @@ export class DataStore {
     let wantFull = true
     if (typeof n === 'object' && n !== null) {
       limit = (n as { limit?: number }).limit ?? 20
-      if (typeof (n as { full?: boolean }).full === 'boolean') wantFull = (n as { full?: boolean }).full!
+      if (typeof (n as { full?: boolean }).full === 'boolean')
+        wantFull = (n as { full?: boolean }).full!
       else if (opts && typeof opts.full === 'boolean') wantFull = opts.full
     } else {
       limit = typeof n === 'number' ? n : 20
@@ -372,7 +490,7 @@ export class DataStore {
       const sliced = indexReleases.slice(0, limit)
       if (!wantFull) {
         // 非 full 模式直接返回索引条目映射的轻量记录（仅版本/日期等）
-        return sliced.map(e => ({
+        return sliced.map((e) => ({
           id: e.id,
           kind: e.kind,
           scopeId,
@@ -405,8 +523,15 @@ export class DataStore {
           } else {
             const parsed = this.parseReleaseId(entry.id)
             if (parsed && parsed.scopeId === scopeId) {
-              const altPath = path.join(this.dataDir, 'releases', parsed.scopeId, parsed.versionSafe, 'data.json')
-              if (fs.existsSync(altPath)) rec = JSON.parse(fs.readFileSync(altPath, 'utf8')) as ReleaseRecord
+              const altPath = path.join(
+                this.dataDir,
+                'releases',
+                parsed.scopeId,
+                parsed.versionSafe,
+                'data.json',
+              )
+              if (fs.existsSync(altPath))
+                rec = JSON.parse(fs.readFileSync(altPath, 'utf8')) as ReleaseRecord
             }
           }
         } catch {
@@ -426,7 +551,7 @@ export class DataStore {
     return items
       .sort((a, b) => b.record.date.localeCompare(a.record.date))
       .slice(0, limit)
-      .map(x => x.record)
+      .map((x) => x.record)
   }
 
   /** data/ 内 git add -A + commit；无变更返回 ''（不产生空提交） */
@@ -446,8 +571,12 @@ export class DataStore {
       if (!hasOrigin) return { action, ok: true, remote: false, message: '未配置远程' }
       const branchR = await git(['branch', '--show-current'], { cwd: this.dataDir })
       const branch = (branchR.ok ? branchR.stdout : '').trim() || 'master'
-      const aheadR = await git(['rev-list', '--count', `origin/${branch}..HEAD`], { cwd: this.dataDir })
-      const behindR = await git(['rev-list', '--count', `HEAD..origin/${branch}`], { cwd: this.dataDir })
+      const aheadR = await git(['rev-list', '--count', `origin/${branch}..HEAD`], {
+        cwd: this.dataDir,
+      })
+      const behindR = await git(['rev-list', '--count', `HEAD..origin/${branch}`], {
+        cwd: this.dataDir,
+      })
       const ahead = Number(((aheadR.ok ? aheadR.stdout : '') || '0').trim())
       const behind = Number(((behindR.ok ? behindR.stdout : '') || '0').trim())
       return { action, ok: true, remote: true, ahead, behind, branch }
@@ -485,7 +614,9 @@ export class DataStore {
 
   async readBackupMeta(releaseId: string, repoId: string): Promise<RepoBackupRef | null> {
     try {
-      const raw = JSON.parse(fs.readFileSync(this.backupMetaPath(releaseId, repoId), 'utf8')) as RepoBackupRef
+      const raw = JSON.parse(
+        fs.readFileSync(this.backupMetaPath(releaseId, repoId), 'utf8'),
+      ) as RepoBackupRef
       return raw.repoId === repoId ? raw : null
     } catch {
       return null
@@ -518,7 +649,9 @@ export class DataStore {
 
   // ---------- 内部：索引增量维护与快速路径 ----------
 
-  private parseReleaseId(id: string): { kind: 'project' | 'repo'; scopeId: string; versionSafe: string } | null {
+  private parseReleaseId(
+    id: string,
+  ): { kind: 'project' | 'repo'; scopeId: string; versionSafe: string } | null {
     let kind: 'project' | 'repo' | null = null
     let rest = ''
     if (id.startsWith('rel_p_')) {
@@ -538,25 +671,61 @@ export class DataStore {
     return { kind, scopeId, versionSafe: versionSafePart }
   }
 
-  private readScopeIndexSync(scopeId: string): { id: string; kind: ReleaseRecord['kind']; version: string; buildStamp: string; date: string }[] | null {
+  private readScopeIndexSync(
+    scopeId: string,
+  ):
+    | {
+        id: string
+        kind: ReleaseRecord['kind']
+        version: string
+        buildStamp: string
+        date: string
+      }[]
+    | null {
     const p = path.join(this.dataDir, 'releases', scopeId, 'index.json')
     try {
       if (!fs.existsSync(p)) return null
-      const raw = JSON.parse(fs.readFileSync(p, 'utf8')) as { schemaVersion?: number; scopeId?: string; releases?: unknown }
+      const raw = JSON.parse(fs.readFileSync(p, 'utf8')) as {
+        schemaVersion?: number
+        scopeId?: string
+        releases?: unknown
+      }
       if (!raw || !Array.isArray(raw.releases)) return null
-      return raw.releases as { id: string; kind: ReleaseRecord['kind']; version: string; buildStamp: string; date: string }[]
+      return raw.releases as {
+        id: string
+        kind: ReleaseRecord['kind']
+        version: string
+        buildStamp: string
+        date: string
+      }[]
     } catch {
       return null
     }
   }
 
-  private readGlobalIndexSync(): { releases: { id: string; kind: ReleaseRecord['kind']; scopeId: string; version: string; date: string }[] } | null {
+  private readGlobalIndexSync(): {
+    releases: {
+      id: string
+      kind: ReleaseRecord['kind']
+      scopeId: string
+      version: string
+      date: string
+    }[]
+  } | null {
     const p = path.join(this.dataDir, 'index.json')
     try {
       if (!fs.existsSync(p)) return null
       const raw = JSON.parse(fs.readFileSync(p, 'utf8')) as { releases?: unknown }
       if (!raw || !Array.isArray(raw.releases)) return null
-      return raw as { releases: { id: string; kind: ReleaseRecord['kind']; scopeId: string; version: string; date: string }[] }
+      return raw as {
+        releases: {
+          id: string
+          kind: ReleaseRecord['kind']
+          scopeId: string
+          version: string
+          date: string
+        }[]
+      }
     } catch {
       return null
     }
@@ -564,19 +733,40 @@ export class DataStore {
 
   private async upsertScopeIndex(record: ReleaseRecord): Promise<void> {
     const indexPath = path.join(this.dataDir, 'releases', record.scopeId, 'index.json')
-    type ScopeIdx = { schemaVersion: number; scopeId: string; releases: { id: string; kind: ReleaseRecord['kind']; version: string; buildStamp: string; date: string }[] }
+    type ScopeIdx = {
+      schemaVersion: number
+      scopeId: string
+      releases: {
+        id: string
+        kind: ReleaseRecord['kind']
+        version: string
+        buildStamp: string
+        date: string
+      }[]
+    }
     let current: ScopeIdx | null = null
     try {
-      if (fs.existsSync(indexPath)) current = JSON.parse(fs.readFileSync(indexPath, 'utf8')) as ScopeIdx
+      if (fs.existsSync(indexPath))
+        current = JSON.parse(fs.readFileSync(indexPath, 'utf8')) as ScopeIdx
     } catch {
       current = null
     }
-    if (!current || !Array.isArray((current as ScopeIdx).releases) || (current as ScopeIdx).scopeId !== record.scopeId) {
+    if (
+      !current ||
+      !Array.isArray((current as ScopeIdx).releases) ||
+      (current as ScopeIdx).scopeId !== record.scopeId
+    ) {
       await this.rebuildScopeIndex(record.scopeId)
       return
     }
     if (current.releases.some((r) => r.id === record.id)) return
-    current.releases.push({ id: record.id, kind: record.kind, version: record.version, buildStamp: record.buildStamp, date: record.date })
+    current.releases.push({
+      id: record.id,
+      kind: record.kind,
+      version: record.version,
+      buildStamp: record.buildStamp,
+      date: record.date,
+    })
     current.releases.sort((a, b) => b.date.localeCompare(a.date))
     current.schemaVersion = 1
     fs.mkdirSync(path.dirname(indexPath), { recursive: true })
@@ -585,10 +775,20 @@ export class DataStore {
 
   private async upsertGlobalIndex(record: ReleaseRecord): Promise<void> {
     const indexPath = path.join(this.dataDir, 'index.json')
-    type GlobalIdx = { schemaVersion: number; releases: { id: string; kind: ReleaseRecord['kind']; scopeId: string; version: string; date: string }[] }
+    type GlobalIdx = {
+      schemaVersion: number
+      releases: {
+        id: string
+        kind: ReleaseRecord['kind']
+        scopeId: string
+        version: string
+        date: string
+      }[]
+    }
     let current: GlobalIdx | null = null
     try {
-      if (fs.existsSync(indexPath)) current = JSON.parse(fs.readFileSync(indexPath, 'utf8')) as GlobalIdx
+      if (fs.existsSync(indexPath))
+        current = JSON.parse(fs.readFileSync(indexPath, 'utf8')) as GlobalIdx
     } catch {
       current = null
     }
@@ -597,7 +797,13 @@ export class DataStore {
       return
     }
     if (current.releases.some((r) => r.id === record.id)) return
-    current.releases.push({ id: record.id, kind: record.kind, scopeId: record.scopeId, version: record.version, date: record.date })
+    current.releases.push({
+      id: record.id,
+      kind: record.kind,
+      scopeId: record.scopeId,
+      version: record.version,
+      date: record.date,
+    })
     current.releases.sort((a, b) => b.date.localeCompare(a.date))
     current.schemaVersion = 1
     atomicWrite(indexPath, JSON.stringify(current, null, 2))
@@ -605,7 +811,9 @@ export class DataStore {
 
   // ---------- 内部：记录扫描与索引重建 ----------
 
-  private async listRecordFiles(scopeId?: string): Promise<{ record: ReleaseRecord; dir: string }[]> {
+  private async listRecordFiles(
+    scopeId?: string,
+  ): Promise<{ record: ReleaseRecord; dir: string }[]> {
     const root = path.join(this.dataDir, 'releases')
     const out: { record: ReleaseRecord; dir: string }[] = []
     if (!fs.existsSync(root)) return out
@@ -659,6 +867,9 @@ export class DataStore {
         version: record.version,
         date: record.date,
       }))
-    atomicWrite(path.join(this.dataDir, 'index.json'), JSON.stringify({ schemaVersion: 1, releases: items }, null, 2))
+    atomicWrite(
+      path.join(this.dataDir, 'index.json'),
+      JSON.stringify({ schemaVersion: 1, releases: items }, null, 2),
+    )
   }
 }

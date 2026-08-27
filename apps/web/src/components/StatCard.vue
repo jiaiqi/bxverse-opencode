@@ -6,7 +6,7 @@ withDefaults(defineProps<{
   subLabel?: string
   icon?: string
   accent?: boolean
-  color?: 'emerald' | 'cyan' | 'amber' | 'purple'
+  color?: 'emerald' | 'cyan' | 'amber' | 'purple' | 'orange'
 }>(), {
   icon: 'i-carbon-cube',
   accent: false,
@@ -21,6 +21,7 @@ withDefaults(defineProps<{
       color === 'cyan' ? 'border-l-[3px] border-l-info' :
       color === 'amber' ? 'border-l-[3px] border-l-warning' :
       color === 'purple' ? 'border-l-[3px] border-l-[var(--bx-accent-purple)]' :
+      color === 'orange' ? 'border-l-[3px] border-l-warning' :
       'border-l-[3px] border-l-brand-500',
       'border-border'
     ]"
@@ -32,6 +33,7 @@ withDefaults(defineProps<{
         :class="[
           color === 'cyan' ? 'bg-info-soft text-info' :
           color === 'amber' ? 'bg-warning-soft text-warning' :
+          color === 'orange' ? 'bg-warning-soft text-warning' :
           color === 'purple' ? 'bg-[var(--bx-accent-purple-soft)] text-[var(--bx-accent-purple)]' :
           'bg-brand-soft text-brand-500'
         ]"

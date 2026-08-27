@@ -59,7 +59,10 @@ async function loadStatuses() {
 async function loadReleases() {
   releasesLoading.value = true
   try {
-    releases.value = await projectsStore.projectReleases(projectId.value, releaseExpanded.value ? 100 : 5)
+    releases.value = await projectsStore.projectReleases(
+      projectId.value,
+      releaseExpanded.value ? 100 : 5,
+    )
   } finally {
     releasesLoading.value = false
   }
@@ -109,15 +112,19 @@ const sortedRepos = computed(() => {
 
 const VALID_TABS = ['repos', 'releases', 'backups'] as const
 const tab = ref<'repos' | 'releases' | 'backups'>(
-  VALID_TABS.includes(route.query.tab as (typeof VALID_TABS)[number]) ? (route.query.tab as 'repos' | 'releases' | 'backups') : 'repos',
+  VALID_TABS.includes(route.query.tab as (typeof VALID_TABS)[number])
+    ? (route.query.tab as 'repos' | 'releases' | 'backups')
+    : 'repos',
 )
 watch(tab, (t) => {
-  if (String(route.query.tab ?? '') !== t) void router.replace({ query: { ...route.query, tab: t } })
+  if (String(route.query.tab ?? '') !== t)
+    void router.replace({ query: { ...route.query, tab: t } })
 })
 watch(
   () => route.query.tab,
   (v) => {
-    if (v && VALID_TABS.includes(v as (typeof VALID_TABS)[number]) && v !== tab.value) tab.value = v as 'repos' | 'releases' | 'backups'
+    if (v && VALID_TABS.includes(v as (typeof VALID_TABS)[number]) && v !== tab.value)
+      tab.value = v as 'repos' | 'releases' | 'backups'
   },
 )
 
@@ -199,17 +206,24 @@ async function submitDeprecate() {
   }
 }
 
-watch(projectId, async (id) => {
-  statuses.value = new Map()
-  releaseExpanded.value = false
-  if (!projectsStore.byId(id)) await projectsStore.load()
-  await Promise.all([loadStatuses(), loadReleases(), checkBranchAlignment()])
-}, { immediate: true })
+watch(
+  projectId,
+  async (id) => {
+    statuses.value = new Map()
+    releaseExpanded.value = false
+    if (!projectsStore.byId(id)) await projectsStore.load()
+    await Promise.all([loadStatuses(), loadReleases(), checkBranchAlignment()])
+  },
+  { immediate: true },
+)
 
 // 状态轮询（30s 或配置周期）— interval 响应式
-usePolling(async () => {
-  if (project.value) await Promise.all([loadStatuses(), loadReleases(), checkBranchAlignment()])
-}, () => appStore.pollInterval || 30_000)
+usePolling(
+  async () => {
+    if (project.value) await Promise.all([loadStatuses(), loadReleases(), checkBranchAlignment()])
+  },
+  () => appStore.pollInterval || 30_000,
+)
 </script>
 
 <template>
@@ -219,19 +233,30 @@ usePolling(async () => {
       <div class="glass-panel p-5 rounded-2xl space-y-4">
         <div class="flex items-start justify-between gap-4 flex-wrap">
           <div class="flex items-start gap-3.5 min-w-0">
-            <div class="w-10 h-10 rounded-xl bg-brand-soft text-brand-500 flex items-center justify-center font-bold text-lg border border-brand-200 shrink-0">
+            <div
+              class="w-10 h-10 rounded-xl bg-brand-soft text-brand-500 flex items-center justify-center font-bold text-lg border border-brand-200 shrink-0"
+            >
               {{ project.name.slice(0, 1) }}
             </div>
             <div class="min-w-0">
               <div class="flex items-center gap-2.5 flex-wrap">
                 <h1 class="text-lg font-bold text-text-1 truncate m-0">{{ project.name }}</h1>
-                <span class="font-mono text-xs font-bold px-2 py-0.5 rounded bg-surface-alt border border-border text-info">
+                <span
+                  class="font-mono text-xs font-bold px-2 py-0.5 rounded bg-surface-alt border border-border text-info"
+                >
                   {{ project.version }}
                 </span>
-                <span class="text-xs font-mono text-text-3">方案: {{ project.repoVersionFormat ?? project.repoVersionScheme ?? 'hybrid' }}</span>
-                <span class="text-xs font-mono text-text-3">推演: {{ project.bump || 'auto' }}</span>
+                <span class="text-xs font-mono text-text-3"
+                  >方案:
+                  {{ project.repoVersionFormat ?? project.repoVersionScheme ?? 'hybrid' }}</span
+                >
+                <span class="text-xs font-mono text-text-3"
+                  >推演: {{ project.bump || 'auto' }}</span
+                >
               </div>
-              <p class="text-xs text-text-3 mt-1 m-0 leading-relaxed">{{ project.description || '暂无业务描述' }}</p>
+              <p class="text-xs text-text-3 mt-1 m-0 leading-relaxed">
+                {{ project.description || '暂无业务描述' }}
+              </p>
             </div>
           </div>
 
@@ -284,12 +309,21 @@ usePolling(async () => {
           <i aria-hidden="true" class="i-carbon-warning-filled text-warning shrink-0 text-base" />
           <span class="text-text-1">
             分支协同巡检预警：检测到
-            <strong class="text-warning font-semibold">{{ branchAlignment.items.filter(x => !x.isAligned).map(x => `${x.repoName} (${x.branch})`).join('、') }}</strong>
+            <strong class="text-warning font-semibold">{{
+              branchAlignment.items
+                .filter((x) => !x.isAligned)
+                .map((x) => `${x.repoName} (${x.branch})`)
+                .join('、')
+            }}</strong>
             未停留在主发布分支 ({{ branchAlignment.defaultBranch }})
           </span>
         </div>
         <div class="flex items-center gap-2 shrink-0">
-          <NButton size="tiny" type="warning" @click="doBatchCheckout(branchAlignment.defaultBranch)">
+          <NButton
+            size="tiny"
+            type="warning"
+            @click="doBatchCheckout(branchAlignment.defaultBranch)"
+          >
             <template #icon><i aria-hidden="true" class="i-carbon-reset" /></template>
             一键切至主分支
           </NButton>
@@ -327,10 +361,10 @@ usePolling(async () => {
               <RepoCard
                 v-for="repo in sortedRepos"
                 :key="repo.id"
+                :to="`/repo/${project.id}/${repo.id}`"
                 :repo="repo"
                 :status="statuses.get(repo.id)"
                 :loading="statusLoading.has(repo.id)"
-                @open="router.push(`/repo/${project.id}/${repo.id}`)"
                 @refresh="refreshRepo(repo.id)"
               />
             </div>
@@ -343,10 +377,14 @@ usePolling(async () => {
                 <i aria-hidden="true" class="i-carbon-history text-[var(--bx-accent-purple)]" />
                 <span>历次发布审计记录 (Release Audit Trail)</span>
               </h2>
-              <span class="text-xs font-mono text-text-3">历史数据由本地 Git 数据仓库自动审计存盘</span>
+              <span class="text-xs font-mono text-text-3"
+                >历史数据由本地 Git 数据仓库自动审计存盘</span
+              >
             </div>
 
-            <div v-if="releasesLoading" class="p-5 text-center text-text-3"><NSpin size="small" /></div>
+            <div v-if="releasesLoading" class="p-5 text-center text-text-3">
+              <NSpin size="small" />
+            </div>
             <div v-else-if="releases.length === 0" class="p-5">
               <EmptyState
                 title="暂无发布记录"
@@ -355,7 +393,9 @@ usePolling(async () => {
             </div>
             <div v-else class="overflow-x-auto">
               <table class="w-full text-left border-collapse text-xs font-mono">
-                <caption class="sr-only">历次发布审计记录</caption>
+                <caption class="sr-only">
+                  历次发布审计记录
+                </caption>
                 <thead>
                   <tr class="text-text-3 border-b border-border text-[11px]">
                     <th scope="col" class="py-2.5 px-3 font-medium">发布版本</th>
@@ -367,21 +407,34 @@ usePolling(async () => {
                   </tr>
                 </thead>
                 <tbody class="divide-y divide-border">
-                  <tr v-for="r in releases" :key="r.id" class="hover:bg-surface-hover/50 transition-colors" :class="{ 'opacity-60': r.deprecated }">
-                    <td class="py-2.5 px-3 font-bold" :class="r.deprecated ? 'line-through text-text-3' : 'text-info'">
+                  <tr
+                    v-for="r in releases"
+                    :key="r.id"
+                    class="hover:bg-surface-hover/50 transition-colors"
+                    :class="{ 'opacity-60': r.deprecated }"
+                  >
+                    <td
+                      class="py-2.5 px-3 font-bold"
+                      :class="r.deprecated ? 'line-through text-text-3' : 'text-info'"
+                    >
                       {{ r.version }}
                     </td>
                     <td class="py-2.5 px-3 text-text-3">{{ formatDate(r.date) }}</td>
                     <td class="py-2.5 px-3 text-text-2 truncate max-w-48">
-                      {{ (r.repos ?? []).map(x => x.repoName).join('、') || r.scopeName }}
+                      {{ (r.repos ?? []).map((x) => x.repoName).join('、') || r.scopeName }}
                     </td>
                     <td class="py-2.5 px-3">
-                      <span v-if="r.deprecated" class="chip chip-error text-[10px]" :title="'废弃原因: ' + r.deprecateReason">
-                        <i aria-hidden="true" class="i-carbon-warning-filled text-warning mr-1 align-[-0.125em]" />已废弃 ({{ r.deprecateReason || '人为撤销' }})
+                      <span
+                        v-if="r.deprecated"
+                        class="chip chip-error text-[10px]"
+                        :title="'废弃原因: ' + r.deprecateReason"
+                      >
+                        <i
+                          aria-hidden="true"
+                          class="i-carbon-warning-filled text-warning mr-1 align-[-0.125em]"
+                        />已废弃 ({{ r.deprecateReason || '人为撤销' }})
                       </span>
-                      <span v-else class="chip chip-brand text-[10px]">
-                        ● 双轨已确认
-                      </span>
+                      <span v-else class="chip chip-brand text-[10px]"> ● 双轨已确认 </span>
                     </td>
                     <td class="py-2.5 px-3 text-text-3">
                       <span v-if="r.backups?.length" class="text-brand-500">Bundle+Manifest</span>
@@ -390,14 +443,31 @@ usePolling(async () => {
                     <td class="py-2.5 px-3 text-right">
                       <div class="flex flex-col items-end gap-1.5">
                         <div class="flex gap-2">
-                          <button class="text-brand-500 hover:underline bg-transparent border-0 cursor-pointer p-0" @click="openDetail(r)">查看日志</button>
-                          <button v-if="!r.deprecated" class="text-warning hover:underline bg-transparent border-0 cursor-pointer p-0" @click="openDeprecate(r)">标为废弃</button>
+                          <button
+                            class="text-brand-500 hover:underline bg-transparent border-0 cursor-pointer p-0"
+                            @click="openDetail(r)"
+                          >
+                            查看日志
+                          </button>
+                          <button
+                            v-if="!r.deprecated"
+                            class="text-warning hover:underline bg-transparent border-0 cursor-pointer p-0"
+                            @click="openDeprecate(r)"
+                          >
+                            标为废弃
+                          </button>
                         </div>
                         <ReleaseNoteActions
                           :release-id="r.id"
                           :content="r.logs.external.content"
                           :version="r.version"
-                          :repos="(project?.repos ?? []).map(x => ({ id: x.id, name: x.name, remote: x.remote }))"
+                          :repos="
+                            (project?.repos ?? []).map((x) => ({
+                              id: x.id,
+                              name: x.name,
+                              remote: x.remote,
+                            }))
+                          "
                           :project-id="projectId"
                           size="tiny"
                         />
@@ -406,9 +476,23 @@ usePolling(async () => {
                   </tr>
                 </tbody>
               </table>
-              <div v-if="releases.length >= 5" class="pt-3 border-t border-border flex justify-center">
-                <button v-if="!releaseExpanded" class="link text-xs" @click="expandReleases">展开查看全部历史（最多 100 条）</button>
-                <button v-else class="link text-xs" @click="releaseExpanded = false; loadReleases()">收起</button>
+              <div
+                v-if="releases.length >= 5"
+                class="pt-3 border-t border-border flex justify-center"
+              >
+                <button v-if="!releaseExpanded" class="link text-xs" @click="expandReleases">
+                  展开查看全部历史（最多 100 条）
+                </button>
+                <button
+                  v-else
+                  class="link text-xs"
+                  @click="
+                    releaseExpanded = false;
+                    loadReleases();
+                  "
+                >
+                  收起
+                </button>
               </div>
             </div>
           </section>
@@ -432,7 +516,9 @@ usePolling(async () => {
               :release-id="detailRelease.id"
               :content="detailRelease.logs.external.content"
               :version="detailRelease.version"
-              :repos="(project?.repos ?? []).map(x => ({ id: x.id, name: x.name, remote: x.remote }))"
+              :repos="
+                (project?.repos ?? []).map((x) => ({ id: x.id, name: x.name, remote: x.remote }))
+              "
               :project-id="projectId"
               size="small"
             />
@@ -457,11 +543,14 @@ usePolling(async () => {
       >
         <div class="space-y-4 text-xs">
           <p class="text-text-2 leading-relaxed">
-            标记废弃会将该版本的审计状态更新为 <strong class="text-error font-semibold">已废弃 (Deprecated)</strong>。
-            审计记录安全存入 Git 数据仓库，便于团队追溯。
+            标记废弃会将该版本的审计状态更新为
+            <strong class="text-error font-semibold">已废弃 (Deprecated)</strong>。 审计记录安全存入
+            Git 数据仓库，便于团队追溯。
           </p>
           <div class="field">
-            <label for="deprecate-reason" class="text-xs font-medium text-text-1 mb-1 block">废弃原因说明</label>
+            <label for="deprecate-reason" class="text-xs font-medium text-text-1 mb-1 block"
+              >废弃原因说明</label
+            >
             <NInput
               id="deprecate-reason"
               v-model:value="deprecateModal.reason"
@@ -470,16 +559,24 @@ usePolling(async () => {
           </div>
           <div class="p-3 rounded-lg bg-surface-alt border border-border space-y-1">
             <label class="flex items-center gap-2 text-text-1 cursor-pointer">
-              <input type="checkbox" v-model="deprecateModal.cleanupTags" class="accent-error rounded">
+              <input
+                type="checkbox"
+                v-model="deprecateModal.cleanupTags"
+                class="accent-error rounded"
+              />
               <span>同时安全撤销当次 Git 里程碑与构建标签 (Tag Cleanup)</span>
             </label>
-            <div class="text-11px text-text-3 pl-5">将安全删除业务工程上的本地与远程标签，释放标签名供重发</div>
+            <div class="text-11px text-text-3 pl-5">
+              将安全删除业务工程上的本地与远程标签，释放标签名供重发
+            </div>
           </div>
         </div>
         <template #footer>
           <div class="flex justify-end gap-2.5">
             <NButton quaternary @click="deprecateModal.open = false">取消</NButton>
-            <NButton type="error" :loading="deprecateModal.submitting" @click="submitDeprecate">确认标为废弃</NButton>
+            <NButton type="error" :loading="deprecateModal.submitting" @click="submitDeprecate"
+              >确认标为废弃</NButton
+            >
           </div>
         </template>
       </NModal>
@@ -487,7 +584,13 @@ usePolling(async () => {
     <div v-else-if="projectsStore.loading" class="p-10 text-center text-text-3">
       <NSpin size="small" />
     </div>
-    <NResult v-else status="404" title="项目不存在" description="可能已被删除或从未创建" class="mt-10">
+    <NResult
+      v-else
+      status="404"
+      title="项目不存在"
+      description="可能已被删除或从未创建"
+      class="mt-10"
+    >
       <template #footer>
         <NButton @click="router.push('/')">返回总览</NButton>
       </template>

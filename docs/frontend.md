@@ -630,6 +630,18 @@ emits: { 'update:modelValue': [path: string] }
 - **StatCard**：props `{ label, value, icon?, accent? }`；`stat-value` + `stat-label`。
 - **LogStateBadge**：StatusBadge 的 logState 语义包装，向导第 3 步与记录详情共用。
 
+### 4.21 OnboardingWizard（M5-08 首次使用引导）
+
+```ts
+// 无 props/emits；读写 uiStore.onboardingOpen；App.vue 全局挂载（CommandPalette 之后）
+```
+
+- **四步**：欢迎（产品定位 + 零侵入承诺）→ 令牌保护（脱敏展示前 4 位、复制完整令牌、NPopconfirm 轮换 `api.rotateToken`）→ 建项目/接仓库（内嵌复用 AddProjectDialog / AddRepoDialog，保存后 `projectsStore.load()`）→ 首次发布（打开发布向导按钮，无项目时禁用；`pnpm seed` 演示数据命令一键复制）。
+- **自动弹出**：App.vue boot 后 `projectsStore.items.length === 0 && !localStorage['bxverse.onboarding.done']` 时打开；完成/跳过/Esc 均写完成标记（`ONBOARDING_DONE_KEY`，stores/ui.ts 导出），之后不再自动弹。
+- **重看入口**：AppLayout 侧栏底部 `i-carbon-help` 按钮 + 命令面板「重看新手引导」（系统组，关键词 onboarding/guide/引导）。
+- **a11y**：NModal preset=card + `aria-label="首次使用引导"`；`:mask-closable="false"`；进度点 `aria-hidden`；icon 均 `aria-hidden`。
+- RepoDetail 设置面板补充：`status.repoKind === 'static'`（无 package.json 的原生静态仓库）时 R26 流水线区顶部展示降级提示横幅（派生版本模式 / install-build 自动跳过 / 产物目录可指源码目录）。
+
 ---
 
 ## 5. 状态管理（Pinia）
@@ -1055,3 +1067,8 @@ const routes = [
 | 2026-08-17 | 新增 §4.18 Settings AI 供应商管理（多供应商：预设 DeepSeek/OpenAI/Ollama/Kimi coding plan/小米 MiMo/MiniMax coding plan/自定义，write-only 凭据，热更新，旧配置迁移）与 §4.19 AI Git 助手（阶段二设计预留：Git 面板 + AI 提交信息/变更解读/预检失败分析）；§3.4 Settings 表单表与 §4.14 LogEditor AI 润色描述同步为多供应商语义；章节编号顺延（原 §4.18 DirPicker 编号保留，其他小组件→§4.20） |
 | 2026-08-17 | §4.19 GitTab 落地：双栏布局、状态摘要统计、单文件与全部暂存/撤销、Conventional Commits 提交弹窗（AI 生成标题/说明）、单文件 Diff 侧栏 + AI 变更解读，RepoDetail（R26 6 字段流水线） 接入 `git` TabPane |
 | 2026-08-24 | 新增 R28 快速发布通道：§3.4 向导补充快速模式（`?mode=quick` 预填 `lastQuickPublish`，检测→版本→日志→dry-run→执行，门禁仍强制，向导保留为详细模式；连续两次 patch 第二次≤5 步） |
+| 2026-08-25 | M5-08 落地：新增 §4.21 OnboardingWizard（四步引导/自动弹出/重看入口）+ RepoDetail 静态仓库（repoKind=static）提示横幅；e2e/onboarding.py 覆盖 |
+| 2026-08-25 | M7 收口：BackupPanel 恢复对话框升级——默认路径预填 BX_HOME/restores/{version}-{repoName}（health.home 透出）、快照/产物 overwrite 覆盖开关、版本号二次确认解锁、恢复审计 chip（restores×N，tooltip 最近恢复时间/目录）；api.backupRestore 增 overwrite |
+| 2026-08-26 | M8 收口：ProjectCard 脏仓徽标（i-carbon-document-unknown + 计数）+ 末次发布相对时间（今天/昨天/N 天前/N 周前/N 月前/N 年前）；RepoCard 设置菜单（NDropdown：刷新/打开 Git/编辑/移除）—— 整卡 RouterLink + 全部 .stop 防误导航；StatCard color 扩展 'orange'；Dashboard 4 卡变 5 卡（新增「工作区脏」） |
+| 2026-08-26 | M11 落地：FailureRecoveryCard.vue（失败头卡：危险色边框 + 错误码 chip + 失败仓计数；结构化诊断：head/target/tag/tagSource 4 列事实 + 恢复建议 + 三出路按钮 + 诊断包 Blob 导出）；StepResult.vue 失败时优先渲染 FailureRecoveryCard 替代旧 NAlert |
+| 2026-08-26 | M14 命令面板增强：fuzzy 匹配（连续命中加权 + 短查询优先）+ aria-label 描述总项数 + listbox role + 空态 role=status + 计数条；onboarding e2e 用 placeholder 选择器兼容动态 aria-label |

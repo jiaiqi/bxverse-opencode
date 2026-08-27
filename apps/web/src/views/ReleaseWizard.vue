@@ -153,6 +153,20 @@ function handleAgain() {
   void detect().then(() => store.setSelected(changedRepoIds.value))
 }
 
+/** M11：失败三出路 — 改用下一版本号（回版本步自选 bump） */
+function handleRetryBump() {
+  store.step = 1
+  store.bumpOverride = 'patch' // 默认 patch 兜底，前端可在 StepVersion 改成 minor/major
+}
+/** M11：失败三出路 — 接管续跑（server 端 findActive journal 自动接续） */
+async function handleResume() {
+  store.reset(projectId.value)
+  await detect()
+  store.setSelected(changedRepoIds.value)
+  store.bumpOverride = 'patch'
+  store.step = 4 // 直接走 dry-run 复检
+}
+
 function goPrev() {
   store.goTo(store.step - 1)
 }
@@ -279,7 +293,12 @@ function goNext() {
           <StepExecute />
         </div>
         <div v-show="store.step === 6">
-          <StepResult :project-id="projectId" @again="handleAgain" />
+          <StepResult
+            :project-id="projectId"
+            @again="handleAgain"
+            @retry-bump="handleRetryBump"
+            @resume="handleResume"
+          />
         </div>
       </div>
 

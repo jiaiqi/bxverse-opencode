@@ -949,10 +949,11 @@ data: {"type":"done","message":"发布完成","data":{"releaseId":"rel_p_3f1_v1.
 响应 `200`：
 
 ```json
-{ "ok": true, "version": "0.2.0" }
+{ "ok": true, "version": "0.2.0", "home": "C:/Users/x/.bxverse" }
 ```
 
 - `version` 为 server 包版本（`package.json`），非项目/仓库版本。
+- `home`（2026-08-25 扩展）为 BX_HOME 根路径，供前端拼白名单内默认路径（如恢复向导默认目录）。
 - 认证豁免：`(pathname === '/api/health') && method === 'GET'` 跳过 token 校验（见 app.ts）；响应同样无 CORS 头。
 - 不做任何 git/配置读取，用于探测服务存活与版本。
 
@@ -1071,7 +1072,7 @@ data: {"type":"done","message":"发布完成","data":{"releaseId":"rel_p_3f1_v1.
 
 - `GET /api/backups/usage?projectId=&repoId=`：`BackupUsage` 聚合（`getBackupUsage`）。
 - `POST /api/backups/cleanup`：`{ projectId?, repoId?, retention?, dryRun }` → `enforceRetention`；缺 `retention` 时取 `AppConfig.backup.retention`，三项全空 400 `VALIDATION`；`assertBackupCleanupBody` 校验 `keepLast>=1/maxBytes>=0/keepDays>=1`。
-- `POST /api/backups/restore`：`{ releaseId, repoId, kind, targetDir }` → `restoreBundle/restoreArchive`；`assertRestoreBody` 校验绝对路径且非根，`kind` ∈ `source-bundle/source-archive/artifact`。
+- `POST /api/backups/restore`：`{ releaseId, repoId, kind, targetDir, overwrite? }` → `restoreBundle/restoreArchive`；`assertRestoreBody` 校验绝对路径且非根 + BX_HOME 白名单，`kind` ∈ `source-bundle/source-archive/artifact`；`overwrite`（仅快照/产物生效）允许目标目录非空并覆盖同名文件，bundle（git clone）恒要求空目录；成功后向备份元数据追加 `restores[]` 审计记录并 `commitRecords` 入数据仓库，响应 `{ ok, targetDir, restores }`。
 
 ### 10.9 发布说明分发至平台 Release（R27）
 
@@ -1156,5 +1157,9 @@ data: {"type":"done","message":"发布完成","data":{"releaseId":"rel_p_3f1_v1.
 | 2026-08-13 | §2 端点总览补齐：`/api/health`、`/api/projects/:id/versions`、`/api/projects/:id/versions/export`、`/api/releases/:id/versions`、`/api/repos/:pid/:rid/backups`、`/api/backups/*`（元数据/下载/删除/compare/verify）、`/api/repos/:pid/:rid/diff`；实现文件栏按实际源码路径填写 |
 | 2026-08-17 | 新增 §7.5 AI 供应商管理与能力：providers CRUD / credential（write-only）/ test / polish 升级多供应商；§7.5.3 阶段二 AI Git 助手与 `/api/repos/:pid/:rid/git/*` 路由（设计预留）；§3.1 `ai.apiKey` 语义改为永不回显（`hasKey` 布尔）；§3.2 `POST /api/config` 兼容旧 `ai.apiKey`（迁移到 credentials 后置空） |
 | 2026-08-17 | §7.5.3 阶段二落地：实现 `/api/repos/:pid/:rid/git/*`（status/diff/stage/unstage/commit/push/pull）与 `/api/ai/commit-message`、`/api/ai/explain-diff` 路由，更新请求/响应参数契约 |
-
-
+| 2026-08-25 | M7 恢复收口：§10.8 restore 补 overwrite 冲突策略 + restores 审计；§10.3 health 响应扩展 home 字段 |
+| 2026-08-26 | §10.x OverviewData 扩展：顶层 + 项目级 dirtyRepoCount、lastRelease.daysAgo |
+| 2026-08-26 | 新增 GET /api/ops/doctor：调 core/doctor.runDoctor 返回 DoctorReport（home/at/counts/overall/projects[repos[hints]]），同源 CLI 端 scripts/doctor.mjs；需 X-BX-Token |
+| 2026-08-26 | §10.x 新增 GET /api/publish/:taskId/failure（结构化失败诊断：failedRepos[] + reports[] FailedRepoReport）；POST /api/publish/:taskId/rollback body {repoIds?}（仅删自产 build 标签 + 标 deprecate + 写 R24 审计） |
+| 2026-08-26 | 新增 GET /api/ops/process（自举版本/内存 RSS/uptime/BX_HOME/nodeVersion/platform/startedAt）+ GET /api/ops/logs?level=all|info|warn|error（30 天滚动 JSON 日志流，最多 500 行倒序） |
+| 2026-08-26 | 新增 GET /api/overview/weekly（近 8 周发布次数 + 跨项目数，按 ISO 周分组，0 周也展示空柱） |

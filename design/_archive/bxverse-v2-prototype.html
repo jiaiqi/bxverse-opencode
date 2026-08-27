@@ -1,0 +1,2070 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>BX 版本管理台 · 原型 v2（精密仪器方向）</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Sora:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<style>
+/* ============================================================
+   BX 版本管理台 · 原型 v2 —— 精密仪器（Precision Instrument）
+   深色优先；版本号即视觉主角；细网格呼应 git graph；
+   无大面积 blur（性能/对比度），半透明分层 + 顶部光晕。
+   ============================================================ */
+
+:root {
+  /* ---- 主题令牌（dark 默认） ---- */
+  --bg: #0B0D10;
+  --bg-grid: rgba(255, 255, 255, 0.025);
+  --bg-glow: rgba(0, 201, 110, 0.07);
+  --bg-glow-2: rgba(77, 159, 255, 0.05);
+  --surface-1: #12151B;
+  --surface-2: #181C24;
+  --surface-3: #1E232D;
+  --surface-hover: #1A1F28;
+  --border: #20262F;
+  --border-strong: #2C3542;
+  --text-1: #E9EDF2;
+  --text-2: #9AA4B2;
+  --text-3: #5E6A78;
+  --brand: #00C96E;
+  --brand-hover: #1FD98A;
+  --brand-pressed: #00B160;
+  --brand-soft: rgba(0, 201, 110, 0.12);
+  --brand-soft-2: rgba(0, 201, 110, 0.2);
+  --brand-ring: rgba(0, 201, 110, 0.35);
+  --info: #4D9FFF;
+  --info-soft: rgba(77, 159, 255, 0.12);
+  --warn: #FFB454;
+  --warn-soft: rgba(255, 180, 84, 0.12);
+  --error: #FF6B6B;
+  --error-soft: rgba(255, 107, 107, 0.12);
+  --success: #00C96E;
+  --success-soft: rgba(0, 201, 110, 0.12);
+
+  --font-sans: "Sora", system-ui, -apple-system, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "Cascadia Code", Consolas, monospace;
+
+  --radius-s: 6px;
+  --radius-m: 10px;
+  --radius-l: 14px;
+  --radius-xl: 20px;
+
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+  --dur-fast: 140ms;
+  --dur-base: 200ms;
+  --dur-slow: 260ms;
+
+  --sidebar-w: 248px;
+  --topbar-h: 56px;
+}
+
+html[data-theme="light"] {
+  --bg: #F4F6F8;
+  --bg-grid: rgba(15, 23, 42, 0.035);
+  --bg-glow: rgba(0, 150, 90, 0.08);
+  --bg-glow-2: rgba(77, 130, 255, 0.07);
+  --surface-1: #FFFFFF;
+  --surface-2: #FAFBFC;
+  --surface-3: #F0F2F5;
+  --surface-hover: #F2F4F7;
+  --border: #E2E6EC;
+  --border-strong: #C9D0DA;
+  --text-1: #11161D;
+  --text-2: #4B5563;
+  --text-3: #8B96A3;
+  --brand: #00A85E;
+  --brand-hover: #009353;
+  --brand-pressed: #008C4F;
+  --brand-soft: rgba(0, 168, 94, 0.1);
+  --brand-soft-2: rgba(0, 168, 94, 0.18);
+  --brand-ring: rgba(0, 168, 94, 0.3);
+  --info: #2563EB;
+  --info-soft: rgba(37, 99, 235, 0.1);
+  --warn: #D97706;
+  --warn-soft: rgba(217, 119, 6, 0.1);
+  --error: #DC2626;
+  --error-soft: rgba(220, 38, 38, 0.1);
+  --success: #00A85E;
+  --success-soft: rgba(0, 168, 94, 0.1);
+}
+
+/* ============ 基础 ============ */
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; }
+body {
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--text-1);
+  background:
+    radial-gradient(1100px 420px at 50% -140px, var(--bg-glow), transparent 70%),
+    radial-gradient(700px 380px at 108% -80px, var(--bg-glow-2), transparent 70%),
+    var(--bg);
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden;
+}
+/* 细网格背景（呼应 git graph） */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background-image:
+    linear-gradient(var(--bg-grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--bg-grid) 1px, transparent 1px);
+  background-size: 32px 32px;
+  mask-image: radial-gradient(ellipse 90% 70% at 50% 0%, #000 30%, transparent 100%);
+  z-index: 0;
+}
+a { color: inherit; text-decoration: none; }
+button {
+  font-family: inherit;
+  font-size: inherit;
+  color: inherit;
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+:focus-visible { outline: 2px solid var(--brand-ring); outline-offset: 2px; border-radius: 4px; }
+::selection { background: var(--brand-soft-2); }
+
+/* 滚动条 */
+::-webkit-scrollbar { width: 9px; height: 9px; }
+::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 5px; border: 2px solid transparent; background-clip: content-box; }
+::-webkit-scrollbar-thumb:hover { background: var(--text-3); background-clip: content-box; }
+::-webkit-scrollbar-track { background: transparent; }
+
+/* ============ 通用组件 ============ */
+.mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+.num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-weight: 600; letter-spacing: -0.02em; }
+
+/* 按钮 */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 34px;
+  padding: 0 14px;
+  border-radius: var(--radius-m);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-2);
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  transition: background var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out),
+              color var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-out), box-shadow var(--dur-fast) var(--ease-out);
+  white-space: nowrap;
+  user-select: none;
+}
+.btn:hover { color: var(--text-1); background: var(--surface-hover); border-color: var(--border-strong); }
+.btn:active { transform: scale(0.97); }
+.btn:disabled { opacity: 0.45; pointer-events: none; }
+.btn-primary {
+  background: var(--brand);
+  border-color: var(--brand);
+  color: #04140B;
+  font-weight: 600;
+}
+.btn-primary:hover { background: var(--brand-hover); border-color: var(--brand-hover); color: #04140B; }
+.btn-primary:active { transform: scale(0.97); }
+.btn-ghost { background: transparent; border-color: transparent; }
+.btn-ghost:hover { background: var(--surface-hover); border-color: transparent; }
+.btn-sm { height: 28px; padding: 0 10px; font-size: 12px; border-radius: var(--radius-s); gap: 5px; }
+.btn-icon { width: 32px; height: 32px; padding: 0; justify-content: center; border-radius: var(--radius-m); }
+.btn-icon.btn-sm { width: 26px; height: 26px; }
+.btn-danger-text { color: var(--error); }
+.btn-danger-text:hover { background: var(--error-soft); border-color: transparent; color: var(--error); }
+
+/* 图标（原型用内联 SVG 简单绘制；正式实现仍走 carbon presetIcons） */
+.ic { width: 15px; height: 15px; flex-shrink: 0; display: inline-block; vertical-align: -2px; }
+.ic-sm { width: 13px; height: 13px; }
+
+/* 徽章：版本/状态 chip */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  font-weight: 500;
+  line-height: 1;
+  white-space: nowrap;
+  color: var(--text-2);
+  background: var(--surface-3);
+  border: 1px solid var(--border);
+}
+.chip .dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+.chip-brand { color: var(--brand); background: var(--brand-soft); border-color: rgba(0, 201, 110, 0.25); }
+.chip-info { color: var(--info); background: var(--info-soft); border-color: rgba(77, 159, 255, 0.25); }
+.chip-warn { color: var(--warn); background: var(--warn-soft); border-color: rgba(255, 180, 84, 0.25); }
+.chip-error { color: var(--error); background: var(--error-soft); border-color: rgba(255, 107, 107, 0.25); }
+.chip-dim { color: var(--text-3); background: transparent; border-color: var(--border); }
+.code-chip { font-family: var(--font-mono); font-size: 11px; font-variant-numeric: tabular-nums; }
+
+/* 版本徽章：仪器读数风（里程碑实心 / 构建描边） */
+.version-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 26px;
+  padding: 0 10px 0 0;
+  border-radius: var(--radius-s);
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  color: var(--text-1);
+  overflow: hidden;
+  white-space: nowrap;
+}
+.version-badge .tick {
+  align-self: stretch;
+  width: 3px;
+  background: var(--brand);
+  margin-right: 8px;
+  border-radius: 0 2px 2px 0;
+  box-shadow: 0 0 8px var(--brand-ring);
+}
+.version-badge.ghost .tick { background: var(--info); box-shadow: 0 0 8px rgba(77,159,255,.35); }
+.version-badge .suffix { color: var(--text-3); font-weight: 400; }
+
+/* 卡片 */
+.card {
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-l);
+  transition: border-color var(--dur-base) var(--ease-out), transform var(--dur-base) var(--ease-out),
+              box-shadow var(--dur-base) var(--ease-out), background var(--dur-base) var(--ease-out);
+}
+.card-hover:hover {
+  border-color: var(--border-strong);
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.28), 0 0 0 1px rgba(255,255,255,0.015);
+  transform: translateY(-1px);
+}
+.card-pad { padding: 18px; }
+
+/* 空状态 */
+.empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 44px 20px;
+  text-align: center;
+  color: var(--text-3);
+}
+.empty .e-ic {
+  width: 44px; height: 44px;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 12px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  color: var(--text-3);
+  margin-bottom: 4px;
+}
+.empty .e-title { font-size: 14.5px; font-weight: 600; color: var(--text-1); }
+.empty .e-desc { font-size: 12.5px; max-width: 320px; }
+
+/* 骨架屏 */
+.skeleton {
+  border-radius: var(--radius-s);
+  background: linear-gradient(90deg, var(--surface-2) 25%, var(--surface-3) 50%, var(--surface-2) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.4s infinite linear;
+}
+@keyframes shimmer { to { background-position: -200% 0; } }
+
+/* 表单 */
+.field { display: flex; flex-direction: column; gap: 6px; }
+.field label, .field-label { font-size: 12px; font-weight: 500; color: var(--text-2); }
+.field input, .field select, .field textarea {
+  height: 34px;
+  padding: 0 12px;
+  border-radius: var(--radius-m);
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text-1);
+  font-family: inherit;
+  font-size: 13px;
+  transition: border-color var(--dur-fast) var(--ease-out), box-shadow var(--dur-fast) var(--ease-out), background var(--dur-fast) var(--ease-out);
+}
+.field input:focus, .field select:focus, .field textarea:focus {
+  outline: none;
+  border-color: var(--brand);
+  box-shadow: 0 0 0 3px var(--brand-ring);
+  background: var(--surface-1);
+}
+.field textarea { height: auto; padding: 10px 12px; resize: vertical; line-height: 1.5; }
+.field .hint { font-size: 11.5px; color: var(--text-3); }
+
+/* 开关 */
+.switch {
+  position: relative;
+  width: 38px; height: 21px;
+  border-radius: 999px;
+  background: var(--surface-3);
+  border: 1px solid var(--border-strong);
+  transition: background var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out);
+  flex-shrink: 0;
+}
+.switch::after {
+  content: "";
+  position: absolute;
+  top: 2px; left: 2px;
+  width: 15px; height: 15px;
+  border-radius: 50%;
+  background: var(--text-2);
+  transition: transform var(--dur-fast) var(--ease-out), background var(--dur-fast) var(--ease-out);
+}
+.switch.on { background: var(--brand); border-color: var(--brand); }
+.switch.on::after { transform: translateX(17px); background: #04140B; }
+
+/* 弹窗/抽屉遮罩 */
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(5, 7, 10, 0.55);
+  backdrop-filter: blur(3px);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--dur-base) var(--ease-out);
+  z-index: 50;
+}
+.overlay.open { opacity: 1; pointer-events: auto; }
+
+/* 抽屉 */
+.drawer {
+  position: fixed;
+  top: 0; right: 0; bottom: 0;
+  width: min(560px, 92vw);
+  background: var(--surface-1);
+  border-left: 1px solid var(--border);
+  z-index: 51;
+  transform: translateX(100%);
+  transition: transform var(--dur-slow) var(--ease-out);
+  display: flex;
+  flex-direction: column;
+}
+.drawer.open { transform: translateX(0); }
+.drawer-head {
+  display: flex; align-items: center; gap: 10px;
+  padding: 0 20px; height: 56px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.drawer-head .d-title { font-size: 15px; font-weight: 600; flex: 1; display: flex; align-items: center; gap: 10px; }
+.drawer-body { flex: 1; overflow-y: auto; padding: 20px; }
+
+/* 模态 */
+.modal {
+  position: fixed;
+  left: 50%; top: 50%;
+  transform: translate(-50%, -50%) scale(0.96);
+  opacity: 0;
+  pointer-events: none;
+  width: min(520px, 92vw);
+  max-height: 86vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface-1);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-l);
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.45);
+  z-index: 52;
+  transition: transform var(--dur-base) var(--ease-out), opacity var(--dur-base) var(--ease-out);
+}
+.modal.open { transform: translate(-50%, -50%) scale(1); opacity: 1; pointer-events: auto; }
+.modal-head { display: flex; align-items: center; gap: 10px; padding: 16px 20px 0; }
+.modal-head .m-title { font-size: 15px; font-weight: 600; flex: 1; }
+.modal-body { padding: 16px 20px; overflow-y: auto; }
+.modal-foot { padding: 0 20px 18px; display: flex; justify-content: flex-end; gap: 8px; }
+
+/* ============ 布局壳 ============ */
+.shell { display: flex; height: 100vh; position: relative; z-index: 1; }
+
+/* 侧栏 */
+.sidebar {
+  width: var(--sidebar-w);
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  background: rgba(16, 19, 25, 0.78);
+  border-right: 1px solid var(--border);
+  backdrop-filter: blur(14px) saturate(130%);
+  transition: width var(--dur-base) var(--ease-out);
+  overflow: hidden;
+}
+html[data-theme="light"] .sidebar { background: rgba(255, 255, 255, 0.8); }
+.shell.collapsed .sidebar { width: 64px; }
+.sb-logo {
+  display: flex; align-items: center; gap: 10px;
+  height: var(--topbar-h);
+  padding: 0 18px;
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--border);
+}
+.sb-logo .mark {
+  width: 26px; height: 26px;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 8px;
+  background: var(--brand);
+  color: #04140B;
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 13px;
+  box-shadow: 0 0 16px var(--brand-ring);
+  flex-shrink: 0;
+}
+.sb-logo .name { font-size: 13.5px; font-weight: 600; letter-spacing: 0.01em; white-space: nowrap; }
+.sb-logo .name small { display: block; font-size: 10px; font-weight: 400; color: var(--text-3); font-family: var(--font-mono); letter-spacing: 0.06em; }
+.shell.collapsed .sb-logo .name { display: none; }
+.shell.collapsed .sb-logo { justify-content: center; padding: 0; }
+
+.sb-nav { flex: 1; overflow-y: auto; padding: 10px 10px; }
+.sb-group {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 10px 6px;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  color: var(--text-3);
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.shell.collapsed .sb-group { justify-content: center; padding: 12px 0 6px; }
+.sb-item {
+  display: flex; align-items: center; gap: 10px;
+  height: 36px;
+  padding: 0 10px;
+  margin-bottom: 2px;
+  border-radius: var(--radius-m);
+  color: var(--text-2);
+  font-size: 13px;
+  font-weight: 500;
+  position: relative;
+  white-space: nowrap;
+  transition: background var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out);
+  cursor: pointer;
+}
+.sb-item:hover { background: var(--surface-hover); color: var(--text-1); }
+.sb-item.active { background: var(--brand-soft); color: var(--brand); font-weight: 600; }
+.sb-item.active::before {
+  content: "";
+  position: absolute;
+  left: -10px; top: 8px; bottom: 8px;
+  width: 3px;
+  border-radius: 0 3px 3px 0;
+  background: var(--brand);
+  box-shadow: 0 0 10px var(--brand-ring);
+}
+.sb-item .ic { opacity: 0.75; }
+.sb-item.active .ic { opacity: 1; }
+.sb-item .label { flex: 1; overflow: hidden; text-overflow: ellipsis; }
+.sb-item .badge-dot {
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: var(--brand);
+  box-shadow: 0 0 8px var(--brand-ring);
+  flex-shrink: 0;
+}
+.shell.collapsed .sb-item { justify-content: center; padding: 0; }
+.shell.collapsed .sb-item .label, .shell.collapsed .sb-item .badge-dot { display: none; }
+.shell.collapsed .sb-group span { display: none; }
+
+.sb-foot {
+  flex-shrink: 0;
+  padding: 8px 10px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.sb-foot .sb-item { text-align: left; width: 100%; }
+.shell.collapsed .sb-foot { align-items: center; }
+.shell.collapsed .sb-foot .sb-item { width: 36px; text-align: center; }
+.sb-kbd {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-3);
+  border: 1px solid var(--border-strong);
+  border-radius: 4px;
+  padding: 1px 5px;
+  background: var(--surface-2);
+}
+
+/* 主区 */
+.main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+
+/* 顶栏 */
+.topbar {
+  height: var(--topbar-h);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 20px;
+  border-bottom: 1px solid var(--border);
+  background: rgba(13, 16, 21, 0.6);
+  backdrop-filter: blur(14px) saturate(130%);
+  flex-shrink: 0;
+  position: relative;
+  z-index: 5;
+}
+html[data-theme="light"] .topbar { background: rgba(255, 255, 255, 0.7); }
+.tb-title { font-size: 14px; font-weight: 600; display: flex; align-items: center; gap: 8px; min-width: 0; }
+.tb-title .crumb { color: var(--text-3); font-weight: 400; font-size: 12.5px; }
+.tb-title .crumb-sep { color: var(--text-3); opacity: 0.5; }
+.tb-spacer { flex: 1; }
+.tb-search {
+  display: flex; align-items: center; gap: 8px;
+  height: 32px;
+  width: 230px;
+  padding: 0 12px;
+  border-radius: var(--radius-m);
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text-3);
+  font-size: 12.5px;
+  transition: border-color var(--dur-fast) var(--ease-out), box-shadow var(--dur-fast) var(--ease-out), width var(--dur-base) var(--ease-out);
+  cursor: text;
+}
+.tb-search:hover { border-color: var(--border-strong); }
+.tb-search.focused { border-color: var(--brand); box-shadow: 0 0 0 3px var(--brand-ring); width: 300px; }
+.tb-search .kbd { margin-left: auto; }
+
+/* 服务状态 */
+.status-pill {
+  display: inline-flex; align-items: center; gap: 7px;
+  height: 26px; padding: 0 11px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  font-weight: 500;
+  background: var(--success-soft);
+  color: var(--success);
+  border: 1px solid rgba(0, 201, 110, 0.25);
+  white-space: nowrap;
+}
+.status-pill .pulse {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--success);
+  box-shadow: 0 0 0 0 rgba(0, 201, 110, 0.5);
+  animation: pulse 2.2s infinite;
+}
+@keyframes pulse {
+  0% { box-shadow: 0 0 0 0 rgba(0, 201, 110, 0.45); }
+  70% { box-shadow: 0 0 0 7px rgba(0, 201, 110, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(0, 201, 110, 0); }
+}
+
+/* 内容区 */
+.content { flex: 1; overflow-y: auto; position: relative; }
+.page {
+  max-width: 1240px;
+  margin: 0 auto;
+  padding: 28px 28px 60px;
+  animation: page-in var(--dur-slow) var(--ease-out);
+}
+@keyframes page-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* 页头 */
+.page-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 22px; }
+.ph-title { display: flex; align-items: center; gap: 10px; font-size: 20px; font-weight: 700; letter-spacing: -0.01em; }
+.ph-title .ph-ic {
+  width: 32px; height: 32px;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 9px;
+  background: var(--brand-soft);
+  color: var(--brand);
+  border: 1px solid rgba(0, 201, 110, 0.25);
+}
+.ph-desc { font-size: 12.5px; color: var(--text-3); margin-top: 3px; padding-left: 42px; }
+.ph-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+
+/* 区块标题 */
+.sec-title {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 14px; font-weight: 600;
+  margin: 26px 0 12px;
+}
+.sec-title .sec-ic { color: var(--brand); opacity: 0.9; }
+.sec-title .count { font-family: var(--font-mono); font-size: 11.5px; font-weight: 500; color: var(--text-3); background: var(--surface-2); border: 1px solid var(--border); border-radius: 999px; padding: 1px 8px; }
+
+/* 统计卡（仪器读数风） */
+.stat-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+.stat-card {
+  display: flex; align-items: center; gap: 16px;
+  padding: 18px 20px;
+  position: relative;
+  overflow: hidden;
+}
+.stat-card::after {
+  content: "";
+  position: absolute;
+  right: -30px; top: -30px;
+  width: 110px; height: 110px;
+  border-radius: 50%;
+  background: radial-gradient(circle, var(--stat-glow, rgba(255,255,255,0.04)), transparent 70%);
+  pointer-events: none;
+}
+.stat-card.accent { --stat-glow: var(--brand-ring); }
+.stat-ic {
+  width: 42px; height: 42px;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 12px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  color: var(--text-3);
+  flex-shrink: 0;
+}
+.stat-card.accent .stat-ic { background: var(--brand-soft); border-color: rgba(0,201,110,0.3); color: var(--brand); }
+.stat-num { font-size: 26px; font-weight: 700; letter-spacing: -0.03em; line-height: 1.1; }
+.stat-card.accent .stat-num { color: var(--brand); text-shadow: 0 0 24px var(--brand-ring); }
+.stat-label { font-size: 12px; color: var(--text-3); margin-top: 2px; }
+.stat-sub { font-family: var(--font-mono); font-size: 10.5px; color: var(--text-3); opacity: 0.8; }
+
+/* 项目卡 */
+.project-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 14px; }
+.project-card { padding: 18px; display: flex; flex-direction: column; gap: 14px; cursor: pointer; position: relative; }
+.project-card:active { transform: scale(0.99); }
+.pc-top { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.pc-name { font-size: 14.5px; font-weight: 600; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pc-release-btn {
+  opacity: 0;
+  transform: translateY(2px);
+  transition: opacity var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-out);
+  color: var(--brand);
+}
+.project-card:hover .pc-release-btn { opacity: 1; transform: translateY(0); }
+.pc-meta { display: flex; gap: 16px; font-size: 12.5px; color: var(--text-2); }
+.pc-meta .m { display: flex; align-items: center; gap: 6px; }
+.pc-meta .m.hot { color: var(--brand); font-weight: 500; }
+.pc-foot {
+  display: flex; align-items: center; gap: 8px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+  font-size: 11.5px;
+  color: var(--text-3);
+}
+.pc-foot .grow { flex: 1; }
+
+/* 仓库卡 */
+.repo-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 14px; }
+.repo-card { padding: 16px 18px; cursor: pointer; display: flex; flex-direction: column; gap: 10px; }
+.repo-card:active { transform: scale(0.99); }
+.rc-top { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.rc-name { font-size: 14px; font-weight: 600; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rc-branch { display: flex; align-items: center; gap: 6px; }
+.rc-path { font-family: var(--font-mono); font-size: 11px; color: var(--text-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* 待发布行 */
+.changed-group { padding: 6px 0; }
+.changed-head { display: flex; align-items: center; gap: 12px; padding: 10px 16px; }
+.changed-head .cg-name { font-size: 13.5px; font-weight: 600; min-width: 140px; }
+.changed-repos { display: flex; flex-wrap: wrap; gap: 8px; flex: 1; }
+.repo-link {
+  display: inline-flex; align-items: center; gap: 7px;
+  height: 30px; padding: 0 10px 0 8px;
+  border-radius: var(--radius-m);
+  border: 1px solid var(--border);
+  background: var(--surface-1);
+  font-size: 12.5px;
+  color: var(--text-2);
+  transition: border-color var(--dur-fast) var(--ease-out), background var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-out);
+  cursor: pointer;
+}
+.repo-link:hover { border-color: rgba(0, 201, 110, 0.4); background: var(--brand-soft); color: var(--brand); }
+.repo-link:active { transform: scale(0.97); }
+.repo-link .hash { font-family: var(--font-mono); font-size: 10.5px; color: var(--text-3); }
+
+/* ============ 发布历史 ============ */
+.release-list { display: flex; flex-direction: column; }
+.release-row {
+  display: flex; align-items: center; gap: 14px;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease-out);
+  position: relative;
+}
+.release-row:last-child { border-bottom: none; }
+.release-row:hover { background: var(--surface-hover); }
+.release-row::before {
+  content: "";
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  width: 3px;
+  background: transparent;
+  border-radius: 0 3px 3px 0;
+  transition: background var(--dur-fast) var(--ease-out);
+}
+.release-row:hover::before { background: var(--brand); box-shadow: 0 0 10px var(--brand-ring); }
+.rr-ver { min-width: 172px; }
+.rr-meta { flex: 1; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; min-width: 0; }
+.rr-date { font-size: 12px; color: var(--text-3); font-variant-numeric: tabular-nums; }
+.rr-scope { font-size: 12px; color: var(--text-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 300px; }
+.rr-chev { color: var(--text-3); opacity: 0.6; transition: transform var(--dur-fast) var(--ease-out), opacity var(--dur-fast) var(--ease-out); }
+.release-row:hover .rr-chev { opacity: 1; transform: translateX(2px); }
+
+/* ============ 树 / 列表 ============ */
+.tree-row {
+  display: flex; align-items: center; gap: 8px;
+  height: 30px;
+  padding: 0 10px;
+  font-size: 12.5px;
+  color: var(--text-2);
+  border-radius: var(--radius-s);
+  border-left: 2px solid transparent;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out);
+}
+.tree-row:hover { background: var(--surface-hover); color: var(--text-1); }
+.tree-row.active { background: var(--brand-soft); color: var(--brand); border-left-color: var(--brand); font-weight: 500; }
+.tree-row .fname { overflow: hidden; text-overflow: ellipsis; }
+.tree-row .chev { transition: transform var(--dur-fast) var(--ease-out); color: var(--text-3); }
+.tree-row.open .chev { transform: rotate(90deg); }
+.tree-row .f-ic { opacity: 0.8; flex-shrink: 0; }
+
+/* 控制台 */
+.console {
+  background: #0A0C0F;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-l);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.7;
+  overflow: hidden;
+}
+html[data-theme="light"] .console { background: #101318; }
+.console-head {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 14px;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+  color: #5E6A78;
+  font-size: 11px;
+  font-family: var(--font-sans);
+}
+.console-head .dots { display: flex; gap: 6px; }
+.console-head .dots i { width: 9px; height: 9px; border-radius: 50%; display: block; }
+.console-body { padding: 12px 16px; max-height: 300px; overflow-y: auto; color: #B7C1CD; }
+.console-line { display: flex; gap: 12px; white-space: pre-wrap; word-break: break-all; }
+.console-line .ln-repo { width: 110px; flex-shrink: 0; color: #5E6A78; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.console-line .ln-cmd { flex: 1; }
+.console-line .ln-cmd .dim { color: #4A5460; }
+.console-line.step .ln-cmd { color: #00C96E; }
+.console-line.done .ln-cmd { color: #00C96E; }
+.console-line.err .ln-cmd { color: #FF6B6B; }
+.console-line.run { animation: none; }
+.console-cursor::after {
+  content: "▊";
+  color: #00C96E;
+  animation: blink 1s steps(1) infinite;
+}
+@keyframes blink { 50% { opacity: 0; } }
+
+/* 日志编辑器 */
+.log-editor { border: 1px solid var(--border); border-radius: var(--radius-l); overflow: hidden; background: var(--surface-1); }
+.le-head {
+  display: flex; align-items: center; gap: 8px;
+  padding: 10px 14px;
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--border);
+  flex-wrap: wrap;
+}
+.le-title { font-size: 13px; font-weight: 600; }
+.le-body { display: grid; grid-template-columns: 1fr 1fr; }
+.le-body .le-editor { border-right: 1px solid var(--border); }
+.le-body textarea {
+  width: 100%; height: 220px;
+  background: var(--surface-1);
+  color: var(--text-1);
+  border: none;
+  padding: 14px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.6;
+  resize: none;
+}
+.le-body textarea:focus { outline: none; }
+.le-preview { padding: 14px; overflow-y: auto; max-height: 250px; font-size: 13px; color: var(--text-2); }
+.le-preview h3 { font-size: 12.5px; color: var(--text-1); margin: 10px 0 4px; }
+.le-preview ul { padding-left: 18px; margin: 4px 0; }
+.le-preview li { margin: 2px 0; }
+
+/* 向导步骤条 */
+.steps { display: flex; align-items: center; margin-bottom: 24px; }
+.step {
+  display: flex; align-items: center; gap: 9px;
+  flex: 1;
+  color: var(--text-3);
+  font-size: 12.5px;
+  font-weight: 500;
+  cursor: default;
+  min-width: 0;
+}
+.step .s-num {
+  width: 26px; height: 26px;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 50%;
+  border: 1px solid var(--border-strong);
+  background: var(--surface-2);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  transition: all var(--dur-fast) var(--ease-out);
+  flex-shrink: 0;
+}
+.step .s-label { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.step.done .s-num { background: var(--brand-soft); border-color: var(--brand); color: var(--brand); }
+.step.done .s-label { color: var(--text-2); }
+.step.active { color: var(--text-1); font-weight: 600; }
+.step.active .s-num {
+  background: var(--brand);
+  border-color: var(--brand);
+  color: #04140B;
+  box-shadow: 0 0 0 4px var(--brand-ring);
+  font-weight: 700;
+}
+.step-line {
+  flex: 1; height: 1.5px;
+  background: var(--border);
+  margin: 0 12px;
+  min-width: 18px;
+  position: relative;
+  overflow: hidden;
+}
+.step-line::after {
+  content: "";
+  position: absolute; inset: 0;
+  background: var(--brand);
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform var(--dur-base) var(--ease-out);
+}
+.step-line.passed::after { transform: scaleX(1); }
+
+/* tabs */
+.tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--border); }
+.tab {
+  position: relative;
+  height: 40px;
+  padding: 0 16px;
+  display: flex; align-items: center; gap: 7px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-3);
+  transition: color var(--dur-fast) var(--ease-out);
+  cursor: pointer;
+  border-radius: var(--radius-m) var(--radius-m) 0 0;
+}
+.tab:hover { color: var(--text-1); }
+.tab.active { color: var(--brand); font-weight: 600; }
+.tab.active::after {
+  content: "";
+  position: absolute;
+  left: 12px; right: 12px; bottom: -1px;
+  height: 2px;
+  border-radius: 2px 2px 0 0;
+  background: var(--brand);
+  box-shadow: 0 0 8px var(--brand-ring);
+}
+.tab-count { font-family: var(--font-mono); font-size: 10.5px; color: var(--text-3); }
+
+/* 向导仓库行 */
+.wz-row {
+  display: flex; align-items: center; gap: 12px;
+  padding: 12px 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-m);
+  background: var(--surface-1);
+  margin-bottom: 8px;
+  transition: border-color var(--dur-fast) var(--ease-out), background var(--dur-fast) var(--ease-out);
+  cursor: pointer;
+}
+.wz-row:hover { border-color: var(--border-strong); }
+.wz-row.changed { border-color: rgba(0,201,110,0.3); background: var(--brand-soft); }
+.wz-row.synced { opacity: 0.65; }
+.checkbox {
+  width: 17px; height: 17px;
+  border-radius: 5px;
+  border: 1.5px solid var(--border-strong);
+  background: var(--surface-2);
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+  transition: all var(--dur-fast) var(--ease-out);
+  color: transparent;
+}
+.wz-row.changed .checkbox { border-color: var(--brand); }
+.checkbox.on { background: var(--brand); border-color: var(--brand); color: #04140B; }
+.checkbox.on svg { stroke: #04140B; }
+.checkbox:disabled { opacity: 0.4; }
+
+/* 提交明细行 */
+.commit-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 16px 8px 52px;
+  font-size: 12.5px;
+  border-bottom: 1px solid var(--border);
+  transition: background var(--dur-fast) var(--ease-out);
+}
+.commit-row:hover { background: var(--surface-hover); }
+.commit-row .cs { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.commit-row.excluded .cs { opacity: 0.45; text-decoration: line-through; }
+
+/* 设置区段 */
+.settings-sec { margin-bottom: 14px; }
+.settings-card { padding: 20px; }
+.setting-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 12px 0; border-bottom: 1px solid var(--border); }
+.setting-row:last-child { border-bottom: none; }
+.setting-row .sr-label { font-size: 13.5px; font-weight: 500; }
+.setting-row .sr-desc { font-size: 12px; color: var(--text-3); margin-top: 2px; }
+
+/* 主题选择卡 */
+.theme-pick { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.theme-opt {
+  display: flex; align-items: center; gap: 12px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-l);
+  background: var(--surface-1);
+  cursor: pointer;
+  transition: all var(--dur-fast) var(--ease-out);
+  text-align: left;
+}
+.theme-opt:hover { border-color: var(--border-strong); }
+.theme-opt.selected { border-color: var(--brand); background: var(--brand-soft); box-shadow: 0 0 0 1px var(--brand); }
+.theme-opt .swatch { width: 40px; height: 40px; border-radius: 10px; border: 1px solid var(--border); flex-shrink: 0; position: relative; overflow: hidden; }
+.theme-opt .swatch .dot { position: absolute; width: 14px; height: 14px; border-radius: 4px; }
+.theme-opt .t-title { font-size: 13px; font-weight: 600; }
+.theme-opt .t-desc { font-size: 11.5px; color: var(--text-3); margin-top: 2px; }
+.theme-opt .check { margin-left: auto; color: var(--brand); opacity: 0; }
+.theme-opt.selected .check { opacity: 1; }
+
+/* 表格（对比） */
+.tbl { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.tbl th {
+  text-align: left;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  color: var(--text-3);
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+  text-transform: uppercase;
+}
+.tbl td { padding: 9px 12px; border-bottom: 1px solid var(--border); color: var(--text-2); }
+.tbl tr:last-child td { border-bottom: none; }
+.tbl tr:hover td { background: var(--surface-hover); }
+.tbl td.mono { font-family: var(--font-mono); font-size: 11.5px; }
+
+/* 备份条目 */
+.backup-item {
+  display: flex; align-items: center; gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-m);
+  background: var(--surface-1);
+  margin-bottom: 8px;
+  transition: border-color var(--dur-fast) var(--ease-out), background var(--dur-fast) var(--ease-out);
+}
+.backup-item:hover { border-color: var(--border-strong); }
+.backup-item.selected { border-color: var(--brand); background: var(--brand-soft); }
+.bi-kind { width: 34px; height: 34px; display: flex; align-items: center; justify-content: center; border-radius: 9px; background: var(--surface-2); border: 1px solid var(--border); color: var(--text-3); flex-shrink: 0; }
+.bi-info { flex: 1; min-width: 0; }
+.bi-ver { font-family: var(--font-mono); font-size: 12.5px; font-weight: 600; }
+.bi-meta { font-size: 11.5px; color: var(--text-3); }
+
+/* 通知 toast */
+.toast {
+  position: fixed;
+  right: 20px; bottom: 20px;
+  display: flex; align-items: center; gap: 10px;
+  padding: 12px 18px;
+  background: var(--surface-2);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-m);
+  box-shadow: 0 12px 32px rgba(0,0,0,0.35);
+  font-size: 13px;
+  z-index: 60;
+  opacity: 0;
+  transform: translateY(12px) scale(0.98);
+  pointer-events: none;
+  transition: opacity var(--dur-base) var(--ease-out), transform var(--dur-base) var(--ease-out);
+}
+.toast.show { opacity: 1; transform: translateY(0) scale(1); }
+.toast .ic { color: var(--brand); }
+
+/* 页面切换动画 */
+.page { animation: page-in var(--dur-slow) var(--ease-out); }
+
+/* stagger 进入 */
+.stagger > * {
+  opacity: 0;
+  transform: translateY(10px);
+  animation: page-in var(--dur-slow) var(--ease-out) forwards;
+}
+.stagger > *:nth-child(1) { animation-delay: 40ms; }
+.stagger > *:nth-child(2) { animation-delay: 90ms; }
+.stagger > *:nth-child(3) { animation-delay: 140ms; }
+.stagger > *:nth-child(4) { animation-delay: 190ms; }
+.stagger > *:nth-child(5) { animation-delay: 240ms; }
+.stagger > *:nth-child(6) { animation-delay: 290ms; }
+.stagger > *:nth-child(7) { animation-delay: 340ms; }
+.stagger > *:nth-child(8) { animation-delay: 390ms; }
+
+/* 响应式 */
+@media (max-width: 1080px) {
+  .stat-grid { grid-template-columns: 1fr 1fr; }
+  .tb-search { display: none; }
+}
+@media (max-width: 860px) {
+  .stat-grid { grid-template-columns: 1fr; }
+  .le-body { grid-template-columns: 1fr; }
+  .le-body .le-editor { border-right: none; border-bottom: 1px solid var(--border); }
+}
+
+/* 动效降级 */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+@media (hover: hover) and (pointer: fine) {
+  .card-hover { transition: border-color var(--dur-base) var(--ease-out), transform var(--dur-base) var(--ease-out), box-shadow var(--dur-base) var(--ease-out); }
+}
+</style>
+</head>
+<body>
+
+<div class="shell" id="shell">
+
+  <!-- ============ 侧栏 ============ -->
+  <aside class="sidebar">
+    <div class="sb-logo">
+      <div class="mark">BX</div>
+      <div class="name">版本管理台<small>BXVERSE · LOCAL</small></div>
+    </div>
+
+    <nav class="sb-nav" aria-label="主导航">
+      <div class="sb-group"><span>导航</span></div>
+      <a class="sb-item" data-page-link="dashboard">
+        <svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="1.5" y="1.5" width="5.5" height="5.5" rx="1.5"/><rect x="9" y="1.5" width="5.5" height="5.5" rx="1.5"/><rect x="1.5" y="9" width="5.5" height="5.5" rx="1.5"/><rect x="9" y="9" width="5.5" height="5.5" rx="1.5"/></svg>
+        <span class="label">总览</span>
+      </a>
+
+      <div class="sb-group"><span>项目</span></div>
+      <a class="sb-item" data-page-link="project" data-page-arg="p1">
+        <svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M1.5 4.5A1.5 1.5 0 0 1 3 3h2.4a1.5 1.5 0 0 1 1.06.44L8 5h5a1.5 1.5 0 0 1 1.5 1.5v5A1.5 1.5 0 0 1 13 13H3a1.5 1.5 0 0 1-1.5-1.5z"/></svg>
+        <span class="label">主产品线</span>
+        <span class="badge-dot" title="有仓库待发布"></span>
+      </a>
+      <a class="sb-item" data-page-link="project" data-page-arg="p2">
+        <svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M1.5 4.5A1.5 1.5 0 0 1 3 3h2.4a1.5 1.5 0 0 1 1.06.44L8 5h5a1.5 1.5 0 0 1 1.5 1.5v5A1.5 1.5 0 0 1 13 13H3a1.5 1.5 0 0 1-1.5-1.5z"/></svg>
+        <span class="label">移动端矩阵</span>
+        <span class="badge-dot" title="有仓库待发布"></span>
+      </a>
+      <a class="sb-item" data-page-link="project" data-page-arg="p3">
+        <svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M1.5 4.5A1.5 1.5 0 0 1 3 3h2.4a1.5 1.5 0 0 1 1.06.44L8 5h5a1.5 1.5 0 0 1 1.5 1.5v5A1.5 1.5 0 0 1 13 13H3a1.5 1.5 0 0 1-1.5-1.5z"/></svg>
+        <span class="label">数据可视化线</span>
+      </a>
+      <a class="sb-item" data-page-link="project" data-page-arg="p4">
+        <svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M1.5 4.5A1.5 1.5 0 0 1 3 3h2.4a1.5 1.5 0 0 1 1.06.44L8 5h5a1.5 1.5 0 0 1 1.5 1.5v5A1.5 1.5 0 0 1 13 13H3a1.5 1.5 0 0 1-1.5-1.5z"/></svg>
+        <span class="label">工具链</span>
+      </a>
+      <a class="sb-item" data-page-link="project" data-page-arg="p5">
+        <svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M1.5 4.5A1.5 1.5 0 0 1 3 3h2.4a1.5 1.5 0 0 1 1.06.44L8 5h5a1.5 1.5 0 0 1 1.5 1.5v5A1.5 1.5 0 0 1 13 13H3a1.5 1.5 0 0 1-1.5-1.5z"/></svg>
+        <span class="label">AI 应用线</span>
+      </a>
+    </nav>
+
+    <div class="sb-foot">
+      <a class="sb-item" data-page-link="settings">
+        <svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M8 5.6A2.4 2.4 0 1 0 8 10.4 2.4 2.4 0 0 0 8 5.6z"/><path d="M13.4 8.9l1.1-.9-1.5-2.6-1.4.5a5.4 5.4 0 0 0-1.1-.9l-.2-1.4h-3l-.2 1.4a5.4 5.4 0 0 0-1.1.9l-1.4-.5L2.1 8l1.1.9a5.4 5.4 0 0 0 0 1.8l-1.1.9 1.5 2.6 1.4-.5a5.4 5.4 0 0 0 1.1.9l.2 1.4h3l.2-1.4a5.4 5.4 0 0 0 1.1-.9l1.4.5 1.5-2.6-1.1-.9a5.4 5.4 0 0 0 0-1.8z"/></svg>
+        <span class="label">设置</span>
+      </a>
+      <button class="sb-item" id="sbThemeToggle">
+        <svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="8" cy="8" r="3.2"/><path d="M8 1.5v2M8 12.5v2M1.5 8h2M12.5 8h2M3.2 3.2l1.4 1.4M11.4 11.4l1.4 1.4M12.8 3.2l-1.4 1.4M4.6 11.4l-1.4 1.4"/></svg>
+        <span class="label">主题</span>
+        <span class="sb-kbd" id="sbThemeLabel">深色</span>
+      </button>
+      <button class="sb-item" id="sbPalette">
+        <svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5L14 14"/></svg>
+        <span class="label">命令面板</span>
+        <span class="sb-kbd">Ctrl K</span>
+      </button>
+    </div>
+  </aside>
+
+  <!-- ============ 主区 ============ -->
+  <div class="main">
+    <header class="topbar">
+      <div class="tb-title" id="tbTitle">
+        <span class="crumb" id="tbCrumb"></span>
+      </div>
+      <div class="tb-spacer"></div>
+      <div class="tb-search" id="tbSearch" tabindex="0" role="searchbox" aria-label="搜索项目、仓库、版本">
+        <svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5L14 14"/></svg>
+        搜索项目 / 仓库 / 版本…
+        <span class="sb-kbd kbd">Ctrl K</span>
+      </div>
+      <div class="status-pill" title="bxverse v0.1.0 · 数据仓库已同步">
+        <span class="pulse"></span>本地服务已连接
+      </div>
+      <button class="btn-icon btn-ghost" id="tbTheme" aria-label="切换主题" title="切换主题">
+        <svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="8" cy="8" r="3.2"/><path d="M8 1.5v2M8 12.5v2M1.5 8h2M12.5 8h2M3.2 3.2l1.4 1.4M11.4 11.4l1.4 1.4M12.8 3.2l-1.4 1.4M4.6 11.4l-1.4 1.4"/></svg>
+      </button>
+      <button class="btn btn-sm" id="tbSync">
+        <svg class="ic ic-sm" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M13.5 8a5.5 5.5 0 0 1-9.4 3.9M2.5 8A5.5 5.5 0 0 1 11.9 4.1M1.5 2.5v3.5H5M14.5 13.5V10H11"/></svg>
+        同步数据
+      </button>
+      <button class="btn btn-primary" id="tbNewProject">
+        <svg class="ic ic-sm" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M8 3v10M3 8h10"/></svg>
+        新建项目
+      </button>
+    </header>
+
+    <main class="content" id="content"></main>
+  </div>
+</div>
+
+<!-- 抽屉：发布记录详情 -->
+<div class="overlay" data-overlay="release-drawer"></div>
+<aside class="drawer" id="release-drawer" role="dialog" aria-modal="true" aria-label="发布记录详情">
+  <div class="drawer-head">
+    <div class="d-title">
+      <span class="version-badge" id="drVersion"></span>
+      <span class="chip chip-brand" id="drBump"></span>
+      <span class="chip" id="drPushed"></span>
+    </div>
+    <button class="btn-icon btn-ghost" data-close="release-drawer" aria-label="关闭">
+      <svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 4l8 8M12 4l-8 8"/></svg>
+    </button>
+  </div>
+  <div class="drawer-body">
+    <div class="d-sec">
+      <div class="field-label" style="margin-bottom:6px">发布信息</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:18px" id="drMeta"></div>
+    </div>
+    <div class="tabs" style="margin-bottom:0">
+      <div class="tab active" data-tab="external">对外日志</div>
+      <div class="tab" data-tab="internal">对内日志</div>
+    </div>
+    <div style="padding:16px 2px;font-size:13px;color:var(--text-2)" id="drLog"></div>
+  </div>
+</aside>
+
+<!-- 模态：新建项目 -->
+<div class="overlay" data-overlay="newProjectModal"></div>
+<div class="modal" id="newProjectModal" role="dialog" aria-modal="true" aria-label="新建项目">
+  <div class="modal-head">
+    <div class="m-title">新建项目</div>
+    <button class="btn-icon btn-ghost" data-close="newProjectModal" aria-label="关闭">
+      <svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 4l8 8M12 4l-8 8"/></svg>
+    </button>
+  </div>
+  <div class="modal-body" style="display:flex;flex-direction:column;gap:16px">
+    <div class="field">
+      <label for="np-name">项目名称 <span style="color:var(--error)">*</span></label>
+      <input id="np-name" placeholder="如：主产品线…" autocomplete="off" spellcheck="false" />
+    </div>
+    <div class="field">
+      <label for="np-desc">描述（可选）</label>
+      <textarea id="np-desc" rows="2" placeholder="一句话说明该项目…"></textarea>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+      <div class="field">
+        <label for="np-bump">版本递增策略</label>
+        <select id="np-bump">
+          <option>自动（按提交语义推断）</option>
+          <option>手动（默认补丁 patch）</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="np-scheme">仓库版本方案</label>
+        <select id="np-scheme">
+          <option>混合 vX.Y.Z.YYMMDDHH</option>
+          <option>时间戳 vYYMMDDHH</option>
+        </select>
+      </div>
+    </div>
+  </div>
+  <div class="modal-foot">
+    <button class="btn btn-ghost" data-close="newProjectModal">取消</button>
+    <button class="btn btn-primary" data-close="newProjectModal" onclick="bx.toast('项目已创建'); bx.goto('project','p1')">创建</button>
+  </div>
+</div>
+
+<!-- 模态：命令面板 -->
+<div class="overlay" data-overlay="paletteModal"></div>
+<div class="modal" id="paletteModal" role="dialog" aria-modal="true" aria-label="命令面板" style="top:120px;transform:translateX(-50%) scale(0.97);width:min(560px,92vw)">
+  <div style="display:flex;align-items:center;gap:10px;padding:14px 18px;border-bottom:1px solid var(--border)">
+    <svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" style="color:var(--text-3)"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5L14 14"/></svg>
+    <input id="paletteInput" placeholder="搜索命令、项目、仓库…" autocomplete="off" spellcheck="false"
+      style="flex:1;background:transparent;border:none;outline:none;color:var(--text-1);font-size:14px;font-family:inherit" />
+    <span class="sb-kbd">Esc</span>
+  </div>
+  <div style="max-height:320px;overflow-y:auto;padding:8px" id="paletteResults"></div>
+  <div style="display:flex;gap:16px;padding:10px 18px;border-top:1px solid var(--border);font-size:11px;color:var(--text-3)">
+    <span><b class="mono" style="color:var(--text-2)">↑↓</b> 选择</span>
+    <span><b class="mono" style="color:var(--text-2)">Enter</b> 执行</span>
+    <span><b class="mono" style="color:var(--text-2)">Esc</b> 关闭</span>
+  </div>
+</div>
+
+<!-- toast -->
+<div class="toast" id="toast"><svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M2.5 8.5l3.5 3.5L13.5 4.5"/></svg><span id="toastMsg"></span></div>
+
+<script>
+/* ============================================================
+   BX v2 原型 —— 交互脚本（纯原生，仅演示交互与布局）
+   ============================================================ */
+const DATA = {
+  dashboard: {
+    stats: [
+      { label: '项目', value: '5', icon: 'folder', sub: '2 个有待发布', accent: false },
+      { label: '代码仓库', value: '12', icon: 'cube', sub: '6 个本地 / 6 个远程', accent: false },
+      { label: '待发布仓库', value: '3', icon: 'commit', sub: '累计 27 条提交', accent: true },
+    ],
+  },
+  projects: {
+    p1: {
+      name: '主产品线', desc: '核心 B 端产品线，含 PC / 数据可视化 / 微信端', scheme: '混合版本',
+      version: 'v2.4.0', repos: [
+        { id: 'r1', name: 'l-pc-front', display: 'PC 前端', branch: 'main', path: 'E:\\bx-gitee\\l-pc-front', version: 'v2.4.0.26081728', changed: true, commits: 12, dirty: 0, remote: true },
+        { id: 'r2', name: 'l-data-v', display: '数据可视化', branch: 'release/2.4', path: 'E:\\bx-gitee\\l-data-v', version: 'v2.4.0.26081728', changed: true, commits: 9, dirty: 2, remote: true },
+        { id: 'r3', name: 'l-mp-weixin-reface', display: '微信小程序', branch: 'main', path: 'E:\\bx-gitee\\l-mp-weixin-reface', version: 'v2.4.0.26081728', changed: true, commits: 6, dirty: 0, remote: true },
+        { id: 'r4', name: 'saas', display: 'SaaS 平台', branch: 'main', path: 'E:\\bx_pc_main\\saas', version: 'v2.4.0.26081728', changed: false, commits: 0, dirty: 0, remote: false },
+        { id: 'r5', name: 'im-web', display: 'IM 前端', branch: 'master', path: 'E:\\project\\box-im\\im-web', version: 'v2.4.0.26081728', changed: false, commits: 0, dirty: 0, remote: true },
+      ],
+      releases: [
+        { ver: 'v2.4.0', bump: 'minor', pushed: true, date: '2026-08-17 15:30', scope: 'PC 前端、数据可视化、微信小程序、SaaS 平台、IM 前端', repos: 5, commits: 27, ins: 1842, del: 527 },
+        { ver: 'v2.3.2', bump: 'patch', pushed: true, date: '2026-08-11 09:12', scope: 'PC 前端、数据可视化、IM 前端', repos: 3, commits: 11, ins: 406, del: 88 },
+        { ver: 'v2.3.1', bump: 'patch', pushed: false, date: '2026-08-02 18:45', scope: 'PC 前端', repos: 1, commits: 3, ins: 24, del: 9 },
+        { ver: 'v2.3.0', bump: 'minor', pushed: true, date: '2026-07-28 11:20', scope: 'PC 前端、数据可视化、微信小程序、SaaS 平台', repos: 4, commits: 33, ins: 2910, del: 1204 },
+        { ver: 'v2.2.1', bump: 'patch', pushed: true, date: '2026-07-15 16:02', scope: '数据可视化、IM 前端', repos: 2, commits: 7, ins: 96, del: 31 },
+      ],
+    },
+    p2: { name: '移动端矩阵', desc: '移动端多端矩阵', scheme: '时间戳版本', version: 'v1.8.0', repos: [] },
+    p3: { name: '数据可视化线', desc: '', scheme: '混合版本', version: 'v0.9.2', repos: [] },
+    p4: { name: '工具链', desc: '', scheme: '混合版本', version: 'v3.1.0', repos: [] },
+    p5: { name: 'AI 应用线', desc: '', scheme: '混合版本', version: 'v0.3.0', repos: [] },
+  },
+  changedRepos: [
+    { projectId: 'p1', projectName: '主产品线', repos: [
+      { repoId: 'r1', repoName: 'PC 前端', commits: 12, head: 'a81f3c2' },
+      { repoId: 'r2', repoName: '数据可视化', commits: 9, head: 'f09d41b' },
+      { repoId: 'r3', repoName: '微信小程序', commits: 6, head: '7c2e9a0' },
+    ]},
+  ],
+  repoTree: [
+    { name: 'src', type: 'dir', open: true, children: [
+      { name: 'views', type: 'dir', open: true, children: [
+        { name: 'Dashboard.vue', type: 'file' }, { name: 'ReleaseWizard.vue', type: 'file' },
+        { name: 'BackupManage.vue', type: 'file' }, { name: 'Settings.vue', type: 'file' },
+      ]},
+      { name: 'components', type: 'dir', open: false, children: [
+        { name: 'LogEditor.vue', type: 'file' }, { name: 'FileTree.vue', type: 'file' },
+      ]},
+      { name: 'stores', type: 'dir', open: false, children: [
+        { name: 'publish.ts', type: 'file' }, { name: 'projects.ts', type: 'file' },
+      ]},
+      { name: 'main.ts', type: 'file' },
+    ]},
+    { name: 'package.json', type: 'file' },
+    { name: 'vite.config.ts', type: 'file' },
+  ],
+};
+
+const ICONS = {
+  folder: '<svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M1.5 4.5A1.5 1.5 0 0 1 3 3h2.4a1.5 1.5 0 0 1 1.06.44L8 5h5a1.5 1.5 0 0 1 1.5 1.5v5A1.5 1.5 0 0 1 13 13H3a1.5 1.5 0 0 1-1.5-1.5z"/></svg>',
+  cube: '<svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M8 1.8l5.5 3v6.4L8 14.2l-5.5-3V4.8z"/><path d="M2.5 4.8L8 7.8l5.5-3M8 7.8v6.4"/></svg>',
+  commit: '<svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="8" cy="8" r="2.6"/><path d="M8 1.5v3.9M8 10.6v3.9"/></svg>',
+  branch: '<svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="4" cy="3.5" r="2"/><circle cx="4" cy="12.5" r="2"/><circle cx="12" cy="6.5" r="2"/><path d="M4 5.5v5M4 7.5c0 1.6 4 1.5 5.5 1.5"/></svg>',
+  tag: '<svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M1.5 2.5h5l8 8-5 5-8-8z"/><circle cx="5.5" cy="5.5" r="1.2"/></svg>',
+  doc: '<svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M3.5 1.5h6l3 3v10h-9z"/><path d="M9.5 1.5v3h3"/></svg>',
+  git: '<svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="8" cy="8" r="2.6"/><path d="M8 1.5v3.9M8 10.6v3.9M8 5.5c0 1.6-3.5 2.4-3.5 5M8 5.5c0 1.6 3.5 2.4 3.5 5"/></svg>',
+  check: '<svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M2.5 8.5l3.5 3.5L13.5 4.5"/></svg>',
+  warn: '<svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M8 1.8L15 13.5H1z"/><path d="M8 6v3.2M8 11.6v.4"/></svg>',
+  err: '<svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="8" cy="8" r="6.5"/><path d="M5.5 5.5l5 5M10.5 5.5l-5 5"/></svg>',
+  chevR: '<svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M6 3.5l5 4.5-5 4.5"/></svg>',
+  chevD: '<svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3.5 6l4.5 5 4.5-5"/></svg>',
+  rocket: '<svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M10.5 10.5c-1.5 2.5-3 3.5-6 4 0-2 .5-4 2-6M8.5 3.5C11 2 13.5 2.5 14.5 3 14 6 13 8.5 11.5 10l-3-1.5z"/><circle cx="5.5" cy="10.5" r="1.3"/><path d="M9 6.5c.6.6 1 1.5 1 2.5"/></svg>',
+  shield: '<svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M8 1.5l5.5 2v4.2c0 3.3-2.3 5.6-5.5 6.8-3.2-1.2-5.5-3.5-5.5-6.8V3.5z"/><path d="M6 8l1.5 1.5L10.5 6.5"/></svg>',
+  cloud: '<svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M11.5 12.5h-7a3.5 3.5 0 0 1-.5-6.97A4.5 4.5 0 0 1 12 5.2a2.8 2.8 0 0 1-.5 7.3z"/><path d="M8 8v3.5M8 13.5v.5"/></svg>',
+  renew: '<svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M13.5 8a5.5 5.5 0 0 1-9.4 3.9M2.5 8A5.5 5.5 0 0 1 11.9 4.1M1.5 2.5v3.5H5M14.5 13.5V10H11"/></svg>',
+  copy: '<svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="5.5" y="5.5" width="9" height="9" rx="1.5"/><path d="M10.5 2.5h-7a1 1 0 0 0-1 1v7"/></svg>',
+  dl: '<svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M8 1.5v9M4.5 7.5L8 11l3.5-3.5M2.5 13.5h11"/></svg>',
+  edit: '<svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M11.5 2.5l2 2L5 13l-3 1 1-3z"/></svg>',
+  trash: '<svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M2.5 4h11M6.5 1.5h3M4 4l.8 10h6.4L12 4M6.5 7v4.5M9.5 7v4.5"/></svg>',
+  add: '<svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M8 3v10M3 8h10"/></svg>',
+  download: '<svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M8 1.5v9M4.5 7.5L8 11l3.5-3.5M2.5 13.5h11"/></svg>',
+  terminal: '<svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="1.5" y="2.5" width="13" height="11" rx="1.5"/><path d="M4.5 6l2.5 2-2.5 2M8.5 10.5h3"/></svg>',
+  clock: '<svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="8" cy="8" r="6.5"/><path d="M8 4.5V8l2.5 1.5"/></svg>',
+  palette: '<svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M8 1.5a6.5 6.5 0 1 0 0 13c1 0 1.5-.7 1.5-1.5 0-.7-.5-1.2-.5-2 0-1.2 1-2 2.2-2H13A2.5 2.5 0 0 0 15.5 6.5C15.5 3.7 12.1 1.5 8 1.5z"/><circle cx="5" cy="6" r=".9"/><circle cx="7.5" cy="4.5" r=".9"/><circle cx="10.5" cy="5.5" r=".9"/></svg>',
+};
+
+const PAGES = {
+  dashboard: renderDashboard,
+  project: renderProject,
+  repo: renderRepo,
+  release: renderRelease,
+  backups: renderBackups,
+  settings: renderSettings,
+};
+
+const TITLES = { dashboard: '总览', project: '项目详情', repo: '仓库详情', release: '发布', backups: '备份与对比', settings: '设置' };
+
+/* ---------- 页面渲染 ---------- */
+function renderDashboard() {
+  const s = DATA.dashboard.stats;
+  const projects = Object.values(DATA.projects);
+  const changed = DATA.changedRepos;
+  const statCards = s.map((x, i) => `
+    <div class="card card-hover stat-card ${x.accent ? 'accent' : ''}" style="animation-delay:${i * 60}ms">
+      <div class="stat-ic">${ICONS[x.icon]}</div>
+      <div>
+        <div class="stat-num num">${x.value}</div>
+        <div class="stat-label">${x.label}</div>
+        <div class="stat-sub">${x.sub}</div>
+      </div>
+    </div>`).join('');
+
+  const projectCards = projects.map(p => {
+    const changedCount = p.id === 'p1' ? 3 : 0;
+    const last = p.id === 'p1' ? '<span>上次发布</span> <span class="mono" style="color:var(--text-2)">v2.4.0</span> <span class="mono" style="color:var(--text-3)">· 08-17</span>' : '<span class="grow"></span><span>暂无发布</span>';
+    return `
+    <div class="card card-hover project-card stagger-i" tabindex="0" role="link"
+      onclick="bx.goto('project','${p.id}')" onkeydown="if(event.key==='Enter'||event.key===' ')bx.goto('project','${p.id}')">
+      <div class="pc-top">
+        <span style="color:var(--brand)">${ICONS.folder}</span>
+        <span class="pc-name">${p.name}</span>
+        <span class="version-badge"><span class="tick"></span>${p.version}</span>
+        <button class="btn-icon btn-ghost pc-release-btn" aria-label="发起发布" onclick="event.stopPropagation();bx.goto('release','p1')">
+          ${ICONS.rocket}
+        </button>
+      </div>
+      <div class="pc-meta">
+        <span class="m">${ICONS.cube}${p.id === 'p1' ? 5 : 2} 仓库</span>
+        <span class="m ${changedCount ? 'hot' : ''}">${ICONS.commit}${changedCount} 待发布</span>
+        <span class="m" style="margin-left:auto">${ICONS.cloud}${p.id === 'p1' ? '远程' : '纯本地'}</span>
+      </div>
+      <div class="pc-foot">${last}</div>
+    </div>`;
+  }).join('');
+
+  const changedHtml = changed.map(g => `
+    <div class="changed-head">
+      <span class="cg-name">${g.projectName}</span>
+      <span class="changed-repos">
+        ${g.repos.map(r => `
+          <button class="repo-link" onclick="bx.goto('repo','p1/${r.repoId}')">
+            ${ICONS.git} ${r.repoName}
+            <span class="chip chip-brand code-chip">${r.commits} 提交</span>
+            <span class="hash">${r.head}</span>
+          </button>`).join('')}
+      </span>
+      <button class="btn btn-sm btn-primary" onclick="bx.goto('release','${g.projectId}')">${ICONS.rocket}发布</button>
+    </div>`).join('');
+
+  return `
+    <div class="page">
+      <div class="page-head">
+        <div>
+          <div class="ph-title"><span class="ph-ic">${ICONS.cube}</span>总览</div>
+          <div class="ph-desc">2026-08-17 15:30 · 数据仓库已同步至 <span class="mono">origin/main</span></div>
+        </div>
+        <div class="ph-actions">
+          <button class="btn" onclick="bx.goto('release','p1')">${ICONS.rocket}发起发布</button>
+          <button class="btn btn-primary" onclick="bx.openModal('new-project')">${ICONS.add}新建项目</button>
+        </div>
+      </div>
+
+      <div class="stat-grid stagger">${statCards}</div>
+
+      <div class="sec-title"><span class="sec-ic">${ICONS.folder}</span>项目<span class="count">5</span></div>
+      <div class="project-grid stagger">${projectCards}</div>
+
+      <div class="sec-title"><span class="sec-ic">${ICONS.git}</span>待发布仓库<span class="count">3</span></div>
+      <div class="card" style="padding:4px 0">${changedHtml}</div>
+    </div>`;
+}
+
+function renderProject(arg) {
+  const p = DATA.projects[arg] || DATA.projects.p1;
+  const repoCards = p.repos.map((r, i) => `
+    <div class="card card-hover repo-card stagger-i" tabindex="0" role="link" style="animation-delay:${i * 50}ms"
+      onclick="bx.goto('repo','${arg}/${r.id}')" onkeydown="if(event.key==='Enter'||event.key===' ')bx.goto('repo','${arg}/${r.id}')">
+      <div class="rc-top">
+        <span style="color:var(--brand)">${ICONS.git}</span>
+        <span class="rc-name">${r.display || r.name}</span>
+        ${r.changed ? `<span class="chip chip-brand code-chip">${r.commits} 提交</span>` : ''}
+        ${r.dirty ? `<span class="chip chip-warn">${ICONS.warn}未提交 ${r.dirty}</span>` : ''}
+        ${!r.remote ? `<span class="chip chip-dim">${ICONS.cloud}纯本地</span>` : ''}
+        <span class="rc-branch chip chip-dim" style="margin-left:auto"><span class="dot" style="background:var(--text-3)"></span>${r.branch}</span>
+      </div>
+      <div class="rc-path">${r.path}</div>
+      <div style="display:flex;align-items:center;gap:8px">
+        <span class="version-badge ghost"><span class="tick"></span>${r.version}</span>
+        <span class="mono" style="font-size:11px;color:var(--text-3)">${r.changed ? '· ' + r.commits + ' 条新提交' : '· 已同步'}</span>
+      </div>
+    </div>`).join('');
+
+  const releaseRows = p.releases.map((r, i) => `
+    <div class="release-row" tabindex="0" role="button" aria-label="查看 ${r.ver} 发布详情"
+      onclick="bx.openRelease(${i})" onkeydown="if(event.key==='Enter'||event.key===' ')bx.openRelease(${i})">
+      <span class="version-badge rr-ver"><span class="tick"></span>${r.ver}</span>
+      <span class="rr-meta">
+        <span class="chip ${r.bump === 'minor' ? 'chip-info' : 'chip-dim'}">${r.bump === 'minor' ? '次版本' : '补丁'}</span>
+        <span class="chip ${r.pushed ? 'chip-brand' : 'chip-warn'}">${ICONS.cloud}${r.pushed ? '已推送' : '未推送'}</span>
+        <span class="rr-scope">${r.scope}</span>
+      </span>
+      <span class="rr-date">${r.date}</span>
+      <span class="rr-chev">${ICONS.chevR}</span>
+    </div>`).join('');
+
+  return `
+    <div class="page">
+      <div class="page-head">
+        <div>
+          <div class="ph-title">
+            <button class="btn-icon" aria-label="返回上一页" onclick="bx.goto('dashboard')" style="border:1px solid var(--border)">${ICONS.chevR.replace('viewBox="0 0 16 16" stroke-width="1.6"','viewBox="0 0 16 16" stroke-width="1.6"').replace('<path d="M6 3.5l5 4.5-5 4.5"/>','<path d="M10 3.5l-5 4.5 5 4.5"/>')}</button>
+            <span class="ph-ic">${ICONS.folder}</span>${p.name}
+          </div>
+          <div class="ph-desc">${p.desc || '—'}</div>
+        </div>
+        <div class="ph-actions">
+          <span class="chip chip-brand code-chip">${p.version}</span>
+          <span class="chip chip-dim">${p.scheme}</span>
+          <button class="btn btn-primary" onclick="bx.goto('release','${arg}')">${ICONS.rocket}发布新版本</button>
+          <button class="btn" onclick="bx.toast('原型演示：接入仓库弹窗')">${ICONS.add}接入仓库</button>
+          <button class="btn" onclick="bx.goto('backups','${arg}')">${ICONS.shield}备份与对比</button>
+          <button class="btn btn-ghost" onclick="bx.toast('原型演示：导出下拉菜单')">${ICONS.download}版本清单</button>
+          <button class="btn btn-ghost btn-icon" aria-label="编辑项目" onclick="bx.toast('原型演示：编辑项目')">${ICONS.edit}</button>
+          <button class="btn btn-ghost btn-icon btn-danger-text" aria-label="删除项目" onclick="bx.toast('原型演示：删除确认弹窗')">${ICONS.trash}</button>
+        </div>
+      </div>
+
+      <div class="sec-title"><span class="sec-ic">${ICONS.git}</span>代码仓库<span class="count">${p.repos.length}</span></div>
+      <div class="repo-grid">${repoCards}</div>
+
+      <div class="sec-title"><span class="sec-ic">${ICONS.tag}</span>发布历史<span class="count">${p.releases.length}</span></div>
+      <div class="card" style="overflow:hidden;padding:0">${releaseRows}</div>
+    </div>`;
+}
+
+function renderRepo(arg) {
+  const [pid, rid] = arg.split('/');
+  const p = DATA.projects[pid] || DATA.projects.p1;
+  const r = p.repos.find(x => x.id === rid) || p.repos[0];
+
+  const tree = (nodes, depth, pid2, rid2) => nodes.map(n => `
+    <div class="tree-row ${n.open ? 'open' : ''} ${n.type === 'file' ? '' : ''}" style="padding-left:${10 + depth * 16}px" tabindex="0" role="button"
+      aria-label="${n.type === 'dir' ? '目录' : '文件'} ${n.name}">
+      ${n.type === 'dir' ? `<span class="chev">${ICONS.chevR}</span>` : '<span style="width:15px"></span>'}
+      <span class="f-ic" style="color:${n.type === 'dir' ? 'var(--warn)' : 'var(--text-3)'}">${n.type === 'dir' ? ICONS.folder : ICONS.doc}</span>
+      <span class="fname">${n.name}</span>
+    </div>
+    ${n.children ? tree(n.children, depth + 1, pid2, rid2) : ''}`).join('');
+
+  const releaseRows = (p.releases || []).slice(0, 4).map((x, i) => `
+    <div class="tree-row ${i === 0 ? 'active' : ''}" tabindex="0" role="button" style="padding-left:14px">
+      <span class="mono" style="font-weight:600">${x.ver}</span>
+      <span style="flex:1"></span>
+      <span style="font-size:11px;color:var(--text-3)" class="mono">${x.commits} 提交</span>
+    </div>`).join('');
+
+  return `
+    <div class="page">
+      <div class="page-head">
+        <div>
+          <div class="ph-title">
+            <button class="btn-icon" aria-label="返回项目" onclick="bx.goto('project','${pid}')" style="border:1px solid var(--border)">${ICONS.chevR.replace('<path d="M6 3.5l5 4.5-5 4.5"/>','<path d="M10 3.5l-5 4.5 5 4.5"/>')}</button>
+            <span class="ph-ic" style="background:var(--info-soft);color:var(--info);border-color:rgba(77,159,255,.3)">${ICONS.git}</span>${r.display || r.name}
+          </div>
+          <div class="ph-desc"><span class="mono" style="color:var(--text-3)">${r.name}</span> · ${r.path}</div>
+        </div>
+        <div class="ph-actions">
+          <span class="chip chip-dim"><span class="dot" style="background:var(--text-3)"></span>${r.branch}</span>
+          ${r.changed ? `<span class="chip chip-brand code-chip">${r.commits} 提交</span>` : ''}
+          ${r.dirty ? `<span class="chip chip-warn">${ICONS.warn}未提交 ${r.dirty}</span>` : ''}
+          <span class="version-badge"><span class="tick"></span>${r.version}</span>
+          <span class="chip chip-dim code-chip" style="cursor:pointer" onclick="bx.toast('已复制远程地址')" title="复制远程地址">${ICONS.copy}${r.remote ? 'origin' : '本地'}</span>
+        </div>
+      </div>
+
+      <div class="card" style="overflow:hidden;padding:0">
+        <div class="tabs" style="padding:0 12px">
+          <div class="tab active" data-tab="files">${ICONS.doc}文件</div>
+          <div class="tab" data-tab="logs">${ICONS.tag}版本日志<span class="tab-count">${(p.releases || []).length}</span></div>
+          <div class="tab" data-tab="settings">${ICONS.palette}设置</div>
+        </div>
+        <div data-tabpanel="files">
+          <div style="display:flex;height:520px">
+            <div style="width:300px;flex-shrink:0;border-right:1px solid var(--border);overflow-y:auto;padding:10px 6px">
+              <div class="tree-row active" style="padding-left:10px"><span style="width:15px"></span><span class="f-ic" style="color:var(--brand)">${ICONS.git}</span><span class="fname mono" style="font-weight:600">${r.name}</span></div>
+              ${tree(DATA.repoTree, 0)}
+            </div>
+            <div style="flex:1;min-width:0;display:flex;flex-direction:column">
+              <div style="display:flex;align-items:center;gap:8px;padding:10px 16px;border-bottom:1px solid var(--border)">
+                <span class="mono" style="font-size:12px;color:var(--text-2)">src/views/ReleaseWizard.vue</span>
+                <span style="flex:1"></span>
+                <span style="font-size:11px;color:var(--text-3)">348 行 · 12.4 KB</span>
+                <button class="btn-icon btn-sm btn-ghost" aria-label="下载文件" onclick="bx.toast('已开始下载')">${ICONS.dl}</button>
+                <button class="btn-icon btn-sm btn-ghost" aria-label="复制内容" onclick="bx.toast('已复制到剪贴板')">${ICONS.copy}</button>
+              </div>
+              <div class="console" style="flex:1;border:none;border-radius:0">
+                <div class="console-head">
+                  <span class="dots"><i style="background:#FF5F57"></i><i style="background:#FEBC2E"></i><i style="background:#28C840"></i></span>
+                  <span>ReleaseWizard.vue</span>
+                </div>
+                <div class="console-body" style="max-height:none;font-size:12px">
+                  <div class="console-line"><span class="ln-repo"></span><span class="ln-cmd" style="color:#8B96A3">1 &nbsp; &lt;script setup lang="ts"&gt;</span></div>
+                  <div class="console-line"><span class="ln-repo"></span><span class="ln-cmd" style="color:#8B96A3">2 &nbsp; &nbsp; // ReleaseWizard —— 发布向导六步（M4）</span></div>
+                  <div class="console-line"><span class="ln-repo"></span><span class="ln-cmd" style="color:#8B96A3">3 &nbsp; &nbsp; import type { RepoStatus } from '@bxverse/shared'</span></div>
+                  <div class="console-line"><span class="ln-repo"></span><span class="ln-cmd" style="color:#5E6A78">4 &nbsp; &nbsp; import { useProjectsStore } from '../stores/projects'</span></div>
+                  <div class="console-line"><span class="ln-repo"></span><span class="ln-cmd" style="color:#5E6A78">5 &nbsp; &nbsp; import { usePublishStore } from '../stores/publish'</span></div>
+                  <div class="console-line"><span class="ln-repo"></span><span class="ln-cmd" style="color:#8B96A3">6 &nbsp;</span></div>
+                  <div class="console-line"><span class="ln-repo"></span><span class="ln-cmd" style="color:#00C96E">7 &nbsp; &nbsp; const store = usePublishStore()</span></div>
+                  <div class="console-line"><span class="ln-repo"></span><span class="ln-cmd" style="color:#8B96A3">8 &nbsp; &nbsp; const route = useRoute()</span></div>
+                  <div class="console-line"><span class="ln-repo"></span><span class="ln-cmd" style="color:#5E6A78">9 &nbsp; &nbsp; const projectId = computed(() =&gt; String(route.params.id))</span></div>
+                  <div class="console-line"><span class="ln-repo"></span><span class="ln-cmd" style="color:#8B96A3">10</span></div>
+                  <div class="console-line"><span class="ln-repo"></span><span class="ln-cmd" style="color:#FF6B6B">11 &nbsp; &nbsp; async function execute() {</span></div>
+                  <div class="console-line"><span class="ln-repo"></span><span class="ln-cmd" style="color:#5E6A78">12 &nbsp; &nbsp; &nbsp; const taskId = await store.execute()</span></div>
+                  <div class="console-line"><span class="ln-repo"></span><span class="ln-cmd" style="color:#8B96A3">13 &nbsp; &nbsp; }</span></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div data-tabpanel="logs" style="display:none">
+          <div style="display:flex;height:520px">
+            <div style="width:320px;flex-shrink:0;border-right:1px solid var(--border);overflow-y:auto;padding:8px 6px">
+              <div class="tree-row" style="padding-left:14px;font-size:11px;color:var(--text-3);text-transform:uppercase;letter-spacing:.06em;cursor:default">发布记录</div>
+              ${releaseRows}
+            </div>
+            <div style="flex:1;min-width:0;display:flex;flex-direction:column">
+              <div style="display:flex;align-items:center;gap:10px;padding:12px 16px;border-bottom:1px solid var(--border)">
+                <div class="tabs" style="border:none">
+                  <div class="tab active" data-tab="ext">对外</div>
+                  <div class="tab" data-tab="int">对内</div>
+                </div>
+                <span class="chip chip-brand">已确认</span>
+                <span style="flex:1"></span>
+                <span class="mono" style="font-size:11.5px;color:var(--text-3)">12 提交 · +406 / -88</span>
+              </div>
+              <div style="flex:1;overflow-y:auto;padding:20px 24px" class="le-preview">
+                <h3>## 功能新增</h3>
+                <ul><li>发布向导支持提交级排除（人工甄别变更收件箱）</li><li>版本清单导出新增「仅日期」格式开关</li></ul>
+                <h3>## 体验优化</h3>
+                <ul><li>仓库详情页 Tab 支持 URL 同步与深链刷新</li><li>大目录树截断提示，避免渲染卡顿</li></ul>
+                <h3>## 问题修复</h3>
+                <ul><li>修复发布历史「版本清单」按钮误开日志抽屉</li><li>修复路径含中文/空格的仓库接入失败</li></ul>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div data-tabpanel="settings" style="display:none">
+          <div style="padding:20px;max-width:640px;display:flex;flex-direction:column;gap:16px">
+            <div class="field"><span class="field-label">本地路径</span><div class="mono" style="font-size:12.5px;color:var(--text-2);background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius-m);padding:10px 12px">${r.path}</div></div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+              <div class="field"><label>英文名</label><input value="${r.name}" /></div>
+              <div class="field"><label>中文名</label><input value="${r.display || ''}" placeholder="如：PC 前端（可选）" /></div>
+            </div>
+            <div class="field"><label>构建命令</label><input value="pnpm build" placeholder="如：pnpm build（发版前执行，可留空）" /></div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+              <div class="field"><label>产物目录</label><input value="public" /></div>
+              <div class="field"><label>备份产物目录</label><input value="dist" placeholder="如：dist（可留空）" /></div>
+            </div>
+            <div class="setting-row" style="padding:14px 0">
+              <div><div class="sr-label">写入版本文件</div><div class="sr-desc">关闭后不写 version.json / version-history.json（零侵入）</div></div>
+              <div class="switch on" tabindex="0" role="switch" aria-checked="true" onclick="this.classList.toggle('on');this.setAttribute('aria-checked',this.classList.contains('on'))"></div>
+            </div>
+            <div style="display:flex;justify-content:space-between;align-items:center;padding-top:8px">
+              <button class="btn btn-primary" onclick="bx.toast('设置已保存')">保存设置</button>
+              <button class="btn btn-ghost btn-danger-text" onclick="bx.toast('原型演示：移除确认')">${ICONS.trash}移除仓库</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>`;
+}
+
+function renderRelease(arg) {
+  const pid = arg || 'p1';
+  const p = DATA.projects[pid] || DATA.projects.p1;
+  const wzRows = p.repos.map(r => `
+    <div class="wz-row ${r.changed ? 'changed' : 'synced'}" tabindex="0" role="checkbox" aria-checked="${r.changed}"
+      onclick="${r.changed ? 'this.classList.toggle(\'changed\')' : ''}">
+      <span class="checkbox ${r.changed ? 'on' : ''}">${ICONS.check}</span>
+      ${ICONS.git}
+      <div style="flex:1;min-width:0">
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+          <span style="font-weight:600;font-size:13.5px">${r.display || r.name}</span>
+          <span class="mono" style="font-size:11px;color:var(--text-3)">${r.name}</span>
+          ${r.changed ? `<span class="chip chip-brand code-chip">${r.commits} 提交</span>` : ''}
+          ${r.dirty ? `<span class="chip chip-warn">${ICONS.warn}未提交 ${r.dirty}</span>` : ''}
+        </div>
+        <div class="mono" style="font-size:11px;color:var(--text-3);margin-top:2px">${r.changed ? 'a81f3c2 · main' : '已同步'}${r.changed ? ' · 有变动' : ''}</div>
+      </div>
+      <div style="font-size:12px;color:${r.changed ? 'var(--brand)' : 'var(--text-3)'}">${r.changed ? '有变动' : '已同步'}</div>
+      ${r.changed ? `<button class="btn btn-sm btn-ghost" onclick="event.stopPropagation();this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'block':'none'">提交明细</button><div style="display:none;grid-column:1/-1"></div>` : ''}
+    </div>`).join('');
+
+  return `
+    <div class="page">
+      <div class="page-head">
+        <div>
+          <div class="ph-title">
+            <button class="btn-icon" aria-label="返回项目" onclick="bx.goto('project','${pid}')" style="border:1px solid var(--border)">${ICONS.chevR.replace('<path d="M6 3.5l5 4.5-5 4.5"/>','<path d="M10 3.5l-5 4.5 5 4.5"/>')}</button>
+            <span class="ph-ic" style="background:var(--brand-soft);color:var(--brand);border-color:rgba(0,201,110,.25)">${ICONS.rocket}</span>发布 · ${p.name}
+          </div>
+          <div class="ph-desc">检测 → 版本 → 日志 → 预览 → 执行 → 完成</div>
+        </div>
+      </div>
+
+      <div class="steps" id="wzSteps">
+        ${['检测变更','版本号','日志','预览','执行','完成'].map((s, i) => `
+          ${i > 0 ? `<div class="step-line ${i < 3 ? 'passed' : ''}"></div>` : ''}
+          <div class="step ${i === 2 ? 'passed' : ''} ${i === 3 ? 'active' : ''}">
+            <span class="s-num">${i < 3 ? '✓' : i + 1}</span>
+            <span class="s-label">${s}</span>
+          </div>`).join('')}
+      </div>
+
+      <div class="card card-pad">
+        <!-- 步骤 4：预览 -->
+        <div id="wzStep4">
+          <div style="display:flex;gap:18px;flex-wrap:wrap;margin-bottom:16px">
+            <div style="display:flex;align-items:center;gap:8px"><div class="switch on" onclick="this.classList.toggle('on')"></div><span style="font-size:13px">离线发布（跳过远程推送）</span></div>
+            <div style="display:flex;align-items:center;gap:8px"><div class="switch on" onclick="this.classList.toggle('on')"></div><span style="font-size:13px">跳过构建命令</span></div>
+            <div style="display:flex;align-items:center;gap:8px"><div class="switch" onclick="this.classList.toggle('on')"></div><span style="font-size:13px">源码备份</span></div>
+            <div style="display:flex;align-items:center;gap:8px"><div class="switch" onclick="this.classList.toggle('on')"></div><span style="font-size:13px">产物备份</span></div>
+          </div>
+          <div class="console">
+            <div class="console-head"><span class="dots"><i style="background:#FF5F57"></i><i style="background:#FEBC2E"></i><i style="background:#28C840"></i></span><span>dry-run · 将执行</span></div>
+            <div class="console-body" id="dryRunBody"></div>
+          </div>
+          <div style="margin-top:14px;display:flex;gap:8px;align-items:center">
+            <span class="chip chip-warn">${ICONS.warn}版本号将递增</span>
+            <span class="mono" style="font-size:12px;color:var(--text-2)">v2.4.0 → <b style="color:var(--brand)">v2.5.0</b> · 建议：次版本 minor</span>
+          </div>
+        </div>
+      </div>
+
+      <div style="display:flex;justify-content:space-between;margin-top:20px">
+        <button class="btn" onclick="bx.toast('原型演示：上一步')">${ICONS.chevR}上一步</button>
+        <button class="btn btn-primary" onclick="bx.wizardRun()">${ICONS.rocket}执行发布</button>
+      </div>
+    </div>`;
+}
+
+function renderBackups(arg) {
+  const pid = arg || 'p1';
+  const p = DATA.projects[pid] || DATA.projects.p1;
+  const kinds = [
+    { kind: '源码 bundle', ver: 'v2.4.0', meta: 'git bundle · 全部历史与标签 · 12.4 MB', ic: 'git' },
+    { kind: '源码快照', ver: 'v2.4.0', meta: 'git archive · 仅已跟踪文件 · 3.1 MB', ic: 'doc' },
+    { kind: '产物归档', ver: 'v2.4.0', meta: 'artifact.tar.gz · 哈希清单 128 项 · 42.7 MB', ic: 'cube' },
+    { kind: '源码 bundle', ver: 'v2.3.2', meta: 'git bundle · 11.8 MB', ic: 'git' },
+    { kind: '产物归档', ver: 'v2.3.2', meta: 'artifact.tar.gz · 哈希清单 121 项 · 39.2 MB', ic: 'cube' },
+  ];
+  const rows = kinds.map((b, i) => `
+    <div class="backup-item ${i === 0 || i === 2 ? 'selected' : ''}" tabindex="0" role="checkbox" aria-checked="${i === 0 || i === 2}"
+      onclick="event.currentTarget.classList.toggle('selected')">
+      <div class="bi-kind">${ICONS[b.ic]}</div>
+      <div class="bi-info">
+        <div class="bi-ver">${b.ver} <span style="color:var(--text-3);font-weight:400;font-size:11.5px">· ${b.kind}</span></div>
+        <div class="bi-meta">${b.meta} · 08-17 15:30</div>
+      </div>
+      <div style="display:flex;gap:4px">
+        <button class="btn-icon btn-sm btn-ghost" aria-label="下载" onclick="bx.toast('已开始下载')">${ICONS.dl}</button>
+        <button class="btn-icon btn-sm btn-ghost" aria-label="校验" onclick="bx.toast('sha256 校验通过 · 全部一致')">${ICONS.shield}</button>
+        <button class="btn-icon btn-sm btn-ghost btn-danger-text" aria-label="删除" onclick="bx.toast('原型演示：删除确认')">${ICONS.trash}</button>
+      </div>
+    </div>`).join('');
+
+  return `
+    <div class="page">
+      <div class="page-head">
+        <div>
+          <div class="ph-title">
+            <button class="btn-icon" aria-label="返回项目" onclick="bx.goto('project','${pid}')" style="border:1px solid var(--border)">${ICONS.chevR.replace('<path d="M6 3.5l5 4.5-5 4.5"/>','<path d="M10 3.5l-5 4.5 5 4.5"/>')}</button>
+            <span class="ph-ic">${ICONS.shield}</span>备份与对比 · ${p.name}
+          </div>
+          <div class="ph-desc">每次发布自动备份源码与产物（元数据入数据仓库审计，大文件存本地 backups 目录）</div>
+        </div>
+        <div class="ph-actions">
+          <span class="chip chip-info code-chip">已选：v2.4.0 ↔ v2.4.0</span>
+          <button class="btn btn-primary" onclick="bx.toast('原型演示：产物对比面板')">${ICONS.git}产物对比</button>
+          <button class="btn" onclick="bx.toast('原型演示：源码 diff 面板')">${ICONS.tag}源码对比</button>
+        </div>
+      </div>
+
+      <div class="card" style="overflow:hidden;padding:0">
+        <div class="console-head" style="border-bottom:1px solid var(--border);background:var(--surface-2)">
+          <span style="font-weight:600;color:var(--text-2)">每仓历次发布备份（点击选择两次进行对比）</span>
+        </div>
+        <div style="padding:14px">${rows}</div>
+      </div>
+
+      <div class="sec-title"><span class="sec-ic">${ICONS.git}</span>一致性对比（示例）</div>
+      <div class="card" style="overflow:auto">
+        <table class="tbl">
+          <thead><tr><th>状态</th><th>文件</th><th>插入</th><th>删除</th><th>左侧大小</th><th>右侧大小</th></tr></thead>
+          <tbody>
+            <tr><td><span class="chip chip-brand code-chip">+ 新增</span></td><td class="mono">src/views/ReleaseWizard.vue</td><td class="mono">+184</td><td class="mono">-52</td><td class="mono">11.2 KB</td><td class="mono">12.4 KB</td></tr>
+            <tr><td><span class="chip chip-info code-chip">~ 变更</span></td><td class="mono">packages/core/src/engine.ts</td><td class="mono">+96</td><td class="mono">-31</td><td class="mono">28.1 KB</td><td class="mono">29.7 KB</td></tr>
+            <tr><td><span class="chip chip-dim code-chip">= 一致</span></td><td class="mono">apps/server/src/index.ts</td><td class="mono">—</td><td class="mono">—</td><td class="mono">3.4 KB</td><td class="mono">3.4 KB</td></tr>
+            <tr><td><span class="chip chip-error code-chip">- 缺失</span></td><td class="mono">scripts/legacy-migrate.js</td><td class="mono">—</td><td class="mono">—</td><td class="mono">1.8 KB</td><td class="mono">—</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>`;
+}
+
+function renderSettings() {
+  return `
+    <div class="page" style="max-width:860px">
+      <div class="page-head">
+        <div>
+          <div class="ph-title"><span class="ph-ic" style="background:var(--info-soft);color:var(--info);border-color:rgba(77,159,255,.3)">${ICONS.palette}</span>设置</div>
+          <div class="ph-desc">外观 · AI · 数据仓库 · 安全</div>
+        </div>
+      </div>
+
+      <div class="sec-title"><span class="sec-ic">${ICONS.palette}</span>外观与体验</div>
+      <div class="card settings-card settings-sec">
+        <div style="font-size:13.5px;font-weight:600;margin-bottom:4px">主题风格</div>
+        <div style="font-size:12px;color:var(--text-3);margin-bottom:12px">Indigo 为标准靛蓝套件（亮/暗/跟随系统）；WenXi 为深色玻璃拟态套件（翠绿强调，仅深色）——原型展示精密仪器方向，翠绿主色延续</div>
+        <div class="theme-pick">
+          <button class="theme-opt selected" onclick="bx.pickTheme('indigo',this)">
+            <span class="swatch" style="background:#0B0D10"><span class="dot" style="left:12px;top:12px;background:#00C96E"></span></span>
+            <span><span class="t-title">精密仪器 · 深色</span><span class="t-desc">近纯黑基底 · 翠绿强调 · 细网格</span></span>
+            <span class="check">${ICONS.check}</span>
+          </button>
+          <button class="theme-opt" onclick="bx.pickTheme('light',this)">
+            <span class="swatch" style="background:#F4F6F8"><span class="dot" style="left:12px;top:12px;background:#00A85E"></span></span>
+            <span><span class="t-title">精密仪器 · 亮色</span><span class="t-desc">浅色基底 · 同一套视觉语言</span></span>
+            <span class="check">${ICONS.check}</span>
+          </button>
+        </div>
+        <div class="setting-row">
+          <div><div class="sr-label">主题模式</div><div class="sr-desc">system 时跟随操作系统</div></div>
+          <div class="tabs" style="border:1px solid var(--border);border-radius:var(--radius-m);overflow:hidden">
+            <div class="tab" style="height:30px;font-size:12px">亮</div>
+            <div class="tab active" style="height:30px;font-size:12px">暗</div>
+            <div class="tab" style="height:30px;font-size:12px">系统</div>
+          </div>
+        </div>
+        <div class="setting-row">
+          <div><div class="sr-label">PWA 安装</div><div class="sr-desc">开启后可用浏览器「安装应用」获得独立窗口体验</div></div>
+          <div class="switch on" onclick="this.classList.toggle('on')"></div>
+        </div>
+        <div class="setting-row">
+          <div><div class="sr-label">变动检测周期</div><div class="sr-desc">仓库变更自动检测间隔</div></div>
+          <input style="width:130px;height:32px;border-radius:var(--radius-m);border:1px solid var(--border);background:var(--surface-2);color:var(--text-1);font-family:var(--font-mono);font-size:12.5px;padding:0 10px" value="30000" />
+        </div>
+      </div>
+
+      <div class="sec-title"><span class="sec-ic">${ICONS.sparkle || ICONS.git}</span>AI 日志润色（可选）</div>
+      <div class="card settings-card settings-sec">
+        <div class="setting-row">
+          <div><div class="sr-label">启用 AI 润色</div><div class="sr-desc">对外日志草稿可一键改写为用户友好文案（仅生成草稿，仍须人工确认）</div></div>
+          <div class="switch" onclick="this.classList.toggle('on')"></div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;padding-top:14px">
+          <div class="field"><label>Base URL（OpenAI 兼容）</label><input placeholder="http://127.0.0.1:11434/v1" /></div>
+          <div class="field"><label>模型</label><input placeholder="qwen2.5:7b" /></div>
+        </div>
+        <div class="field" style="margin-top:14px"><label>API Key（仅存本机）</label><input type="password" placeholder="sk-…" /></div>
+      </div>
+
+      <div class="sec-title"><span class="sec-ic">${ICONS.cloud}</span>数据仓库同步</div>
+      <div class="card settings-card settings-sec">
+        <div class="mono" style="font-size:12.5px;color:var(--text-2);background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius-m);padding:10px 12px;margin-bottom:14px">C:\\Users\\you\\.bxverse\\data</div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <button class="btn btn-sm" onclick="bx.toast('拉取完成')">${ICONS.cloud}拉取</button>
+          <button class="btn btn-sm" onclick="bx.toast('推送完成')">${ICONS.cloud}推送</button>
+          <span style="font-size:12px;color:var(--text-3)">上次同步：2 分钟前 · 0 提交</span>
+        </div>
+      </div>
+
+      <div class="sec-title"><span class="sec-ic">${ICONS.shield}</span>安全</div>
+      <div class="card settings-card settings-sec">
+        <div class="setting-row">
+          <div><div class="sr-label">访问令牌</div><div class="sr-desc">轮换后旧令牌立即失效</div></div>
+          <button class="btn" style="color:var(--warn)" onclick="bx.toast('原型演示：轮换确认弹窗')">轮换令牌</button>
+        </div>
+      </div>
+
+      <div style="display:flex;justify-content:flex-end">
+        <button class="btn btn-primary" onclick="bx.toast('设置已保存')">保存全部设置</button>
+      </div>
+    </div>`;
+}
+
+/* ---------- 交互 ---------- */
+const bx = {
+  state: { page: 'dashboard', arg: null },
+  goto(page, arg) {
+    this.state = { page, arg };
+    const main = document.getElementById('content');
+    // 重设 innerHTML 即重建 DOM，.page 的进入动画（page-in）自动重放
+    main.innerHTML = PAGES[page](arg);
+    // 侧栏高亮
+    document.querySelectorAll('.sb-item').forEach(el => el.classList.toggle('active', el.dataset.pageLink === page));
+    // 顶栏标题：主标题 + 面包屑（仅子页面显示路径，重建避免累积）
+    let crumbText = '';
+    if (page === 'repo') {
+      const [pid, rid] = (arg || 'p1/r1').split('/');
+      const p = DATA.projects[pid] || DATA.projects.p1;
+      const r = p.repos.find(x => x.id === rid) || p.repos[0];
+      crumbText = `${p.name} / ${r.display || r.name}`;
+    } else if (page === 'release' || page === 'backups') {
+      const p = DATA.projects[arg || 'p1'];
+      crumbText = p ? p.name : '';
+    }
+    document.getElementById('tbTitle').innerHTML =
+      `<span>${TITLES[page] || ''}</span>${crumbText ? `<span class="crumb">${crumbText}</span>` : ''}`;
+    document.title = `${TITLES[page] || '总览'} · BX 版本管理台（原型 v2）`;
+    // 初始化页面内交互
+    this.bindTabs();
+    this.bindTree();
+    this.bindSteps();
+    this.bindDryRun();
+  },
+  bindTabs() {
+    document.querySelectorAll('.tab[data-tab]').forEach(tab => {
+      tab.onclick = () => {
+        const root = tab.closest('.card') || document;
+        const key = tab.dataset.tab;
+        // 同组 tab 高亮
+        tab.parentElement.querySelectorAll('.tab[data-tab]').forEach(t => t.classList.toggle('active', t === tab));
+        // 有对应面板则切换（files/logs/settings）
+        const panels = root.querySelectorAll('[data-tabpanel]');
+        if (panels.length) {
+          panels.forEach(p => p.style.display = p.dataset.tabpanel === key ? '' : 'none');
+        }
+      };
+    });
+  },
+  bindTree() {
+    document.querySelectorAll('.tree-row[role="button"]').forEach(row => {
+      row.onclick = (e) => {
+        e.stopPropagation();
+        const chev = row.querySelector('.chev');
+        if (chev) {
+          row.classList.toggle('open');
+          const children = row.nextElementSibling;
+          // 展开/收起：简单做法——只切换图标
+        } else {
+          row.parentElement.querySelectorAll('.tree-row').forEach(r => r.classList.remove('active'));
+          row.classList.add('active');
+        }
+      };
+    });
+  },
+  bindSteps() {
+    document.querySelectorAll('#wzSteps .step').forEach((s, i) => {
+      s.style.cursor = 'pointer';
+      s.onclick = () => {
+        document.querySelectorAll('#wzSteps .step').forEach(x => x.classList.remove('active'));
+        document.querySelectorAll('#wzSteps .step-line').forEach(x => x.classList.remove('passed'));
+        s.classList.add('active');
+        for (let k = 0; k < i; k++) {
+          document.querySelectorAll('#wzSteps .step')[k].classList.add('done');
+          document.querySelectorAll('#wzSteps .step-line')[k]?.classList.add('passed');
+        }
+        for (let k = i + 1; k < 6; k++) document.querySelectorAll('#wzSteps .step')[k].classList.remove('done');
+        bx.toast(`原型演示：切换到「${s.querySelector('.s-label').textContent}」步骤`, true);
+      };
+    });
+  },
+  bindDryRun() {
+    const body = document.getElementById('dryRunBody');
+    if (!body) return;
+    const lines = [
+      ['PC 前端', '[预检] 检查 HEAD / dirty / 里程碑标签', 'step'],
+      ['PC 前端', '$ pnpm build', 'cmd'],
+      ['PC 前端', 'git tag v2.5.0', 'cmd'],
+      ['PC 前端', 'git tag build/v2.5.0.26081728', 'cmd'],
+      ['数据可视化', '[预检] 检查 HEAD / dirty / 里程碑标签', 'step'],
+      ['数据可视化', 'git tag v2.5.0', 'cmd'],
+      ['微信小程序', '[预检] 检查 HEAD / dirty / 里程碑标签', 'step'],
+      ['微信小程序', 'git tag v2.5.0', 'cmd'],
+      ['（项目）', '写发布记录 → releases/v2.5.0/data.json + 双轨日志', 'cmd'],
+      ['（数据仓库）', '里程碑标签 v2.5.0 + commit', 'cmd'],
+      ['（远程）', '离线模式：跳过推送', 'cmd'],
+    ];
+    body.innerHTML = lines.map(l => `
+      <div class="console-line ${l[2] === 'step' ? 'step' : ''}">
+        <span class="ln-repo">${l[0]}</span>
+        <span class="ln-cmd">${l[1]}</span>
+      </div>`).join('') + `<div class="console-line console-cursor"><span class="ln-repo"></span><span class="ln-cmd">准备执行…</span></div>`;
+  },
+  wizardRun() {
+    const body = document.getElementById('dryRunBody');
+    if (!body) return;
+    const steps = [
+      ['PC 前端', 'git tag v2.5.0', 'cmd'], ['PC 前端', '✓ tag 创建成功', 'done'],
+      ['PC 前端', '写入 version.json / version-history.json', 'cmd'],
+      ['数据可视化', 'git tag v2.5.0', 'cmd'], ['数据可视化', '✓ tag 创建成功', 'done'],
+      ['（数据仓库）', 'commit 发布记录 + 里程碑标签', 'cmd'],
+      ['（项目）', '★ 发布完成：v2.5.0 · 3 个仓库全部成功', 'done'],
+    ];
+    body.innerHTML = '';
+    let i = 0;
+    const timer = setInterval(() => {
+      if (i >= steps.length) { clearInterval(timer); bx.toast('发布完成：v2.5.0'); return; }
+      const [repo, cmd, type] = steps[i++];
+      const div = document.createElement('div');
+      div.className = 'console-line ' + (type === 'done' ? 'done' : '');
+      div.innerHTML = `<span class="ln-repo">${repo}</span><span class="ln-cmd">${cmd}</span>`;
+      body.appendChild(div);
+      body.scrollTop = body.scrollHeight;
+    }, 350);
+  },
+  openRelease(i) {
+    const p = DATA.projects.p1;
+    const r = p.releases[i];
+    if (!r) return;
+    document.getElementById('drVersion').innerHTML = `<span class="tick"></span>${r.ver}`;
+    document.getElementById('drBump').textContent = r.bump === 'minor' ? '次版本' : '补丁';
+    document.getElementById('drPushed').innerHTML = `${ICONS.cloud}${r.pushed ? '已推送' : '未推送'}`;
+    document.getElementById('drMeta').innerHTML = `
+      <span class="chip chip-dim">${ICONS.cube}${r.repos} 仓库</span>
+      <span class="chip chip-dim">${ICONS.commit}${r.commits} 提交</span>
+      <span class="chip chip-dim">${ICONS.tag}+${r.ins} / -${r.del}</span>
+      <span class="chip chip-dim">${ICONS.clock}${r.date}</span>`;
+    document.getElementById('drLog').innerHTML = `
+      <h3 style="font-size:13px;margin:0 0 8px;color:var(--text-1)">对外日志（用户可见）</h3>
+      <p style="margin:0 0 12px">本版本新增发布向导提交级排除、版本清单「仅日期」导出；优化深链刷新与目录树渲染。</p>
+      <h3 style="font-size:13px;margin:0 0 8px;color:var(--text-1)">对内日志（全量技术细节）</h3>
+      <ul style="padding-left:18px;margin:0">
+        <li>engine.ts：发布流程挂接备份步骤，tag 后源码备份、build 后产物备份</li>
+        <li>backups.ts：新增下载/校验/对比/删除路由</li>
+        <li>ReleaseWizard.vue：步骤守卫、SSE 控制台、中断续跑</li>
+      </ul>`;
+    this.openDrawer('release-drawer');
+  },
+  openDrawer(id) {
+    document.getElementById(id).classList.add('open');
+    document.querySelector(`[data-overlay="${id}"]`).classList.add('open');
+  },
+  closeDrawer(id) {
+    document.getElementById(id).classList.remove('open');
+    document.querySelector(`[data-overlay="${id}"]`).classList.remove('open');
+  },
+  openModal(id) {
+    document.getElementById(id).classList.add('open');
+    document.querySelector(`[data-overlay="${id}"]`).classList.add('open');
+    if (id === 'paletteModal') document.getElementById('paletteInput').focus();
+  },
+  closeModal(id) {
+    document.getElementById(id).classList.remove('open');
+    document.querySelector(`[data-overlay="${id}"]`).classList.remove('open');
+  },
+  toast(msg, silent) {
+    const t = document.getElementById('toast');
+    document.getElementById('toastMsg').textContent = msg;
+    t.classList.add('show');
+    clearTimeout(this._tt);
+    this._tt = setTimeout(() => t.classList.remove('show'), 2200);
+  },
+  pickTheme(kind, el) {
+    document.querySelectorAll('.theme-opt').forEach(x => x.classList.remove('selected'));
+    el.classList.add('selected');
+    document.documentElement.dataset.theme = kind === 'light' ? 'light' : 'dark';
+    this.syncThemeUI();
+    this.toast('主题已切换（原型演示）');
+  },
+  syncThemeUI() {
+    const dark = document.documentElement.dataset.theme !== 'light';
+    document.getElementById('sbThemeLabel').textContent = dark ? '深色' : '亮色';
+  },
+  toggleTheme() {
+    document.documentElement.dataset.theme = document.documentElement.dataset.theme === 'light' ? 'dark' : 'light';
+    this.syncThemeUI();
+    document.querySelectorAll('.theme-opt').forEach(x => x.classList.remove('selected'));
+  },
+};
+
+/* ---------- 事件绑定 ---------- */
+document.querySelectorAll('.sb-item[data-page-link]').forEach(el => {
+  el.addEventListener('click', e => {
+    e.preventDefault();
+    bx.goto(el.dataset.pageLink, el.dataset.pageArg);
+  });
+});
+document.getElementById('sbThemeToggle').addEventListener('click', () => bx.toggleTheme());
+document.getElementById('tbTheme').addEventListener('click', () => bx.toggleTheme());
+document.getElementById('tbSync').addEventListener('click', () => bx.toast('数据仓库已同步'));
+document.getElementById('tbNewProject').addEventListener('click', () => bx.openModal('new-project'));
+document.getElementById('sbPalette').addEventListener('click', () => bx.openModal('paletteModal'));
+document.getElementById('tbSearch').addEventListener('click', () => bx.openModal('paletteModal'));
+document.addEventListener('keydown', e => {
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+    e.preventDefault();
+    bx.openModal('paletteModal');
+  }
+  if (e.key === 'Escape') {
+    document.querySelectorAll('.modal.open, .drawer.open').forEach(el => el.classList.remove('open'));
+    document.querySelectorAll('.overlay.open').forEach(el => el.classList.remove('open'));
+  }
+});
+document.querySelectorAll('[data-close]').forEach(el => {
+  el.addEventListener('click', () => {
+    const id = el.dataset.close;
+    const el2 = document.getElementById(id);
+    if (el2 && el2.classList.contains('modal')) bx.closeModal(id);
+    else bx.closeDrawer(id);
+  });
+});
+document.querySelectorAll('.overlay').forEach(ov => {
+  ov.addEventListener('click', () => {
+    ov.classList.remove('open');
+    document.querySelectorAll('.modal.open, .drawer.open').forEach(el => el.classList.remove('open'));
+  });
+});
+
+/* 命令面板内容 */
+const paletteCommands = [
+  { group: '页面', title: '总览', icon: 'cube', run: () => bx.goto('dashboard') },
+  { group: '页面', title: '设置', icon: 'palette', run: () => bx.goto('settings') },
+  { group: '项目', title: '主产品线', icon: 'folder', run: () => bx.goto('project', 'p1') },
+  { group: '项目', title: '移动端矩阵', icon: 'folder', run: () => bx.goto('project', 'p2') },
+  { group: '仓库', title: 'PC 前端', icon: 'git', run: () => bx.goto('repo', 'p1/r1') },
+  { group: '仓库', title: '数据可视化', icon: 'git', run: () => bx.goto('repo', 'p1/r2') },
+  { group: '发布', title: '开始发布', icon: 'rocket', run: () => bx.goto('release', 'p1') },
+];
+function renderPalette(q) {
+  const list = paletteCommands.filter(c => !q || c.title.includes(q) || c.group.includes(q));
+  document.getElementById('paletteResults').innerHTML = list.length
+    ? list.map(c => `
+      <button class="sb-item" style="width:100%;margin:0;border-radius:var(--radius-m)"
+        onclick="bx.closeModal('paletteModal');c.run()" data-cmd='${JSON.stringify(c.run.toString())}'>
+        <span style="opacity:.7">${ICONS[c.icon]}</span><span class="label">${c.title}</span>
+      </button>`).join('')
+    : '<div style="padding:20px;text-align:center;color:var(--text-3);font-size:13px">没有匹配的命令</div>';
+}
+document.getElementById('paletteInput').addEventListener('input', e => renderPalette(e.target.value));
+renderPalette('');
+
+/* 初始渲染 */
+bx.goto('dashboard');
+bx.syncThemeUI();
+</script>
+</body>
+</html>

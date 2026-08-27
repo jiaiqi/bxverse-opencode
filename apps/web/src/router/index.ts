@@ -12,6 +12,7 @@ const router = createRouter({
     { path: '/project/:id/backups', name: 'backups', component: () => import('../views/BackupManage.vue'), meta: { title: '备份与对比' } },
     { path: '/repo/:pid/:rid', name: 'repo', component: () => import('../views/RepoDetail.vue'), meta: { title: '仓库详情' } },
     { path: '/settings', name: 'settings', component: () => import('../views/Settings.vue'), meta: { title: '设置' } },
+    { path: '/ops', name: 'ops', component: () => import('../views/OpsCenter.vue'), meta: { title: '系统健康' } },
     { path: '/:pathMatch(.*)*', name: 'not-found', component: () => import('../views/NotFound.vue'), meta: { title: '页面不存在' } },
   ],
 })

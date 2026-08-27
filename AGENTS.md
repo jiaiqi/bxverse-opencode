@@ -70,7 +70,8 @@ apps/web/src/{main.ts, App.vue, api/*, stores/*, router/, views/（含 BackupMan
 apps/cli/src/index.ts
 scripts/{seed.mjs, doctor.mjs, gen-pwa-icons.cjs}
 e2e/{prepare-fixture.mjs, wizard-flow.py, resume.mjs, README.md}
-docs/{requirements.md, architecture.md, data-model.md, core-engine.md, api.md, frontend.md, development.md, roadmap.md, r26-build-pipeline.md}  设计文档
+docs/{requirements.md, architecture.md, data-model.md, core-engine.md, api.md, frontend.md, development.md, roadmap.md, next-development-plan.md, optimization-plan.md, r26-build-pipeline.md, theme-spec-wenxi.md}  设计文档（_archive/ 为过期归档，勿引用）
+design/bxverse-ultimate-cockpit.html  终极形态交互原型（下一阶段前端形态依据；_archive/ 为旧稿归档）
 verse/      参考原型，不在 workspace，不参与构建
 ```
 
@@ -161,11 +162,14 @@ apps/@bxverse/cli ──────┘
 | `docs/frontend.md` | 前端页面/组件/状态/交互设计（§3.6 备份管理、§4.16–4.18 RuntimeStatus/VersionExportDropdown/DirPicker、§5.5 composables、§8 提交级排除/URL 同步/beforeunload、§12 WIG 合规约定、R26 RepoDetail 流水线） | 写 web 页面组件前 |
 | `docs/development.md` | 开发环境、调试、故障排查（§3 seed/icons/e2e、§6 WIG 与 URL 同步/构建顺序、§8 端口冲突/server 重启） | 环境搭建与排障时 |
 | `docs/r26-build-pipeline.md` | R26 仓库级构建流水线与双格式权威方案 | R26 相关任务必读 |
+| `docs/next-development-plan.md` | **下一阶段开发总纲**：现状快照、原型差距清单、Phase 1–3 排期与出口标准、文档治理 | 领取任何新任务前；决定「接下来做什么」时 |
+| `docs/optimization-plan.md` | 优化任务卡库（F/T/S/A/C/N/DOC 系列，单卡自包含） | 执行具体优化任务时（先按代码现状核对任务是否已落地） |
 
 > 注：除 requirements.md、architecture.md、roadmap.md 外，其余文档由并行任务撰写，可能暂缺——缺失时以 requirements + shared/types.ts + architecture.md 为准，并在实现注释中标注「依赖待补：docs/xxx.md」。
 
 ## 7. 提交与协作约定
 
 - 任务完成后跑完 §3.2 验证命令再交付；提交信息遵循仓库既有风格（常规前缀）。
+- **开工前先 `git status`**：本仓常有并行会话的未提交半成品（改名/重构进行中）。发现工作树有他人未提交改动时：不覆盖、不代提交；若其破坏了 build/e2e（如多语句 `@click` 缺分号、e2e 断言的 UI 文案已改名），只做最小修复让验证转绿，并在交付说明中点名。
 - 不 commit 未要求提交的内容；不推送到远端（数据仓库的 git 操作属产品功能，勿与开发仓库混淆）。
 - 修改任何 `docs/*.md` 设计文档前，先确认对应实现已同步；文档与代码不一致时优先改代码（除非需求变更，需求变更必须回写 requirements.md 变更记录）。

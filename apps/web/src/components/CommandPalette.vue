@@ -64,6 +64,13 @@ const commands = computed<Command[]>(() => {
   })
   list.push({
     group: '系统',
+    title: '重看新手引导',
+    icon: 'i-carbon-help',
+    keywords: 'onboarding guide tour yindao',
+    run: () => uiStore.toggleOnboarding(true),
+  })
+  list.push({
+    group: '系统',
     title: '切换主题',
     icon: 'i-carbon-screen',
     keywords: 'theme dark light',
@@ -75,8 +82,36 @@ const commands = computed<Command[]>(() => {
 const filtered = computed(() => {
   const q = query.value.trim().toLowerCase()
   if (!q) return commands.value
-  return commands.value.filter(c => c.title.toLowerCase().includes(q) || c.keywords.includes(q))
+  // 模糊匹配：标题中字符按顺序出现即命中（支持缩写）
+  return commands.value
+    .map((c) => ({ c, score: fuzzyScore(c.title, q) || (c.keywords.toLowerCase().includes(q) ? 1 : 0) }))
+    .filter((x) => x.score > 0)
+    .sort((a, b) => b.score - a.score)
+    .map((x) => x.c)
 })
+
+/** 简单 fuzzy：标题中字符按 q 的顺序出现；连续命中 +2；命中数 / q.length */
+function fuzzyScore(title: string, q: string): number {
+  if (!q) return 0
+  const t = title.toLowerCase()
+  let ti = 0
+  let qi = 0
+  let run = 0
+  let score = 0
+  while (ti < t.length && qi < q.length) {
+    if (t[ti] === q[qi]) {
+      run += 1
+      score += run > 1 ? 2 : 1
+      qi += 1
+    } else {
+      run = 0
+    }
+    ti += 1
+  }
+  if (qi < q.length) return 0 // 未完全匹配
+  // 短查询权重更高（精确匹配）
+  return score * (1 + (q.length <= 3 ? 0.5 : 0))
+}
 
 const grouped = computed(() => {
   const map = new Map<string, Command[]>()
@@ -129,6 +164,7 @@ const flatActive = (groupIdx: number, itemIdx: number): number => {
   <NModal
     :show="uiStore.paletteOpen"
     :closable="true"
+    :aria-label="`命令面板，共 ${commands.length} 项`"
     @update:show="(v: boolean) => uiStore.togglePalette(v)"
     transform-origin="center"
   >
@@ -139,8 +175,8 @@ const flatActive = (groupIdx: number, itemIdx: number): number => {
           ref="inputRef"
           v-model="query"
           class="flex-1 bg-transparent rounded-md text-text-1 text-sm placeholder-text-3 outline-none focus:ring-2 focus:ring-brand-500"
-          aria-label="搜索命令、项目、仓库"
-          placeholder="搜索命令、项目、仓库…"
+          :aria-label="`搜索命令、项目、仓库（共 ${commands.length} 项）`"
+          placeholder="搜索命令、项目、仓库…（支持模糊匹配）"
           autocomplete="off"
           spellcheck="false"
           role="combobox"
@@ -150,11 +186,16 @@ const flatActive = (groupIdx: number, itemIdx: number): number => {
           :aria-activedescendant="filtered.length ? `cmd-${activeIndex}` : undefined"
           @keydown="onKeydown"
         />
-        <span class="text-xs text-text-3 border border-border rounded-sm px-1 py-0.5">Esc</span>
+        <span class="text-[10px] text-text-3 border border-border rounded-sm px-1 py-0.5">Esc</span>
       </div>
-      <div id="palette-listbox" class="max-h-96 overflow-y-auto py-2" role="listbox" aria-label="搜索结果">
+      <div
+        id="palette-listbox"
+        class="max-h-96 overflow-y-auto py-2"
+        role="listbox"
+        :aria-label="`搜索结果 ${filtered.length} 项`"
+      >
         <template v-for="(group, gi) in grouped" :key="group[0]">
-           <div class="px-4 pt-2 pb-1 text-xs text-text-3" role="presentation">{{ group[0] }}</div>
+          <div class="px-4 pt-2 pb-1 text-xs text-text-3" role="presentation">{{ group[0] }}</div>
           <template v-for="(cmd, ii) in group[1]" :key="cmd.title">
             <button
               :id="`cmd-${flatActive(gi, ii)}`"
@@ -167,17 +208,24 @@ const flatActive = (groupIdx: number, itemIdx: number): number => {
             >
               <i aria-hidden="true" class="text-15px shrink-0" :class="cmd.icon" />
               <span class="flex-1 truncate text-left text-sm">{{ cmd.title }}</span>
+              <span v-if="cmd.group" class="text-[10px] text-text-3 font-mono shrink-0 hidden md:inline">{{ cmd.group }}</span>
             </button>
           </template>
         </template>
-        <div v-if="filtered.length === 0" class="px-4 py-8 text-center text-sm text-text-3">
-          没有匹配的命令
+        <div
+          v-if="filtered.length === 0"
+          class="px-4 py-8 text-center text-sm text-text-3"
+          role="status"
+          aria-live="polite"
+        >
+          没有匹配的命令 · 试试「<span class="text-text-2">发布</span>」「<span class="text-text-2">设置</span>」或项目名
         </div>
       </div>
-      <div class="flex items-center gap-4 px-4 h-9 border-t border-border text-xs text-text-3">
+      <div class="flex items-center gap-4 px-4 h-9 border-t border-border text-xs text-text-3" aria-hidden="true">
         <span><b class="text-text-2">↑↓</b> 选择</span>
         <span><b class="text-text-2">Enter</b> 执行</span>
         <span><b class="text-text-2">Esc</b> 关闭</span>
+        <span class="ml-auto">{{ filtered.length }} / {{ commands.length }}</span>
       </div>
     </div>
   </NModal>

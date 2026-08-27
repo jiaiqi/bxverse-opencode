@@ -1,0 +1,937 @@
+<!DOCTYPE html>
+<html lang="zh-CN" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>bxverse Next · 开发者全景版本与发布驾驶舱</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Google Fonts: Inter & JetBrains Mono -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap" rel="stylesheet">
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <!-- Vue 3 CDN (浏览器独立运行版) -->
+  <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'sans-serif'],
+            mono: ['JetBrains Mono', 'SF Mono', 'Menlo', 'Consolas', 'monospace'],
+          },
+          colors: {
+            bg: {
+              base: '#07090D',
+              surface: '#0E1218',
+              elevated: '#151B24',
+              hover: '#1D2532',
+              active: '#242E3D',
+            },
+            neon: {
+              emerald: '#00F59B',
+              'emerald-dim': 'rgba(0, 245, 155, 0.15)',
+              cyan: '#00D4FF',
+              amber: '#FFB020',
+              rose: '#FF4D6A',
+              purple: '#A855F7',
+            },
+            border: {
+              subtle: '#1C2430',
+              muted: '#283445',
+              bright: '#3E4F66',
+            }
+          },
+          boxShadow: {
+            'glow-emerald': '0 0 20px -3px rgba(0, 245, 155, 0.35)',
+            'glow-cyan': '0 0 20px -3px rgba(0, 212, 255, 0.35)',
+            'panel': '0 8px 32px 0 rgba(0, 0, 0, 0.45)',
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    /* 玻璃拟态与精密仪器质感 */
+    ::-webkit-scrollbar { width: 5px; height: 5px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #283445; border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: #3E4F66; }
+
+    .glass-panel {
+      background: rgba(14, 18, 24, 0.75);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid rgba(255, 255, 255, 0.07);
+    }
+    .instrument-grid {
+      background-size: 24px 24px;
+      background-image: 
+        linear-gradient(to right, rgba(255, 255, 255, 0.02) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
+    }
+    .pulse-dot {
+      animation: pulse-glow 2s infinite cubic-bezier(0.4, 0, 0.6, 1);
+    }
+    @keyframes pulse-glow {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.4; transform: scale(0.85); }
+    }
+    .code-diff-add { background: rgba(0, 245, 155, 0.12); color: #00F59B; border-left: 2px solid #00F59B; }
+    .code-diff-del { background: rgba(255, 77, 106, 0.12); color: #FF4D6A; border-left: 2px solid #FF4D6A; }
+    
+    /* 模拟打字机光标 */
+    .typing-cursor::after {
+      content: '▋';
+      display: inline-block;
+      vertical-align: middle;
+      color: #00F59B;
+      animation: blink 1s step-start infinite;
+    }
+    @keyframes blink { 50% { opacity: 0; } }
+  </style>
+</head>
+
+<body class="bg-bg-base text-slate-200 antialiased font-sans h-screen overflow-hidden flex flex-col instrument-grid select-none">
+  <div id="app" class="flex flex-col h-full w-full">
+
+    <!-- ==================== 顶部全局导航控制台 (Global Command Bar) ==================== -->
+    <header class="h-12 border-b border-border-subtle bg-bg-surface/90 backdrop-blur px-4 flex items-center justify-between shrink-0 z-30">
+      <!-- 左：Logo 与项目切换器 -->
+      <div class="flex items-center gap-3.5">
+        <div class="flex items-center gap-2">
+          <div class="w-6 h-6 rounded-md bg-gradient-to-br from-neon-emerald to-neon-cyan flex items-center justify-center shadow-glow-emerald">
+            <i data-lucide="layers" class="w-3.5 h-3.5 text-black stroke-[2.5]"></i>
+          </div>
+          <span class="font-bold tracking-tight text-white font-mono text-sm">BXVERSE<span class="text-neon-emerald ml-0.5 font-sans text-xs uppercase px-1.5 py-0.2 rounded bg-neon-emerald/10 border border-neon-emerald/30">Next</span></span>
+        </div>
+
+        <div class="h-4 w-px bg-border-subtle"></div>
+
+        <!-- 项目选择器下拉 -->
+        <div class="relative">
+          <button @click="showProjectMenu = !showProjectMenu" class="flex items-center gap-2 px-2.5 py-1 rounded-md bg-bg-elevated hover:bg-bg-hover border border-border-subtle text-xs transition-colors">
+            <span class="w-2 h-2 rounded-full bg-neon-emerald"></span>
+            <span class="font-medium text-white">{{ currentProject.name }}</span>
+            <span class="font-mono text-slate-400 text-[10px]">{{ currentProject.version }}</span>
+            <i data-lucide="chevron-down" class="w-3.5 h-3.5 text-slate-400"></i>
+          </button>
+
+          <!-- 下拉菜单 -->
+          <div v-if="showProjectMenu" @click.outside="showProjectMenu = false" class="absolute top-8 left-0 w-64 bg-bg-elevated border border-border-muted rounded-lg shadow-panel p-1.5 z-50">
+            <div class="text-[10px] font-mono text-slate-400 uppercase px-2 py-1">切换业务矩阵</div>
+            <div v-for="p in projects" :key="p.id" @click="selectProject(p)" class="flex items-center justify-between px-2 py-1.5 rounded hover:bg-bg-hover cursor-pointer transition-colors" :class="{'bg-bg-hover text-neon-emerald': currentProject.id === p.id}">
+              <div class="flex items-center gap-2 truncate">
+                <span class="w-1.5 h-1.5 rounded-full" :class="currentProject.id === p.id ? 'bg-neon-emerald' : 'bg-slate-500'"></span>
+                <span class="text-xs truncate font-medium">{{ p.name }}</span>
+              </div>
+              <span class="font-mono text-[11px] text-slate-400">{{ p.version }}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 中：全景全局快捷命令触发器 (⌘K Command Center) -->
+      <div class="flex-1 max-w-md mx-4">
+        <button @click="openCommandPalette = true" class="w-full flex items-center justify-between px-3 py-1 rounded-md bg-bg-elevated/70 hover:bg-bg-elevated border border-border-subtle text-slate-400 text-xs transition-all hover:border-border-muted group">
+          <div class="flex items-center gap-2">
+            <i data-lucide="search" class="w-3.5 h-3.5 text-slate-400 group-hover:text-neon-emerald transition-colors"></i>
+            <span>搜索仓库、操作、版本或输入指令…</span>
+          </div>
+          <kbd class="px-1.5 py-0.5 text-[10px] font-mono rounded bg-bg-base border border-border-muted text-slate-400">Ctrl K</kbd>
+        </button>
+      </div>
+
+      <!-- 右：实时系统指标、AI 供应商状态与快捷入口 -->
+      <div class="flex items-center gap-3">
+        <!-- AI 状态胶囊 -->
+        <button @click="showVendorModal = true" class="flex items-center gap-2 px-2 py-1 rounded-md bg-bg-elevated hover:bg-bg-hover border border-border-subtle text-xs transition-colors" :title="'当前生效: ' + activeAiProvider.name + ' (' + activeAiProvider.model + ')'">
+          <span class="w-2 h-2 rounded-full bg-neon-cyan pulse-dot"></span>
+          <span class="text-slate-300 font-mono text-[11px]">{{ activeAiProvider.shortName }}</span>
+          <span class="text-neon-cyan font-mono text-[10px] bg-neon-cyan/10 px-1 rounded">{{ activeAiProvider.latency }}ms</span>
+        </button>
+
+        <!-- 本地守护进程状态 -->
+        <div class="flex items-center gap-1.5 text-[11px] font-mono text-slate-400 px-2 py-0.5 rounded bg-bg-elevated/50 border border-border-subtle">
+          <span class="w-1.5 h-1.5 rounded-full bg-neon-emerald"></span>
+          <span>127.0.0.1:8899</span>
+        </div>
+
+        <div class="h-4 w-px bg-border-subtle"></div>
+
+        <!-- 快速发布大按钮 -->
+        <button @click="openPublishFlow" class="flex items-center gap-1.5 px-3 py-1 rounded-md bg-neon-emerald text-black font-semibold text-xs hover:shadow-glow-emerald hover:brightness-110 active:scale-95 transition-all">
+          <i data-lucide="rocket" class="w-3.5 h-3.5 stroke-[2.5]"></i>
+          <span>一键统一发布</span>
+        </button>
+      </div>
+    </header>
+
+    <!-- ==================== 核心三栏沉浸式工作台 (3-Pane Workspace) ==================== -->
+    <div class="flex-1 flex overflow-hidden">
+
+      <!-- ════════════ 左侧栏：仓库与组件矩阵 (Repositories Navigator) ════════════ -->
+      <aside class="w-64 border-r border-border-subtle bg-bg-surface flex flex-col shrink-0">
+        <!-- 侧栏头部 -->
+        <div class="p-3 border-b border-border-subtle flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <span class="text-xs font-semibold uppercase tracking-wider text-slate-400 font-mono">工程拓扑 ({{ currentProject.repos.length }})</span>
+          </div>
+          <div class="flex items-center gap-1">
+            <button @click="fetchRepoUpdates" class="p-1 rounded hover:bg-bg-hover text-slate-400 hover:text-white" title="检测全部工程变动">
+              <i data-lucide="refresh-cw" class="w-3.5 h-3.5" :class="{'animate-spin text-neon-emerald': isRefreshingRepos}"></i>
+            </button>
+            <button @click="showAddRepo = true" class="p-1 rounded hover:bg-bg-hover text-slate-400 hover:text-white" title="接入新仓库">
+              <i data-lucide="plus" class="w-3.5 h-3.5"></i>
+            </button>
+          </div>
+        </div>
+
+        <!-- 仓库树形列表 -->
+        <div class="flex-1 overflow-y-auto p-2 space-y-1">
+          <div 
+            v-for="r in currentProject.repos" 
+            :key="r.id"
+            @click="selectRepo(r)"
+            class="group p-2.5 rounded-lg border transition-all cursor-pointer relative"
+            :class="selectedRepo.id === r.id ? 'bg-bg-elevated border-neon-emerald/40 shadow-sm' : 'border-transparent hover:bg-bg-elevated/50 hover:border-border-subtle'"
+          >
+            <!-- 选中指示条 -->
+            <div v-if="selectedRepo.id === r.id" class="absolute left-0 top-2 bottom-2 w-0.5 bg-neon-emerald rounded-r"></div>
+
+            <div class="flex items-center justify-between mb-1">
+              <div class="flex items-center gap-2 truncate">
+                <i data-lucide="git-branch" class="w-3.5 h-3.5 text-slate-400 group-hover:text-neon-emerald transition-colors shrink-0"></i>
+                <span class="text-xs font-medium text-white truncate">{{ r.name }}</span>
+              </div>
+              <!-- 变动徽章 -->
+              <span v-if="r.dirtyCount > 0" class="px-1.5 py-0.2 rounded text-[10px] font-mono bg-neon-amber/15 text-neon-amber border border-neon-amber/30">
+                +{{ r.dirtyCount }} 变动
+              </span>
+              <span v-else class="text-[10px] font-mono text-slate-400">已就绪</span>
+            </div>
+
+            <div class="flex items-center justify-between text-[11px] font-mono text-slate-400">
+              <span class="truncate max-w-[130px]">{{ r.branch }} @ {{ r.head.slice(0, 7) }}</span>
+              <span class="text-slate-400 group-hover:text-slate-200">{{ r.version }}</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 侧栏底部：快速版本清单与审计概览 -->
+        <div class="p-3 border-t border-border-subtle bg-bg-elevated/40 space-y-2">
+          <div class="flex items-center justify-between text-xs">
+            <span class="text-slate-400">项目版本清单</span>
+            <button @click="showVersionExport = true" class="text-neon-emerald hover:underline text-[11px] font-mono">导出 JSON</button>
+          </div>
+          <div class="grid grid-cols-2 gap-1.5 text-center font-mono">
+            <div class="p-1.5 rounded bg-bg-surface border border-border-subtle">
+              <div class="text-[10px] text-slate-400">总发版次数</div>
+              <div class="text-xs font-bold text-white mt-0.5">28</div>
+            </div>
+            <div class="p-1.5 rounded bg-bg-surface border border-border-subtle">
+              <div class="text-[10px] text-slate-400">备份归档包</div>
+              <div class="text-xs font-bold text-neon-cyan mt-0.5">14.2 GB</div>
+            </div>
+          </div>
+        </div>
+      </aside>
+
+
+      <!-- ════════════ 中间主视口：操作与执行控制区 (Main Stage View) ════════════ -->
+      <main class="flex-1 flex flex-col bg-bg-base overflow-hidden">
+
+        <!-- 仓库上下文与一级 Tab (Workspace / Git Staging / Releases / Backups / Settings) -->
+        <div class="h-11 border-b border-border-subtle bg-bg-surface px-4 flex items-center justify-between shrink-0">
+          <div class="flex items-center gap-3">
+            <span class="font-bold text-sm text-white flex items-center gap-1.5">
+              <span>{{ selectedRepo.name }}</span>
+              <span class="text-xs text-slate-400 font-normal">({{ selectedRepo.displayName || '未设中文别名' }})</span>
+            </span>
+            <span class="text-slate-400">/</span>
+            <div class="flex items-center gap-1 font-mono text-xs text-slate-400">
+              <i data-lucide="folder" class="w-3 h-3 text-slate-400"></i>
+              <span class="truncate max-w-xs">{{ selectedRepo.path }}</span>
+            </div>
+          </div>
+
+          <!-- 功能 Tabs -->
+          <div class="flex items-center gap-1 p-0.5 rounded-lg bg-bg-elevated border border-border-subtle">
+            <button 
+              v-for="t in ['git-stage', 'pipeline', 'releases', 'backup-diff']" 
+              :key="t"
+              @click="currentTab = t"
+              class="px-3 py-1 rounded text-xs transition-all font-medium flex items-center gap-1.5"
+              :class="currentTab === t ? 'bg-bg-hover text-neon-emerald shadow-xs font-semibold' : 'text-slate-400 hover:text-slate-200'"
+            >
+              <i :data-lucide="tabIcons[t]" class="w-3.5 h-3.5"></i>
+              <span>{{ tabLabels[t] }}</span>
+              <span v-if="t === 'git-stage' && selectedRepo.dirtyCount > 0" class="w-1.5 h-1.5 rounded-full bg-neon-amber"></span>
+            </button>
+          </div>
+        </div>
+
+        <!-- 视口内容切换区 -->
+        <div class="flex-1 overflow-hidden flex">
+
+          <!-- TAB 1: 实时 Git 暂存与智能提交流 (Git Stage & AI Assist) -->
+          <div v-if="currentTab === 'git-stage'" class="flex-1 flex overflow-hidden">
+            <!-- 待暂存/已暂存列表 -->
+            <div class="w-80 border-r border-border-subtle bg-bg-surface flex flex-col overflow-hidden">
+              <div class="p-3 border-b border-border-subtle flex items-center justify-between text-xs">
+                <div class="flex items-center gap-2 font-medium">
+                  <span>变更文件 ({{ selectedRepo.files.length }})</span>
+                  <span class="font-mono text-[10px] text-neon-emerald bg-neon-emerald/10 px-1 rounded">已暂存: {{ stagedFiles.length }}</span>
+                </div>
+                <div class="flex items-center gap-1">
+                  <button @click="stageAll" class="text-[11px] text-neon-emerald hover:underline font-mono">全部暂存</button>
+                  <span class="text-slate-400">|</span>
+                  <button @click="unstageAll" class="text-[11px] text-slate-400 hover:underline font-mono">撤销</button>
+                </div>
+              </div>
+
+              <!-- 文件列表项 -->
+              <div class="flex-1 overflow-y-auto p-1.5 space-y-0.5">
+                <div 
+                  v-for="f in selectedRepo.files" 
+                  :key="f.path"
+                  @click="selectedDiffFile = f"
+                  class="group flex items-center justify-between p-2 rounded hover:bg-bg-elevated cursor-pointer transition-colors text-xs"
+                  :class="selectedDiffFile.path === f.path ? 'bg-bg-elevated border border-border-subtle' : ''"
+                >
+                  <div class="flex items-center gap-2 truncate">
+                    <span 
+                      class="font-mono text-[10px] px-1 rounded shrink-0 font-bold"
+                      :class="f.status === 'M' ? 'text-neon-amber bg-neon-amber/10' : (f.status === 'A' ? 'text-neon-emerald bg-neon-emerald/10' : 'text-neon-rose bg-neon-rose/10')"
+                    >
+                      {{ f.status }}
+                    </span>
+                    <span class="font-mono text-slate-200 truncate">{{ f.path }}</span>
+                  </div>
+                  <button 
+                    @click.stop="toggleStage(f)"
+                    class="p-1 rounded hover:bg-bg-active text-slate-400 hover:text-white shrink-0"
+                    :title="f.staged ? '撤销暂存' : '暂存此文件'"
+                  >
+                    <i :data-lucide="f.staged ? 'minus' : 'plus'" class="w-3.5 h-3.5"></i>
+                  </button>
+                </div>
+              </div>
+
+              <!-- 底部 Conventional Commit 提交面板 (集成 AI 助手) -->
+              <div class="p-3 border-t border-border-subtle bg-bg-elevated/70 space-y-2">
+                <div class="flex items-center justify-between text-xs">
+                  <span class="font-semibold text-white">提交暂存变更</span>
+                  <!-- 智能 AI 生成提交信息按钮 -->
+                  <button 
+                    @click="generateAiCommit" 
+                    :disabled="isGeneratingCommit || stagedFiles.length === 0"
+                    class="flex items-center gap-1 px-2 py-0.5 rounded bg-neon-purple/20 text-neon-purple hover:bg-neon-purple/30 border border-neon-purple/40 text-[11px] font-mono transition-colors disabled:opacity-40"
+                  >
+                    <i data-lucide="sparkles" class="w-3 h-3" :class="{'animate-spin': isGeneratingCommit}"></i>
+                    <span>AI 生成 Commit</span>
+                  </button>
+                </div>
+
+                <div class="space-y-1.5">
+                  <input 
+                    v-model="commitSubject" 
+                    type="text" 
+                    placeholder="feat(core): 简要描述本次变更…"
+                    class="w-full px-2.5 py-1.5 rounded bg-bg-surface border border-border-subtle text-xs text-white placeholder-slate-400 font-mono focus:outline-none focus:border-neon-emerald"
+                  />
+                  <textarea 
+                    v-model="commitBody" 
+                    rows="2" 
+                    placeholder="详细说明（可选，支持多行要点）…"
+                    class="w-full px-2.5 py-1.5 rounded bg-bg-surface border border-border-subtle text-xs text-white placeholder-slate-400 font-mono focus:outline-none focus:border-neon-emerald resize-none"
+                  ></textarea>
+                </div>
+
+                <div class="flex items-center justify-between gap-2 pt-1">
+                  <div class="flex items-center gap-1">
+                    <button @click="gitPull" class="px-2 py-1 rounded bg-bg-surface hover:bg-bg-hover text-slate-300 text-xs font-mono border border-border-subtle flex items-center gap-1">
+                      <i data-lucide="arrow-down" class="w-3 h-3"></i> 拉取
+                    </button>
+                    <button @click="gitPush" class="px-2 py-1 rounded bg-bg-surface hover:bg-bg-hover text-slate-300 text-xs font-mono border border-border-subtle flex items-center gap-1">
+                      <i data-lucide="arrow-up" class="w-3 h-3"></i> 推送
+                    </button>
+                  </div>
+                  <button 
+                    @click="executeCommit" 
+                    :disabled="!commitSubject.trim() || stagedFiles.length === 0"
+                    class="flex-1 px-3 py-1 rounded bg-neon-emerald text-black font-semibold text-xs hover:brightness-110 active:scale-95 disabled:opacity-30 transition-all font-mono"
+                  >
+                    提交 (Commit)
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <!-- 右侧 Diff 与 AI 代码解读视口 -->
+            <div class="flex-1 flex flex-col bg-bg-base overflow-hidden">
+              <div class="h-10 border-b border-border-subtle px-4 flex items-center justify-between bg-bg-surface/50 text-xs font-mono">
+                <div class="flex items-center gap-2">
+                  <i data-lucide="file-diff" class="w-4 h-4 text-neon-emerald"></i>
+                  <span class="text-white font-medium">{{ selectedDiffFile.path }}</span>
+                  <span class="text-slate-400 text-[11px]">(+12 / -3 行)</span>
+                </div>
+                <!-- AI 解读触发按钮 -->
+                <button @click="explainDiff" class="flex items-center gap-1 text-neon-cyan hover:underline text-xs">
+                  <i data-lucide="bot" class="w-3.5 h-3.5"></i>
+                  <span>AI 变更意图与风险解读</span>
+                </button>
+              </div>
+
+              <!-- AI 解读挂件 (展开时) -->
+              <div v-if="diffExplanation" class="p-3 bg-neon-cyan/5 border-b border-neon-cyan/20 text-xs space-y-1.5 animate-fadeIn">
+                <div class="flex items-center justify-between text-neon-cyan font-semibold">
+                  <div class="flex items-center gap-1.5">
+                    <i data-lucide="sparkles" class="w-3.5 h-3.5"></i>
+                    <span>AI 架构解读（由 {{ activeAiProvider.name }} 生成）</span>
+                  </div>
+                  <button @click="diffExplanation = null" class="text-slate-400 hover:text-white">✕</button>
+                </div>
+                <p class="text-slate-200 leading-relaxed">{{ diffExplanation.intent }}</p>
+                <div class="flex items-center gap-4 text-[11px] text-slate-400 font-mono">
+                  <span>关键点: {{ diffExplanation.keyChanges.join(', ') }}</span>
+                  <span class="text-neon-amber">潜在风险: {{ diffExplanation.risk }}</span>
+                </div>
+              </div>
+
+              <!-- 真实代码 Diff 渲染 -->
+              <div class="flex-1 overflow-auto font-mono text-xs p-3 space-y-0.5 leading-5 bg-[#0B0D13]">
+                <div class="text-slate-400 pb-1">@@ -14,8 +14,14 @@ export async function chatCompletion</div>
+                <div class="text-slate-400">   const timeout = opts.timeoutMs ?? AI_TIMEOUT_MS</div>
+                <div class="text-slate-400">   const maxChars = opts.maxChars ?? MAX_TEXT_LENGTH</div>
+                <div class="code-diff-del">-  const url = `${provider.baseUrl}/chat/completions`</div>
+                <div class="code-diff-add">+  const baseUrl = normalizeBaseUrl(provider.baseUrl)</div>
+                <div class="code-diff-add">+  if (!baseUrl) throw new Error('Base URL 格式无效')</div>
+                <div class="code-diff-add">+  const url = `${baseUrl}/chat/completions`</div>
+                <div class="text-slate-400">   const controller = new AbortController()</div>
+                <div class="text-slate-400">   const timer = setTimeout(() => controller.abort(), timeout)</div>
+              </div>
+            </div>
+          </div>
+
+
+          <!-- TAB 2: 全流程统一发布流水线 (Release Pipeline & Dry Run) -->
+          <div v-if="currentTab === 'pipeline'" class="flex-1 p-6 overflow-y-auto space-y-6 max-w-4xl mx-auto">
+            <!-- 顶部发布预检概览卡片 -->
+            <div class="glass-panel p-5 rounded-xl space-y-4">
+              <div class="flex items-center justify-between">
+                <div>
+                  <h3 class="text-sm font-semibold text-white">统一发布流水线 (v0.3.0 → v0.3.1)</h3>
+                  <p class="text-xs text-slate-400 mt-0.5">跨 3 个关联工程执行自动化语义版本升级、双轨更新日志生成与 Git 打 Tag 归档</p>
+                </div>
+                <span class="px-2.5 py-1 rounded-full text-xs font-mono bg-neon-emerald/10 text-neon-emerald border border-neon-emerald/30">
+                  预检通过 · 3 仓库待发
+                </span>
+              </div>
+
+              <!-- 6 步流水线时间轴 -->
+              <div class="grid grid-cols-6 gap-2 pt-2">
+                <div v-for="(step, idx) in pipelineSteps" :key="idx" class="flex flex-col items-center text-center">
+                  <div class="w-7 h-7 rounded-full flex items-center justify-center text-xs font-mono font-bold mb-1.5" :class="step.status === 'done' ? 'bg-neon-emerald text-black shadow-glow-emerald' : (step.status === 'active' ? 'bg-neon-cyan text-black animate-pulse' : 'bg-bg-elevated text-slate-400 border border-border-subtle')">
+                    {{ idx + 1 }}
+                  </div>
+                  <span class="text-xs font-medium text-slate-200">{{ step.title }}</span>
+                  <span class="text-[10px] text-slate-400 font-mono">{{ step.desc }}</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- 双轨日志在线预览与 AI 润色区 -->
+            <div class="grid grid-cols-2 gap-4">
+              <!-- 对内全量日志 (Internal Track) -->
+              <div class="glass-panel p-4 rounded-xl space-y-3 flex flex-col">
+                <div class="flex items-center justify-between">
+                  <span class="text-xs font-semibold text-white flex items-center gap-1.5">
+                    <i data-lucide="file-code" class="w-4 h-4 text-neon-amber"></i> 对内技术全量日志 (Internal)
+                  </span>
+                  <span class="text-[10px] font-mono text-neon-emerald">自动捕获 14 提交</span>
+                </div>
+                <textarea class="flex-1 w-full bg-bg-surface border border-border-subtle rounded-lg p-2.5 text-xs font-mono text-slate-200 focus:outline-none focus:border-neon-emerald h-44 resize-none leading-5">### 变更汇总
+- feat(ai): 支持多供应商智能模型探测与毫秒级延迟测速
+- fix(git): 修复 Windows 盘符路径归一化问题
+- perf(core): 优化 tar.gz 源码与产物归档打包吞吐性能</textarea>
+              </div>
+
+              <!-- 对外用户分节日志 (External Track + AI 润色) -->
+              <div class="glass-panel p-4 rounded-xl space-y-3 flex flex-col">
+                <div class="flex items-center justify-between">
+                  <span class="text-xs font-semibold text-white flex items-center gap-1.5">
+                    <i data-lucide="sparkles" class="w-4 h-4 text-neon-purple"></i> 对外友好更新日志 (External)
+                  </span>
+                  <button @click="polishLogWithAi" class="px-2 py-0.5 rounded bg-neon-purple/20 text-neon-purple hover:bg-neon-purple/30 border border-neon-purple/40 text-[11px] font-mono flex items-center gap-1">
+                    <i data-lucide="sparkles" class="w-3 h-3"></i> AI 一键润色
+                  </button>
+                </div>
+                <textarea v-model="externalLogContent" class="flex-1 w-full bg-bg-surface border border-border-subtle rounded-lg p-2.5 text-xs font-mono text-slate-200 focus:outline-none focus:border-neon-purple h-44 resize-none leading-5"></textarea>
+              </div>
+            </div>
+
+            <!-- 执行开关与触发条 -->
+            <div class="glass-panel p-4 rounded-xl flex items-center justify-between">
+              <div class="flex items-center gap-4 text-xs">
+                <label class="flex items-center gap-1.5 cursor-pointer">
+                  <input type="checkbox" checked class="rounded accent-neon-emerald"> 源码 Bundle 归档
+                </label>
+                <label class="flex items-center gap-1.5 cursor-pointer">
+                  <input type="checkbox" checked class="rounded accent-neon-emerald"> 产物 Manifest 快照
+                </label>
+                <label class="flex items-center gap-1.5 cursor-pointer text-slate-400">
+                  <input type="checkbox" class="rounded accent-neon-emerald"> 离线模式 (跳过 Push Tag)
+                </label>
+              </div>
+
+              <button @click="runLivePublish" class="px-6 py-2 rounded-lg bg-neon-emerald text-black font-bold text-xs hover:shadow-glow-emerald hover:brightness-110 active:scale-95 transition-all flex items-center gap-2">
+                <i data-lucide="play" class="w-4 h-4 stroke-[3]"></i>
+                <span>立即执行全矩阵发布</span>
+              </button>
+            </div>
+          </div>
+
+
+          <!-- TAB 3: 历史审计与一致性对比 (Audit & Consistency Diff) -->
+          <div v-if="currentTab === 'backup-diff'" class="flex-1 p-6 overflow-y-auto space-y-4 max-w-5xl mx-auto">
+            <div class="flex items-center justify-between">
+              <div>
+                <h3 class="text-sm font-semibold text-white">版本一致性对比与归档审查</h3>
+                <p class="text-xs text-slate-400 mt-0.5">对比任意两次发布的源码变更与打包产物 Hash 一致性报告</p>
+              </div>
+              <div class="flex items-center gap-2 font-mono text-xs">
+                <select class="bg-bg-elevated border border-border-subtle rounded px-2 py-1 text-white">
+                  <option>基准版本: v0.2.8 (2026-08-11)</option>
+                </select>
+                <span class="text-slate-400">vs</span>
+                <select class="bg-bg-elevated border border-border-subtle rounded px-2 py-1 text-white">
+                  <option>目标版本: v0.3.0 (2026-08-17)</option>
+                </select>
+                <button class="px-3 py-1 rounded bg-bg-hover text-neon-emerald border border-border-subtle">开始比对</button>
+              </div>
+            </div>
+
+            <!-- 对比结果四维卡片 -->
+            <div class="grid grid-cols-4 gap-3">
+              <div class="glass-panel p-3 rounded-lg border-l-2 border-neon-emerald">
+                <div class="text-[10px] text-slate-400 uppercase font-mono">新增产物文件</div>
+                <div class="text-lg font-bold text-white font-mono mt-1">+4 <span class="text-xs font-normal text-slate-400">(1.2 MB)</span></div>
+              </div>
+              <div class="glass-panel p-3 rounded-lg border-l-2 border-neon-amber">
+                <div class="text-[10px] text-slate-400 uppercase font-mono">修改重构文件</div>
+                <div class="text-lg font-bold text-white font-mono mt-1">18 <span class="text-xs font-normal text-slate-400">个文件</span></div>
+              </div>
+              <div class="glass-panel p-3 rounded-lg border-l-2 border-neon-rose">
+                <div class="text-[10px] text-slate-400 uppercase font-mono">废弃删除文件</div>
+                <div class="text-lg font-bold text-white font-mono mt-1">-1 <span class="text-xs font-normal text-slate-400">(80 KB)</span></div>
+              </div>
+              <div class="glass-panel p-3 rounded-lg border-l-2 border-neon-cyan">
+                <div class="text-[10px] text-slate-400 uppercase font-mono">SHA-256 完整性校验</div>
+                <div class="text-lg font-bold text-neon-cyan font-mono mt-1">100% <span class="text-xs font-normal text-slate-400">匹配</span></div>
+              </div>
+            </div>
+
+            <!-- 文件级比对明细表 -->
+            <div class="glass-panel rounded-xl overflow-hidden">
+              <table class="w-full text-left border-collapse text-xs font-mono">
+                <thead>
+                  <tr class="bg-bg-elevated/60 text-slate-400 border-b border-border-subtle text-[11px]">
+                    <th class="py-2.5 px-4 font-medium">相对路径</th>
+                    <th class="py-2.5 px-4 font-medium">状态</th>
+                    <th class="py-2.5 px-4 font-medium">基准 SHA-256</th>
+                    <th class="py-2.5 px-4 font-medium">目标 SHA-256</th>
+                    <th class="py-2.5 px-4 font-medium text-right">操作</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-border-subtle">
+                  <tr class="hover:bg-bg-elevated/30">
+                    <td class="py-2 px-4 text-white font-medium">dist/assets/index-DaI4kGmY.js</td>
+                    <td class="py-2 px-4"><span class="px-1.5 py-0.2 rounded text-[10px] bg-neon-amber/15 text-neon-amber">MODIFIED</span></td>
+                    <td class="py-2 px-4 text-slate-400">e3b0c442...98fc</td>
+                    <td class="py-2 px-4 text-slate-200">7f83b165...1a2b</td>
+                    <td class="py-2 px-4 text-right"><button class="text-neon-emerald hover:underline">查看差异</button></td>
+                  </tr>
+                  <tr class="hover:bg-bg-elevated/30">
+                    <td class="py-2 px-4 text-white font-medium">dist/assets/GitTab-Dk6fASaz.css</td>
+                    <td class="py-2 px-4"><span class="px-1.5 py-0.2 rounded text-[10px] bg-neon-emerald/15 text-neon-emerald">ADDED</span></td>
+                    <td class="py-2 px-4 text-slate-400">—</td>
+                    <td class="py-2 px-4 text-slate-200">4a5b6c7d...ef01</td>
+                    <td class="py-2 px-4 text-right"><button class="text-neon-emerald hover:underline">查看内容</button></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+        </div>
+      </main>
+    </div>
+
+
+    <!-- ==================== 智能 AI 供应商中枢弹窗 (AI Vendor Hub Modal) ==================== -->
+    <div v-if="showVendorModal" class="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fadeIn">
+      <div class="w-full max-w-2xl bg-bg-surface border border-border-muted rounded-2xl shadow-panel overflow-hidden flex flex-col max-h-[85vh]">
+        <!-- 弹窗头 -->
+        <div class="p-4 border-b border-border-subtle flex items-center justify-between bg-bg-elevated/50">
+          <div class="flex items-center gap-2">
+            <div class="w-7 h-7 rounded-lg bg-neon-cyan/15 text-neon-cyan flex items-center justify-center">
+              <i data-lucide="cpu" class="w-4 h-4"></i>
+            </div>
+            <div>
+              <h3 class="text-sm font-bold text-white">AI 智能供应商矩阵 (Multi-Vendor Hub)</h3>
+              <p class="text-[11px] text-slate-400">配置 OpenAI 兼容模型驱动日志润色、代码解读与 Commit 生成</p>
+            </div>
+          </div>
+          <button @click="showVendorModal = false" class="p-1 rounded hover:bg-bg-hover text-slate-400 hover:text-white">✕</button>
+        </div>
+
+        <!-- 弹窗内容：预设生态网格与表单 -->
+        <div class="p-5 overflow-y-auto space-y-4">
+          <!-- 生态分类标签 -->
+          <div class="flex items-center gap-1.5 bg-bg-elevated p-1 rounded-lg text-xs font-medium border border-border-subtle">
+            <button v-for="cat in ['全部', '国内大厂', '国际主流', '聚合中转', '本地部署']" :key="cat" @click="vendorCategory = cat" class="px-3 py-1 rounded transition-colors" :class="vendorCategory === cat ? 'bg-bg-surface text-neon-emerald shadow-xs font-semibold' : 'text-slate-400 hover:text-white'">
+              {{ cat }}
+            </button>
+          </div>
+
+          <!-- 预设卡片网格 -->
+          <div class="grid grid-cols-3 gap-2">
+            <div 
+              v-for="v in vendorPresets" 
+              :key="v.name"
+              @click="selectPreset(v)"
+              class="p-2.5 rounded-lg border text-left cursor-pointer transition-all flex items-start gap-2.5 relative"
+              :class="activePreset.name === v.name ? 'border-neon-emerald bg-neon-emerald/10 shadow-glow-emerald ring-1 ring-neon-emerald' : 'border-border-subtle bg-bg-elevated hover:border-border-muted'"
+            >
+              <div class="w-6 h-6 rounded flex items-center justify-center font-bold text-[10px] text-white shrink-0 mt-0.5" :style="{ backgroundColor: v.color }">
+                {{ v.name.slice(0, 1) }}
+              </div>
+              <div class="min-w-0 flex-1">
+                <div class="text-xs font-medium text-white truncate">{{ v.name }}</div>
+                <div class="text-[10px] text-slate-400 truncate font-mono">{{ v.model }}</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 输入配置项 -->
+          <div class="space-y-3 pt-2">
+            <div>
+              <label class="block text-xs font-medium text-slate-300 mb-1">Base URL (OpenAI 协议兼容端点)</label>
+              <input v-model="activePreset.baseUrl" type="text" class="w-full px-3 py-1.5 rounded-lg bg-bg-elevated border border-border-subtle text-xs text-white font-mono focus:outline-none focus:border-neon-emerald">
+            </div>
+
+            <div>
+              <div class="flex items-center justify-between mb-1">
+                <label class="text-xs font-medium text-slate-300">API Key (仅存本机凭据库 0600，Write-only)</label>
+                <a :href="activePreset.docUrl" target="_blank" class="text-xs text-neon-emerald hover:underline flex items-center gap-1">
+                  <span>前往官网控制台获取 Key</span> <i data-lucide="external-link" class="w-3 h-3"></i>
+                </a>
+              </div>
+              <input v-model="activePreset.apiKey" type="password" placeholder="sk-…" class="w-full px-3 py-1.5 rounded-lg bg-bg-elevated border border-border-subtle text-xs text-white font-mono focus:outline-none focus:border-neon-emerald">
+            </div>
+
+            <!-- 在线模型拉取与快捷选择 -->
+            <div>
+              <div class="flex items-center justify-between mb-1">
+                <label class="text-xs font-medium text-slate-300">目标模型</label>
+                <button @click="pingFetchModels" class="text-[11px] text-neon-cyan hover:underline font-mono flex items-center gap-1">
+                  <i data-lucide="search" class="w-3 h-3" :class="{'animate-spin': isFetchingModels}"></i> 智能探测在线模型
+                </button>
+              </div>
+              <input v-model="activePreset.model" type="text" class="w-full px-3 py-1.5 rounded-lg bg-bg-elevated border border-border-subtle text-xs text-white font-mono focus:outline-none focus:border-neon-emerald">
+            </div>
+          </div>
+        </div>
+
+        <!-- 弹窗底部操作与测速 -->
+        <div class="p-4 border-t border-border-subtle bg-bg-elevated/50 flex items-center justify-between">
+          <button @click="testCurrentVendor" :disabled="isTestingVendor" class="px-3 py-1.5 rounded-lg bg-bg-hover hover:bg-bg-active text-xs font-mono text-slate-200 border border-border-subtle flex items-center gap-1.5">
+            <i data-lucide="zap" class="w-3.5 h-3.5 text-neon-amber" :class="{'animate-spin': isTestingVendor}"></i>
+            <span>{{ vendorTestResult || '连通性与毫秒测速' }}</span>
+          </button>
+          <div class="flex items-center gap-2">
+            <button @click="showVendorModal = false" class="px-3 py-1.5 rounded-lg hover:bg-bg-hover text-xs text-slate-400">取消</button>
+            <button @click="saveVendor" class="px-4 py-1.5 rounded-lg bg-neon-emerald text-black font-semibold text-xs hover:brightness-110">保存并启用</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+
+    <!-- ==================== 统一发布执行 SSE 实时日志弹窗 (Live Release Runner) ==================== -->
+    <div v-if="showPublishRunner" class="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center p-6 z-50">
+      <div class="w-full max-w-3xl bg-bg-surface border border-border-muted rounded-2xl shadow-panel overflow-hidden flex flex-col h-[70vh]">
+        <div class="p-4 border-b border-border-subtle flex items-center justify-between bg-bg-elevated">
+          <div class="flex items-center gap-2">
+            <span class="w-2.5 h-2.5 rounded-full bg-neon-emerald pulse-dot"></span>
+            <h3 class="text-sm font-bold text-white font-mono">RELEASE EXECUTING · SSE STREAM</h3>
+          </div>
+          <span class="text-xs font-mono text-neon-emerald">{{ publishProgress }}% 完成</span>
+        </div>
+
+        <!-- 实时终端日志流 -->
+        <div class="flex-1 p-4 bg-[#090C10] overflow-y-auto font-mono text-xs text-slate-300 space-y-1 select-text">
+          <div v-for="(log, i) in publishLogs" :key="i" class="flex items-start gap-2">
+            <span class="text-slate-400 select-none">{{ log.time }}</span>
+            <span :class="log.level === 'ok' ? 'text-neon-emerald' : (log.level === 'warn' ? 'text-neon-amber' : 'text-slate-200')">{{ log.msg }}</span>
+          </div>
+          <div v-if="publishProgress < 100" class="typing-cursor text-neon-emerald">正在执行流水线操作…</div>
+        </div>
+
+        <div class="p-4 border-t border-border-subtle bg-bg-elevated flex items-center justify-between">
+          <span class="text-xs text-slate-400">发布数据已同步至本地 Git 数据仓库 (~/.bxverse/data)</span>
+          <button v-if="publishProgress >= 100" @click="showPublishRunner = false" class="px-4 py-1.5 rounded-lg bg-neon-emerald text-black font-semibold text-xs hover:brightness-110">
+            完成并查看报告
+          </button>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Vue 3 响应式全景交互逻辑 -->
+  <script>
+    const { createApp, ref, reactive, computed, onMounted } = Vue
+
+    createApp({
+      setup() {
+        // 项目与仓库数据模型
+        const projects = ref([
+          { id: 'p_park', name: '延安园区数字化矩阵', version: 'v0.3.0', repos: [
+            { id: 'r1', name: 'l-pc-front', displayName: '园区中台PC端', version: 'v0.3.0.26081720', branch: 'master', head: '96fa56df', dirtyCount: 2, path: 'E:/bx-gitee/l-pc-front', files: [
+              { path: 'src/api/auth.ts', status: 'M', staged: true },
+              { path: 'public/version-history.json', status: 'A', staged: false },
+            ]},
+            { id: 'r2', name: 'l-data-v', displayName: '大屏可视化指挥中心', version: 'v0.2.9.26081510', branch: 'main', head: '4a8b2c1d', dirtyCount: 0, path: 'E:/bx-gitee/l-data-v', files: [] },
+            { id: 'r3', name: 'l-mp-weixin', displayName: '招商与访客微信小程序', version: 'v0.3.0.26081718', branch: 'develop', head: '7e8f9a0b', dirtyCount: 1, path: 'E:/bx-gitee/l-mp-weixin', files: [
+              { path: 'pages/index/index.vue', status: 'M', staged: false }
+            ]},
+          ]},
+          { id: 'p_ai', name: 'AI 多智能体研发平台', version: 'v1.1.0', repos: [
+            { id: 'r4', name: 'agent-core', displayName: '核心编排引擎', version: 'v1.1.0', branch: 'main', head: 'c2d3e4f5', dirtyCount: 0, path: 'E:/ai/agent-core', files: [] }
+          ]}
+        ])
+
+        const currentProject = ref(projects.value[0])
+        const selectedRepo = ref(currentProject.value.repos[0])
+        const currentTab = ref('git-stage')
+        const showProjectMenu = ref(false)
+        const isRefreshingRepos = ref(false)
+
+        const tabIcons = {
+          'git-stage': 'git-commit',
+          'pipeline': 'workflow',
+          'releases': 'history',
+          'backup-diff': 'file-check-2'
+        }
+        const tabLabels = {
+          'git-stage': 'Git 提交流与 Diff',
+          'pipeline': '统一发布向导',
+          'releases': '版本审计快照',
+          'backup-diff': '一致性对比'
+        }
+
+        // Git 提交流状态
+        const selectedDiffFile = ref(selectedRepo.value.files[0] || { path: 'src/api/auth.ts', status: 'M', staged: true })
+        const stagedFiles = computed(() => selectedRepo.value.files.filter(f => f.staged))
+        const commitSubject = ref('')
+        const commitBody = ref('')
+        const isGeneratingCommit = ref(false)
+        const diffExplanation = ref(null)
+
+        function selectRepo(r) {
+          selectedRepo.value = r
+          selectedDiffFile.value = r.files[0] || { path: 'README.md', status: 'M', staged: false }
+          diffExplanation.value = null
+        }
+
+        function selectProject(p) {
+          currentProject.value = p
+          selectedRepo.value = p.repos[0]
+          showProjectMenu.value = false
+        }
+
+        function toggleStage(f) {
+          f.staged = !f.staged
+        }
+        function stageAll() {
+          selectedRepo.value.files.forEach(f => f.staged = true)
+        }
+        function unstageAll() {
+          selectedRepo.value.files.forEach(f => f.staged = false)
+        }
+
+        function fetchRepoUpdates() {
+          isRefreshingRepos.value = true
+          setTimeout(() => {
+            isRefreshingRepos.value = false
+            alert('全矩阵仓库状态已同步，检测到 3 处最新改动。')
+          }, 800)
+        }
+
+        // AI 生成 Commit 模拟
+        function generateAiCommit() {
+          isGeneratingCommit.value = true
+          commitSubject.value = ''
+          commitBody.value = ''
+          setTimeout(() => {
+            commitSubject.value = 'feat(auth): 升级多供应商 Token 鉴权机制与超时容错'
+            commitBody.value = '- 重构请求拦截器，支持 Bearer Token 自动注入\n- 增加对 401 响应的静默重试与降级保护'
+            isGeneratingCommit.value = false
+          }, 1200)
+        }
+
+        function executeCommit() {
+          alert(`提交成功: ${commitSubject.value}\n已生成新 Commit Hash: 8f2c3a1`)
+          selectedRepo.value.files = selectedRepo.value.files.filter(f => !f.staged)
+          selectedRepo.value.dirtyCount = selectedRepo.value.files.length
+          commitSubject.value = ''
+          commitBody.value = ''
+        }
+
+        function explainDiff() {
+          diffExplanation.value = {
+            intent: '重构 AI 基础网络调用的 BaseURL 规范化逻辑，避免由于末尾多余的 /chat/completions 导致 404 请求失败。',
+            keyChanges: ['引入 normalizeBaseUrl 校验', '增加 AbortController 超时中断'],
+            risk: '低（纯输入清洗，不影响正常入参）'
+          }
+        }
+
+        // AI 供应商状态与弹窗
+        const showVendorModal = ref(false)
+        const vendorCategory = ref('全部')
+        const isFetchingModels = ref(false)
+        const isTestingVendor = ref(false)
+        const vendorTestResult = ref(null)
+
+        const activeAiProvider = reactive({
+          name: 'DeepSeek 官方',
+          shortName: 'DeepSeek',
+          model: 'deepseek-chat',
+          latency: 218
+        })
+
+        const vendorPresets = ref([
+          { name: 'DeepSeek 官方', baseUrl: 'https://api.deepseek.com/v1', model: 'deepseek-chat', docUrl: 'https://platform.deepseek.com/api_keys', color: '#0066FF' },
+          { name: 'Kimi (Moonshot)', baseUrl: 'https://api.moonshot.cn/v1', model: 'kimi-k2.6', docUrl: 'https://platform.moonshot.cn/console/api-keys', color: '#1A56DB' },
+          { name: '阿里通义千问', baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1', model: 'qwen-plus', docUrl: 'https://dashscope.console.aliyun.com/apiKey', color: '#FF6A00' },
+          { name: '智谱 GLM', baseUrl: 'https://open.bigmodel.cn/api/paas/v4', model: 'glm-4-flash', docUrl: 'https://open.bigmodel.cn/usercenter/apikeys', color: '#3858F6' },
+          { name: '硅基流动 (SiliconFlow)', baseUrl: 'https://api.siliconflow.cn/v1', model: 'deepseek-ai/DeepSeek-V3', docUrl: 'https://cloud.siliconflow.cn/account/ak', color: '#7C3AED' },
+          { name: 'Ollama 本地部署', baseUrl: 'http://127.0.0.1:11434/v1', model: 'qwen2.5:7b', docUrl: 'https://ollama.com', color: '#000000' },
+        ])
+
+        const activePreset = reactive({ ...vendorPresets.value[0], apiKey: 'sk-98a72b1c4d5e' })
+
+        function selectPreset(v) {
+          Object.assign(activePreset, v)
+          vendorTestResult.value = null
+        }
+
+        function pingFetchModels() {
+          isFetchingModels.value = true
+          setTimeout(() => {
+            isFetchingModels.value = false
+            alert(`成功探测到该账号下 8 个在线可用模型：\n- ${activePreset.model}\n- deepseek-reasoner\n- deepseek-coder`)
+          }, 900)
+        }
+
+        function testCurrentVendor() {
+          isTestingVendor.value = true
+          vendorTestResult.value = null
+          setTimeout(() => {
+            isTestingVendor.value = false
+            vendorTestResult.value = '🟢 延迟 194ms (连通正常)'
+          }, 700)
+        }
+
+        function saveVendor() {
+          activeAiProvider.name = activePreset.name
+          activeAiProvider.shortName = activePreset.name.split(' ')[0]
+          activeAiProvider.model = activePreset.model
+          activeAiProvider.latency = 194
+          showVendorModal.value = false
+        }
+
+        // 发布流水线模拟
+        const pipelineSteps = [
+          { title: '变动扫描', desc: '3 仓库就绪', status: 'done' },
+          { title: '版本推演', desc: 'v0.3.1 patch', status: 'done' },
+          { title: '双轨日志', desc: '已确认', status: 'active' },
+          { title: '预检 Dry-Run', desc: '待启动', status: 'pending' },
+          { title: '打 Tag 归档', desc: '待启动', status: 'pending' },
+          { title: '推送与审计', desc: '待启动', status: 'pending' },
+        ]
+
+        const externalLogContent = ref(`### 🚀 新增特性
+- **AI 智能中枢升级**：支持国内主流大厂与硅基流动等多供应商一键无缝接入；
+- **Git 提交助手**：支持代码变更深度解读与一键生成规范 Conventional Commits。
+
+### 🛠️ 性能优化
+- 优化跨仓库版本清单导出与对比审计加载延迟。`)
+
+        function polishLogWithAi() {
+          externalLogContent.value = '正在呼叫 ' + activeAiProvider.name + ' 润色中…'
+          setTimeout(() => {
+            externalLogContent.value = `### 🎉 核心亮点 (v0.3.1)
+- 🧠 **全新 AI 智能引擎**：现已深度融合 DeepSeek、通义千问与本地 Ollama，带来毫秒级响应；
+- ⚡ **生产力翻倍**：内置 Git 深度代码透视与一键精准提交建议，告别机械繁琐操作。`
+          }, 1000)
+        }
+
+        // SSE 发布执行器模拟
+        const showPublishRunner = ref(false)
+        const publishProgress = ref(0)
+        const publishLogs = ref([])
+
+        function openPublishFlow() {
+          currentTab.value = 'pipeline'
+        }
+
+        function runLivePublish() {
+          showPublishRunner.value = true
+          publishProgress.value = 5
+          publishLogs.value = [
+            { time: '22:50:01', level: 'info', msg: '[preflight] 开始全工程环境扫描与 Git 脏状态排查…' }
+          ]
+
+          const sequence = [
+            { t: 800, p: 25, msg: '[version] 项目基准版本推演成功: v0.3.1 (scheme: hybrid)' },
+            { t: 1600, p: 50, msg: '[tag] 仓库 l-pc-front 成功创建里程碑标签 build/v0.3.1.26081722' },
+            { t: 2400, p: 75, msg: '[backup] 成功生成 source.bundle 与 产物 manifest 归档' },
+            { t: 3200, p: 100, level: 'ok', msg: '[done] ✅ 全矩阵发布完成！数据已安全落盘至数据仓库。' }
+          ]
+
+          sequence.forEach(s => {
+            setTimeout(() => {
+              publishProgress.value = s.p
+              publishLogs.value.push({ time: new Date().toTimeString().slice(0, 8), level: s.level || 'info', msg: s.msg })
+            }, s.t)
+          })
+        }
+
+        onMounted(() => {
+          lucide.createIcons()
+        })
+
+        return {
+          projects, currentProject, selectedRepo, currentTab, tabIcons, tabLabels,
+          selectedDiffFile, stagedFiles, commitSubject, commitBody, isGeneratingCommit,
+          diffExplanation, showVendorModal, vendorCategory, isFetchingModels, isTestingVendor,
+          vendorTestResult, activeAiProvider, vendorPresets, activePreset, pipelineSteps,
+          externalLogContent, showPublishRunner, publishProgress, publishLogs, isRefreshingRepos,
+          showProjectMenu,
+          selectRepo, selectProject, toggleStage, stageAll, unstageAll, fetchRepoUpdates,
+          generateAiCommit, executeCommit, explainDiff, selectPreset, pingFetchModels,
+          testCurrentVendor, saveVendor, polishLogWithAi, openPublishFlow, runLivePublish
+        }
+      }
+    }).mount('#app')
+  </script>
+</body>
+</html>

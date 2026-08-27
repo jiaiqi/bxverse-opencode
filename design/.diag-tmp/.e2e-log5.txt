@@ -1,0 +1,29 @@
+
+> bxverse@0.1.0 test:e2e G:\vibecoding\bxverse-opencode
+> node e2e/run.mjs
+
+
+===== [1/2] resume.mjs锛堜腑鏂画璺戯級=====
+task1: t_20260826_1006_kn2l
+server killed mid-publish
+server restarted
+task2锛堢画璺戯級: t_20260826_1006_xfkc
+A tags: [ 'build/v0.2.0.26082610', 'v0.2.0' ]
+B tags: [ 'build/v0.2.0.26082610', 'v0.2.0' ]
+journal status: done steps: 13
+RESUME TEST PASSED
+
+===== [2/2] wizard-flow.py锛堝彂甯冨悜瀵煎叚姝ワ級=====
+warning: in the working copy of 'src/wizard.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/wizard.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/state.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/state.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'README.md', LF will be replaced by CRLF the next time Git touches it
+fixture ready: p_we3xt6 C:\Users\24682\AppData\Local\Temp\bxverse-wiz-repo-wALYrK
+console errors: []
+M4 WIZARD E2E PASSED
+
+===== [3/3] onboarding.py锛圡5-08 棣栨浣跨敤寮曞锛?====
+onboarding e2e: ALL PASSED
+
+[e2e] ALL SCENARIOS PASSED

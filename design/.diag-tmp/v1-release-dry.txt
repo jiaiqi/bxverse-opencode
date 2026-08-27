@@ -1,0 +1,13 @@
+
+> bxverse@0.1.0 release:dry G:\vibecoding\bxverse-opencode
+> node scripts/release.mjs --dry-run
+
+[release] 褰撳墠 v0.1.0 鈫?major 鈫?v1.0.0
+  路 @bxverse/cli: 0.1.0 鈫?1.0.0
+  路 @bxverse/server: 0.1.0 鈫?1.0.0
+  路 @bxverse/web: 0.1.0 鈫?1.0.0
+  路 bxverse: 0.1.0 鈫?1.0.0
+  路 @bxverse/core: 0.1.0 鈫?1.0.0
+  路 @bxverse/shared: 0.1.0 鈫?1.0.0
+[release] CHANGELOG.md 宸叉洿鏂帮紙dry-run锛?
+[release] 涓嬩竴姝ワ細git add -A && git commit -m "release: v1.0.0"

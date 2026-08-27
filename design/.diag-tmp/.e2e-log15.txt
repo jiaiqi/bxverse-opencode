@@ -1,0 +1,73 @@
+
+> bxverse@0.1.0 test:e2e G:\vibecoding\bxverse-opencode
+> node e2e/run.mjs
+
+
+===== [1/2] resume.mjs锛堜腑鏂画璺戯級=====
+task1: t_20260826_1716_kukr
+server killed mid-publish
+server restarted
+task2锛堢画璺戯級: t_20260826_1716_8gka
+A tags: [ 'build/v0.2.0.26082617', 'v0.2.0' ]
+B tags: [ 'build/v0.2.0.26082617', 'v0.2.0' ]
+journal status: done steps: 13
+RESUME TEST PASSED
+
+===== [2/2] wizard-flow.py锛堝彂甯冨悜瀵煎叚姝ワ級=====
+warning: in the working copy of 'src/wizard.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/wizard.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/state.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/state.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/wizard.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'README.md', LF will be replaced by CRLF the next time Git touches it
+fixture ready: p_rpeeh0 C:\Users\24682\AppData\Local\Temp\bxverse-wiz-repo-idDQmA
+console errors: []
+M4 WIZARD E2E PASSED
+
+===== [3/3] onboarding.py锛圡5-08 棣栨浣跨敤寮曞锛?====
+Traceback (most recent call last):
+  File "G:\vibecoding\bxverse-opencode\e2e\onboarding.py", line 64, in <module>
+    page.fill("input[aria-label='鎼滅储鍛戒护銆侀」鐩€佷粨搴?]", "寮曞")
+  File "C:\Users\24682\AppData\Local\Programs\Python\Python312\Lib\site-packages\playwright\sync_api\_generated.py", line 10177, in fill
+    self._sync(
+  File "C:\Users\24682\AppData\Local\Programs\Python\Python312\Lib\site-packages\playwright\_impl\_sync_base.py", line 115, in _sync
+    return task.result()
+           ^^^^^^^^^^^^^
+  File "C:\Users\24682\AppData\Local\Programs\Python\Python312\Lib\site-packages\playwright\_impl\_page.py", line 893, in fill
+    return await self._main_frame.fill(**locals_to_params(locals()))
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\24682\AppData\Local\Programs\Python\Python312\Lib\site-packages\playwright\_impl\_frame.py", line 607, in fill
+    await self._fill(**locals_to_params(locals()))
+  File "C:\Users\24682\AppData\Local\Programs\Python\Python312\Lib\site-packages\playwright\_impl\_frame.py", line 619, in _fill
+    await self._channel.send("fill", self._timeout, locals_to_params(locals()))
+  File "C:\Users\24682\AppData\Local\Programs\Python\Python312\Lib\site-packages\playwright\_impl\_connection.py", line 69, in send
+    return await self._connection.wrap_api_call(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\24682\AppData\Local\Programs\Python\Python312\Lib\site-packages\playwright\_impl\_connection.py", line 559, in wrap_api_call
+    raise rewrite_error(error, f"{parsed_st['apiName']}: {error}") from None
+playwright._impl._errors.TimeoutError: Page.fill: Timeout 30000ms exceeded.
+Call log:
+  - waiting for locator("input[aria-label='鎼滅储鍛戒护銆侀」鐩€佷粨搴?]")
+
+node:internal/errors:985
+  const err = new Error(message);
+              ^
+
+Error: Command failed: python e2e/onboarding.py
+    at genericNodeError (node:internal/errors:985:15)
+    at wrappedFn (node:internal/errors:539:14)
+    at checkExecSyncError (node:child_process:925:11)
+    at execFileSync (node:child_process:961:15)
+    at run (file:///G:/vibecoding/bxverse-opencode/e2e/run.mjs:25:3)
+    at file:///G:/vibecoding/bxverse-opencode/e2e/run.mjs:120:5
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5) {
+  status: 1,
+  signal: null,
+  output: [ null, null, null ],
+  pid: 25740,
+  stdout: null,
+  stderr: null
+}
+
+Node.js v24.14.0
+鈥塃LIFECYCLE鈥?Command failed with exit code 1.

@@ -1,0 +1,11 @@
+node_modules
+dist
+coverage
+pnpm-lock.yaml
+
+# 设计原型与文档不做全量格式化，避免无意义 diff 噪音
+design
+docs
+*.md
+apps/web/public
+apps/web/dev-dist

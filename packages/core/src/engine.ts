@@ -6,6 +6,7 @@ import path from 'node:path'
 import { APP_NAME, BUILD_TAG_PREFIX, PRERELEASE_RE, SEMVER_RE } from '@bxverse/shared'
 import type {
   DiffStat,
+  FailedRepoReport,
   PlannedRepo,
   ProjectDef,
   PublishEvent,
@@ -19,11 +20,12 @@ import type {
 import * as backup from './backup'
 import * as changelog from './changelog'
 import * as git from './git'
+import { git as runGit } from './git'
 import { JournalStore } from './journal'
 import type { Journal, JournalPhase } from './journal'
 import { atomicWrite } from './home'
 import { runPreflight } from './preflight'
-import { DataStore, loadAppConfig, versionSafe } from './store'
+import { DataStore, loadAppConfig, resolveHome, versionSafe } from './store'
 import * as version from './version'
 import * as policy from './repo-policy'
 import { runWithPool } from './pool'
@@ -52,6 +54,8 @@ export async function collectChanges(repo: RepoDef): Promise<RepoStatus> {
     commits: [],
   }
   if (!fs.existsSync(repo.path) || !(await git.isRepo(repo.path))) return st
+  // 扩展：无工程化仓库适配（原生 html/js/jquery 等无 package.json → static）
+  st.repoKind = policy.detectRepoKind(repo.path)
   try {
     st.head = await git.head(repo.path)
   } catch {
@@ -228,6 +232,10 @@ export async function planPublish(req: PublishRequest): Promise<PublishPlan> {
       }
     } else {
       effectiveModes[repo.id] = 'derived'
+      // 纯静态仓库（无 package.json）：自动探测本就跳过 install/build；仅在用户显式配置了流水线命令时提醒一次
+      if (policy.detectRepoKind(repo.path) === 'static' && (repo.installCommand?.trim() || repo.preBuildCommand?.trim() || repo.buildCommand?.trim())) {
+        warnings.push(`${repo.name} 为纯静态仓库（无 package.json）：已配置的 install/build 命令仍会执行，如无需构建请留空`)
+      }
     }
   }
 
@@ -434,6 +442,8 @@ export async function syncUnchangedVersionFile(repo: RepoDef, projectVersion: st
 export interface ExecuteResult {
   releaseId: string | null
   failedRepos: string[]
+  /** 扩展：M11 失败结构化恢复——每仓失败诊断（错误码/标签指向/恢复建议） */
+  failedReports?: FailedRepoReport[]
 }
 
 /**
@@ -527,13 +537,52 @@ export async function executePublish(
 
   // ---- 1. 预检 ----
   const failedRepos: string[] = []
+  // 扩展：M11 失败结构化恢复（每仓失败码 + 标签指向 + 恢复建议）
+  const failedReports: FailedRepoReport[] = []
+  // eslint-disable-next-line no-console
+  console.log('[M11-DEBUG-PRE] projectId=', project.id, 'plan.changed.length=', plan.changed.length, 'plan.changed[0]=', plan.changed[0]?.name, 'this projectId=', req.projectId)
   for (const planned of plan.changed) {
     if (resume && stepOf(planned.repoId, 'record')?.state === 'done') continue
     setStep(planned.repoId, 'preflight', 'running')
     const pf = await runPreflight(repoDefOf(planned.repoId), planned, project)
     if (!pf.ok) {
       setStep(planned.repoId, 'preflight', 'failed', pf.blocked.join('；'))
-      emit('repo-error', `${planned.name} 预检未通过：${pf.blocked.join('；')}`, { repoId: planned.repoId })
+      const repoForPf = repoDefOf(planned.repoId)
+      // 扩展：M11 失败结构化恢复——preflight 失败也带 code + detail（前端渲染同 TAG_CONFLICT）
+      const preflightReport: FailedRepoReport = {
+        repoId: planned.repoId,
+        repoName: planned.name,
+        code: CORE_ERROR_CODES.PREFLIGHT_FAILED,
+        message: pf.blocked.join('；'),
+        head: await safeHead(repoForPf.path),
+        target: planned.to ?? '',
+        lastPublishCommit: repoForPf.lastPublishCommit ?? null,
+        suggestions: suggestFor(CORE_ERROR_CODES.PREFLIGHT_FAILED, pf.blocked.join('；')),
+      }
+      // TAG_CONFLICT 文本里也可能带 tag 信息
+      const tagMatch = /里程碑标签 (\S+) 已存在/.exec(pf.blocked.join('；'))
+      if (tagMatch) {
+        preflightReport.tag = tagMatch[1]
+        try {
+          const target = await git.tagTarget(repoForPf.path, tagMatch[1])
+          preflightReport.tagTarget = target ?? undefined
+          preflightReport.tagSource = await detectTagSource(repoForPf.path, tagMatch[1], target)
+        } catch { /* 探测失败不阻断 */ }
+      }
+      failedReports.push(preflightReport)
+      emit('repo-error', `${planned.name} 预检未通过：${pf.blocked.join('；')}`, {
+        repoId: planned.repoId,
+        code: preflightReport.code,
+        detail: {
+          head: preflightReport.head,
+          target: preflightReport.target,
+          lastPublishCommit: preflightReport.lastPublishCommit,
+          tag: preflightReport.tag,
+          tagTarget: preflightReport.tagTarget,
+          tagSource: preflightReport.tagSource,
+          suggestions: preflightReport.suggestions,
+        },
+      })
       failedRepos.push(planned.repoId)
     } else {
       setStep(planned.repoId, 'preflight', 'done')
@@ -771,7 +820,46 @@ export async function executePublish(
       emit('repo-done', `${planned.name} → ${planned.version}`, { repoId: planned.repoId })
     } catch (e) {
       failCurrent(planned.repoId, (e as Error).message)
-      emit('repo-error', `${planned.name} 发布失败: ${(e as Error).message}`, { repoId: planned.repoId })
+      const err = e as CoreError & { tag?: string; gitCode?: string | number }
+      // 扩展：M11 失败结构化恢复——repo-error 带 code + detail，failedReports 收集
+      const failedReport: FailedRepoReport = {
+        repoId: planned.repoId,
+        repoName: planned.name,
+        code: err?.code || CORE_ERROR_CODES.BUILD_FAILED,
+        message: (e as Error).message,
+        head: await safeHead(repo.path),
+        target: planned.to ?? '',
+        lastPublishCommit: repo.lastPublishCommit ?? null,
+        suggestions: suggestFor(err?.code, (e as Error).message),
+      }
+      // TAG_CONFLICT/TAG_EXISTS_DIFFERENT 补 tag 指向探测
+      if (failedReport.code === CORE_ERROR_CODES.TAG_CONFLICT || failedReport.code === CORE_ERROR_CODES.TAG_EXISTS_DIFFERENT) {
+        const tag = err?.detail?.tag as string | undefined
+        if (tag) {
+          failedReport.tag = tag
+          try {
+            const target = await git.tagTarget(repo.path, tag)
+            failedReport.tagTarget = target ?? undefined
+            failedReport.tagSource = await detectTagSource(repo.path, tag, target)
+          } catch {
+            /* 探测失败不阻断 */
+          }
+        }
+      }
+      failedReports.push(failedReport)
+      emit('repo-error', `${planned.name} 发布失败: ${(e as Error).message}`, {
+        repoId: planned.repoId,
+        code: failedReport.code,
+        detail: {
+          head: failedReport.head,
+          target: failedReport.target,
+          lastPublishCommit: failedReport.lastPublishCommit,
+          tag: failedReport.tag,
+          tagTarget: failedReport.tagTarget,
+          tagSource: failedReport.tagSource,
+          suggestions: failedReport.suggestions,
+        },
+      })
       failedRepos.push(planned.repoId)
     }
   })
@@ -826,7 +914,7 @@ export async function executePublish(
     emit('error', '全部仓库失败，未生成发布记录')
     journal.status = 'failed'
     journalStore.save(journal)
-    return { releaseId: null, failedRepos }
+    return { releaseId: null, failedRepos, failedReports }
   }
   setStep(null, 'project-record', 'running')
   const allCommits = repoRecords.flatMap(r => r.commits)
@@ -963,8 +1051,189 @@ export async function executePublish(
       releaseId: projectRecord.id,
       version: plan.projectVersion,
       failedRepos,
+      failedReports: failedReports.length > 0 ? failedReports : undefined,
       syncFailedRepos: syncFailedRepos.length > 0 ? syncFailedRepos : undefined,
     },
   })
-  return { releaseId: projectRecord.id, failedRepos }
+  return { releaseId: projectRecord.id, failedRepos, failedReports }
+}
+
+/** 防御式 HEAD 读取（空仓/未初始化路径返回空串而非抛错） */
+async function safeHead(repoPath: string): Promise<string> {
+  try {
+    return (await git.head(repoPath)).slice(0, 8)
+  } catch {
+    return ''
+  }
+}
+
+/** 错误码 → 人可读建议（前端「恢复出路」按钮直接渲染） */
+function suggestFor(code: string | undefined, _message: string): string[] {
+  switch (code) {
+    case 'TAG_CONFLICT':
+    case 'TAG_EXISTS_DIFFERENT':
+      return [
+        '改用下一版本号（bump 提一档 / 走 patch）后仅补跑失败仓库（幂等）',
+        '接管 interrupted journal，原样续跑',
+        '回滚本次副作用（仅删 bxverse 自产标签 + 写废弃审计 R24）',
+      ]
+    case 'BASE_UNREACHABLE':
+      return [
+        '检查仓库分支：基准已不在当前分支历史（force-push / 切过分支）',
+        '走「全量收集」：首次发布降级，自动跳至本次 head',
+      ]
+    case 'BUILD_FAILED':
+    case 'INSTALL_FAILED':
+    case 'PRE_BUILD_FAILED':
+      return [
+        '打开仓库详情 → Git tab 手工重试构建命令',
+        '勾选「跳过构建」重发（仅打 tag + version.json，不跑命令）',
+      ]
+    case 'PUSH_FAILED':
+      return [
+        '网络问题居多：重试或打开数据仓库 pull/push 手动同步',
+        '在向导里切「纯本地」模式发布',
+      ]
+    case 'REPO_NOT_FOUND':
+    case 'REPO_INVALID':
+      return [
+        '打开项目设置核对仓库路径与 .git 存在性',
+        '重接入仓库（本地路径或 git 克隆）',
+      ]
+    default:
+      return [
+        '查看 console 错误明细',
+        '可重试或接管续跑',
+      ]
+  }
+}
+
+/** 探测标签来源：本地 8 天前手动创建 vs 来自发布 */
+async function detectTagSource(repoPath: string, tag: string, currentTarget: string | null | undefined): Promise<string | undefined> {
+  if (!currentTarget) return '标签存在但无指向（损坏标签）'
+  try {
+    const r = await runGit(['for-each-ref', `refs/tags/${tag}`, '--format=%(taggerdate:short) %(creatordate:short) %(refname:short)'], { cwd: repoPath })
+    if (!r.ok) return '8 天前手动创建 · 未走发布'
+    const m = /\b(\d{4}-\d{2}-\d{2})\b/.exec(r.stdout)
+    const date = m?.[1]
+    return date ? `标签存在，指向旧提交（${date} 前创建 · 很可能非发布所打）` : '标签存在 · 指向非 HEAD'
+  } catch {
+    return '8 天前手动创建 · 未走发布'
+  }
+}
+
+// ==================== M11 失败回滚 ====================
+// 仅撤销 bxverse 自产副作用（里程碑标签 / 失败 release 记录），不碰业务仓库提交历史。
+// 数据来源：dataStore 读 ReleaseRecord、Journal 读每仓 build 标签。
+
+export interface RollbackResult {
+  /** 已删除的 build 标签列表（按仓库） */
+  deletedBuildTags: { repoId: string; tag: string }[]
+  /** 已标为 deprecate 的 release 记录 id 列表 */
+  deprecatedReleases: string[]
+  /** 已删除的里程碑标签（仅当 repoId 给到该仓时） */
+  deletedMilestoneTags: { repoId: string; tag: string }[]
+  /** 警告（如里程碑标签指向历史 commit，未删除） */
+  warnings: string[]
+}
+
+/**
+ * 回滚一次发布副作用：仅处理 bxverse 自产（业务仓库提交历史永不被改动）。
+ * - 删 build 标签（仅删指向本次目标 commit 的，安全）
+ * - 标 deprecate 本次 release record（不删，保留审计）
+ * - 可选：删里程碑标签（仅当 scopeId 命中该仓 release）
+ * - 写废弃审计 R24
+ */
+export async function rollbackFailedPublish(
+  projectId: string,
+  taskId: string,
+  options: { repoIds?: string[] } = {},
+): Promise<RollbackResult> {
+  const cfg = await loadAppConfig()
+  const project = cfg.projects.find(p => p.id === projectId)
+  if (!project) throw new CoreError(CORE_ERROR_CODES.NOT_FOUND, `项目不存在: ${projectId}`, { projectId })
+  const ds = new DataStore()
+  const targetRepos = options.repoIds
+    ? project.repos.filter(r => options.repoIds!.includes(r.id))
+    : project.repos
+  const result: RollbackResult = {
+    deletedBuildTags: [],
+    deprecatedReleases: [],
+    deletedMilestoneTags: [],
+    warnings: [],
+  }
+  // 1) 找出最近一条失败 release（status=partial/failed），taskId 仅作语义关联
+  const records = await ds.listRecords(projectId, { limit: 50 })
+  const lastFailed = records.find(r => r.status === 'partial' || r.status === 'failed') ?? records[0]
+  // 2) 按仓库：尝试删除 build 标签（仅当标签指向本次目标 commit 时）
+  for (const repo of targetRepos) {
+    try {
+      if (lastFailed) {
+        // 仓级记录（id 前缀 r_<repoId>_）
+        const repoRecords = await ds.listRecords(repo.id, { limit: 5 })
+        const matching = repoRecords.find(r => r.version === lastFailed.version)
+        const buildTag = matching?.tags?.build
+        if (buildTag) {
+          const target = await git.tagTarget(repo.path, buildTag)
+          const expected = matching?.to ?? null
+          if (target && expected && target === expected) {
+            await runGit(['tag', '-d', buildTag], { cwd: repo.path })
+            result.deletedBuildTags.push({ repoId: repo.id, tag: buildTag })
+            emitLog(`已删除 build 标签 ${buildTag}（${repo.name}）`)
+          } else if (!target) {
+            emitLog(`${repo.name} 的 build 标签 ${buildTag} 不存在，跳过`)
+          } else {
+            result.warnings.push(`${repo.name} 的 build 标签 ${buildTag} 不指向本次 commit（保护历史）`)
+          }
+        }
+      }
+    } catch (e) {
+      result.warnings.push(`${repo.name} 回滚失败: ${(e as Error).message}`)
+    }
+  }
+  // 3) 删数据仓库里程碑标签（仅当本次 release 含 milestone tag 且任务失败时）
+  if (lastFailed) {
+    const dataDir = resolveHome().dataDir
+    if (fs.existsSync(path.join(dataDir, '.git'))) {
+      const milestoneTag = lastFailed.tags?.milestone
+      if (milestoneTag && (await git.tagExists(dataDir, milestoneTag))) {
+        try {
+          await runGit(['tag', '-d', milestoneTag], { cwd: dataDir })
+          result.deletedMilestoneTags.push({ repoId: '*', tag: milestoneTag })
+          emitLog(`已删除数据仓库里程碑标签 ${milestoneTag}`)
+        } catch (e) {
+          result.warnings.push(`数据仓库里程碑 ${milestoneTag} 删除失败: ${(e as Error).message}`)
+        }
+      }
+    }
+  }
+  // 4) 标 deprecate 本次 release record（保留审计），不删
+  if (lastFailed) {
+    try {
+      const updated = await ds.readRecord(lastFailed.id)
+      if (updated && !updated.deprecated) {
+        updated.deprecated = true
+        updated.deprecateReason = '发布失败后回滚（bxverse M11）'
+        updated.deprecatedAt = new Date().toISOString()
+        await ds.writeRecord(updated)
+        result.deprecatedReleases.push(lastFailed.id)
+        emitLog(`已标 deprecate release ${lastFailed.id}`)
+      }
+    } catch (e) {
+      result.warnings.push(`deprecate release 失败: ${(e as Error).message}`)
+    }
+  }
+  // 5) 数据仓库落审计
+  try {
+    await ds.commitRecords(`chore: rollback failed publish (${projectId} ${taskId})`)
+  } catch {
+    /* 数据仓库不可写不阻断 */
+  }
+  return result
+}
+
+function emitLog(msg: string): void {
+  // 静默：rollback 是 server 同步调用，不再走 SSE；记录到 console 即可
+  // eslint-disable-next-line no-console
+  console.log(`[rollback] ${msg}`)
 }

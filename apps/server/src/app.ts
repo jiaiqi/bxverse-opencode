@@ -27,6 +27,8 @@ import { register as registerMetrics } from './api/metrics'
 import { register as registerOpenApi } from './api/openapi'
 import { register as registerAi } from './api/ai'
 import { register as registerGit } from './api/git'
+import { register as registerDoctor } from './api/doctor'
+import { register as registerOps } from './api/ops'
 
 export type WithCfg = <T>(mutator: (cfg: AppConfig) => T | Promise<T>) => Promise<T>
 
@@ -121,7 +123,8 @@ export function createApp(opts: { token?: string } = {}): App {
       // ignore
     }
     const { sendJson } = await import('./http/json')
-    sendJson(ctx.res, 200, { ok: true, version })
+    // 扩展：home 供前端拼 BX_HOME 白名单内默认路径（恢复向导等）
+    sendJson(ctx.res, 200, { ok: true, version, home: store.resolveHome().root })
   })
   registerConfig(router, { loadCfg, withCfg, getToken: () => token })
   registerAuthApi(router, { rotateToken: rotate })
@@ -139,6 +142,8 @@ export function createApp(opts: { token?: string } = {}): App {
   registerOpenApi(router)
   registerAi(router, { loadCfg, withCfg })
   registerGit(router, { loadCfg })
+  registerDoctor(router, { loadCfg })
+  registerOps(router)
 
   const server = http.createServer(async (req, res) => {
     const url = new URL(req.url ?? '/', 'http://127.0.0.1')
