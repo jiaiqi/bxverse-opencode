@@ -53,5 +53,32 @@ export default defineConfig({
   },
   build: {
     outDir: 'dist',
+    rollupOptions: {
+      output: {
+        // vendor 拆分：把频繁复用的第三方库独立成长期缓存的 chunk
+        // - vue-vendor: vue 核心 + vue-router + pinia（路由级 + 全局）
+        // - naive-vendor: Naive UI（按需 import 后的整体聚合）
+        // - utils-vendor: highlight.js 按需 + markdown-it + 其他轻量工具
+        // 共享 chunk 拆出后单页首次加载只下载当前页 chunk，路由切换时复用 vendor 缓存
+        manualChunks(id) {
+          if (id.includes('node_modules')) {
+            if (id.includes('naive-ui')) return 'vendor-naive'
+            if (
+              id.includes('@vueuse') ||
+              id.includes('/vue/') ||
+              id.includes('vue-router') ||
+              id.includes('pinia')
+            ) {
+              return 'vendor-vue'
+            }
+            if (id.includes('highlight.js') || id.includes('markdown-it')) {
+              return 'vendor-utils'
+            }
+            return 'vendor-misc'
+          }
+          return undefined
+        },
+      },
+    },
   },
 })

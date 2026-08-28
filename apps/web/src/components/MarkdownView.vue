@@ -3,16 +3,19 @@
 // 性能护栏：maxLines>0 时只渲染前 N 行（超长日志草稿避免整段 markdown-it 同步渲染卡死主线程）
 
 import MarkdownIt from 'markdown-it'
-import hljs from 'highlight.js'
+import { hljs } from '../utils/highlight'
 
-const props = withDefaults(defineProps<{
-  content: string
-  /** >0 时仅渲染前 N 行，超长追加截断提示（0 = 不限） */
-  maxLines?: number
-}>(), {
-  content: '',
-  maxLines: 0,
-})
+const props = withDefaults(
+  defineProps<{
+    content: string
+    /** >0 时仅渲染前 N 行，超长追加截断提示（0 = 不限） */
+    maxLines?: number
+  }>(),
+  {
+    content: '',
+    maxLines: 0,
+  },
+)
 
 const md: MarkdownIt = new MarkdownIt({
   html: false,

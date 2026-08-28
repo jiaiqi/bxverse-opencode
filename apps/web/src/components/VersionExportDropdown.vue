@@ -6,7 +6,7 @@
 //   4. 直接打开（弹窗内预览 version.json 内容，可复制/另存）
 // 菜单内置「版本号格式」开关：完整（vX.Y.Z.YYMMDDHH，默认）/ 仅日期（V + 8 位时间戳，如 V26081728）
 
-import hljs from 'highlight.js'
+import { hljs } from '../utils/highlight'
 import type { RepoVersionItem } from '@bxverse/shared'
 import { useProjectsStore } from '../stores/projects'
 import { useFsAccess } from '../composables/useFsAccess'

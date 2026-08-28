@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // FileViewer.vue —— 文件查看器（面包屑/复制/高亮/二进制/截断）
 
-import hljs from 'highlight.js'
+import { hljs } from '../utils/highlight'
 import { api } from '../api'
 import { useMessage } from 'naive-ui'
 import { useFsAccess } from '../composables/useFsAccess'

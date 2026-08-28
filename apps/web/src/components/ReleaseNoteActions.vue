@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import MarkdownIt from 'markdown-it'
-import hljs from 'highlight.js'
+import { hljs } from '../utils/highlight'
 import { api } from '../api'
 import { useMessage } from 'naive-ui'
 
@@ -60,7 +60,9 @@ watch(
   { immediate: true },
 )
 
-const canSync = computed(() => !isOffline.value && !!props.releaseId && !!selectedRepoId.value && !!props.content.trim())
+const canSync = computed(
+  () => !isOffline.value && !!props.releaseId && !!selectedRepoId.value && !!props.content.trim(),
+)
 
 async function copyMarkdown() {
   try {
@@ -123,8 +125,13 @@ async function syncRelease() {
   } catch (e) {
     const err = e as { message?: string; code?: string }
     // 400 未配置 token 时后端返回 VALIDATION，前端给出可操作提示
-    if (String(err.code ?? '').includes('VALIDATION') && String(err.message ?? '').includes('token')) {
-      message.error(`${err.message}（请在 ~/.bxverse/credentials.json 配置 releaseTokens.${provider.value}）`)
+    if (
+      String(err.code ?? '').includes('VALIDATION') &&
+      String(err.message ?? '').includes('token')
+    ) {
+      message.error(
+        `${err.message}（请在 ~/.bxverse/credentials.json 配置 releaseTokens.${provider.value}）`,
+      )
     } else {
       message.error((e as Error).message ?? '同步失败')
     }
@@ -153,7 +160,7 @@ async function syncRelease() {
       <NSelect
         v-if="repos.length > 1"
         v-model:value="selectedRepoId"
-        :options="repos.map(r => ({ label: r.name, value: r.id }))"
+        :options="repos.map((r) => ({ label: r.name, value: r.id }))"
         size="small"
         placeholder="目标仓库"
         class="min-w-[140px]"
@@ -161,7 +168,10 @@ async function syncRelease() {
       />
       <NSelect
         v-model:value="provider"
-        :options="[{ label: 'GitHub', value: 'github' }, { label: 'Gitee', value: 'gitee' }]"
+        :options="[
+          { label: 'GitHub', value: 'github' },
+          { label: 'Gitee', value: 'gitee' },
+        ]"
         size="small"
         class="min-w-[118px]"
         placeholder="平台"
