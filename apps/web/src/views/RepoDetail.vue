@@ -12,6 +12,7 @@ import DirPicker from '../components/DirPicker.vue'
 import GitTab from '../components/GitTab.vue'
 import ErrorState from '../components/ErrorState.vue'
 import LoadingState from '../components/LoadingState.vue'
+import { useRovingTabindex } from '../composables/useRovingTabindex'
 import { useDialog, useMessage } from 'naive-ui'
 
 const route = useRoute()
@@ -30,6 +31,24 @@ const tab = ref<'git' | 'files' | 'logs' | 'settings'>(
     ? (route.query.tab as 'git' | 'files' | 'logs' | 'settings')
     : 'git',
 )
+
+// 4 大子 Tab 切换器键盘导航：← → 切换、Home/End 跳首尾
+const tabBarRef = ref<HTMLElement | null>(null)
+const tabIds = VALID_TABS
+const { onKeydown: onTabBarKeydown } = useRovingTabindex({
+  containerRef: tabBarRef,
+  itemSelector: '[data-tab-id]',
+  itemCount: tabIds.length,
+  orientation: 'horizontal',
+  loop: true,
+  onActivate: (idx) => {
+    const id = tabIds[idx]
+    if (id) tab.value = id
+  },
+})
+function setTab(id: 'git' | 'files' | 'logs' | 'settings') {
+  tab.value = id
+}
 
 // Tab 状态同步 URL（刷新/分享保持状态）
 watch(tab, (t) => {
@@ -301,7 +320,11 @@ watch(tab, (t) => {
 
         <!-- 4 大子 Tab 切换器 -->
         <div
+          ref="tabBarRef"
           class="flex items-center gap-1 p-1 rounded-xl bg-surface-alt border border-border shrink-0"
+          role="tablist"
+          aria-label="仓库视图切换"
+          @keydown="onTabBarKeydown"
         >
           <button
             v-for="st in [
@@ -311,13 +334,17 @@ watch(tab, (t) => {
               { id: 'settings', label: '仓库独立设置', icon: 'i-carbon-settings' },
             ]"
             :key="st.id"
+            :data-tab-id="st.id"
             class="px-3 py-1.5 rounded-lg text-xs font-mono font-medium flex items-center gap-1.5 transition-[background-color,border-color,color,box-shadow] cursor-pointer border-0 focus-ring"
             :class="
               tab === st.id
                 ? 'bg-surface text-brand-600 font-bold border border-border shadow-xs'
                 : 'text-text-3 hover:text-text-1 bg-transparent'
             "
-            @click="tab = st.id as any"
+            role="tab"
+            :tabindex="tab === st.id ? 0 : -1"
+            :aria-selected="tab === st.id ? 'true' : 'false'"
+            @click="setTab(st.id as any)"
           >
             <i aria-hidden="true" class="text-13px" :class="st.icon" />
             <span>{{ st.label }}</span>

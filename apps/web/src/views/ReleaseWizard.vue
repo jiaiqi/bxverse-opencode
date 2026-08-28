@@ -13,6 +13,7 @@ import StepResult from '../components/wizard/StepResult.vue'
 import { useDetectPool } from '../composables/useDetectPool'
 import { useBranchAlignment } from '../composables/useBranchAlignment'
 import { useTakeover } from '../composables/useTakeover'
+import { useRovingTabindex } from '../composables/useRovingTabindex'
 import { useDialog, useMessage } from 'naive-ui'
 import LoadingState from '../components/LoadingState.vue'
 
@@ -25,6 +26,29 @@ const message = useMessage()
 
 const projectId = computed(() => String(route.params.id))
 const project = computed(() => projectsStore.byId(projectId.value))
+
+// 步骤条键盘导航（仅在已完成步骤间方向键切换，未到步骤被 store.goTo 门禁拒绝）
+const stepBarRef = ref<HTMLElement | null>(null)
+const stepDefs = [
+  { title: '检测变更', desc: 'Preflight' },
+  { title: '版本推演', desc: 'SemVer' },
+  { title: '双轨日志', desc: 'Changelog' },
+  { title: '预检预演', desc: 'Dry-Run' },
+  { title: '执行发版', desc: 'SSE Terminal' },
+  { title: '完成归档', desc: 'Done' },
+] as const
+const stepMax = computed(() => stepDefs.length)
+const { onKeydown: onStepBarKeydown } = useRovingTabindex({
+  containerRef: stepBarRef,
+  itemSelector: '[data-step-index]',
+  itemCount: stepMax,
+  orientation: 'horizontal',
+  loop: true,
+  onActivate: (idx) => {
+    const target = idx + 1
+    if (target < store.step) store.goTo(target)
+  },
+})
 
 const isQuick = computed(() => String(route.query.mode ?? '') === 'quick')
 const hasQuickSnapshot = computed(() => !!project.value?.lastQuickPublish)
@@ -261,26 +285,24 @@ function goNext() {
             </p>
           </div>
         </div>
-        <div class="flex items-stretch gap-2 pt-2 overflow-x-auto">
+        <div
+          ref="stepBarRef"
+          class="flex items-stretch gap-2 pt-2 overflow-x-auto"
+          role="tablist"
+          aria-label="发布向导步骤"
+          @keydown="onStepBarKeydown"
+        >
           <div
-            v-for="(st, idx) in [
-              { title: '检测变更', desc: 'Preflight' },
-              { title: '版本推演', desc: 'SemVer' },
-              { title: '双轨日志', desc: 'Changelog' },
-              { title: '预检预演', desc: 'Dry-Run' },
-              { title: '执行发版', desc: 'SSE Terminal' },
-              { title: '完成归档', desc: 'Done' },
-            ]"
+            v-for="(st, idx) in stepDefs"
             :key="idx"
+            :data-step-index="idx"
             class="flex flex-col items-center text-center cursor-pointer min-w-[80px] flex-1 focus-ring rounded-md"
-            role="button"
-            :tabindex="idx + 1 <= store.step ? 0 : -1"
-            :aria-current="store.step === idx + 1 ? 'step' : undefined"
+            role="tab"
+            :tabindex="idx + 1 === store.step ? 0 : -1"
+            :aria-selected="store.step === idx + 1 ? 'true' : 'false'"
             :aria-disabled="idx + 1 > store.step ? 'true' : undefined"
             :aria-label="`${st.title} ${st.desc} 第 ${idx + 1} 步${store.step === idx + 1 ? ' 当前步骤' : idx + 1 < store.step ? ' 可返回' : ' 未完成'}`"
             @click="idx + 1 < store.step && store.goTo(idx + 1)"
-            @keydown.enter.prevent="idx + 1 < store.step && store.goTo(idx + 1)"
-            @keydown.space.prevent="idx + 1 < store.step && store.goTo(idx + 1)"
           >
             <div
               class="w-7 h-7 rounded-full flex items-center justify-center text-xs font-mono font-bold mb-1.5 transition-[background-color,border-color,color,box-shadow,transform,opacity]"
