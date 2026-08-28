@@ -6,7 +6,7 @@
 import { PassThrough } from 'node:stream'
 import type { IncomingMessage } from 'node:http'
 import { describe, expect, it } from 'vitest'
-import { readJsonBody } from '../src/http/json'
+import { readJsonBody, type ApiError } from '../src/http/json'
 
 /** 模拟 IncomingMessage：把指定 Buffer 序列以 1KB chunk 形式推入后 end */
 function fakeReq(chunks: Buffer[]): IncomingMessage {
@@ -64,9 +64,9 @@ describe('F1 · readJsonBody UTF-8 多字节', () => {
       }
       pt.end()
     }
-    const settled = readJsonBody(req).catch((e: Error & { status?: number; code?: string }) => e)
+    const settled = readJsonBody(req).catch((e: unknown) => e as ApiError)
     await pushAll()
-    const err = await settled
+    const err = (await settled) as ApiError
     expect(err.status).toBe(400)
     expect(err.code).toBe('VALIDATION')
     expect(err.message).toMatch(/32MB|上限/)
@@ -80,7 +80,7 @@ describe('F1 · readJsonBody UTF-8 多字节', () => {
 
   it('非 JSON body → 400 VALIDATION', async () => {
     const req = fakeReq([Buffer.from('not json', 'utf8')])
-    const err = await readJsonBody(req).catch((e: Error & { status?: number; code?: string }) => e)
+    const err = (await readJsonBody(req).catch((e: unknown) => e as ApiError)) as ApiError
     expect(err.status).toBe(400)
     expect(err.code).toBe('VALIDATION')
   })
