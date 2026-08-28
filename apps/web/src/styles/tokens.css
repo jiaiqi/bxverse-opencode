@@ -683,6 +683,30 @@ html.dark .hljs-regexp {
   opacity: 0;
 }
 
+/* ==================== 入场 stagger（页面/列表元素错位淡入） ====================
+   模板用法：<div class="stagger-item" :style="{ '--stagger-delay': (idx * 40) + 'ms' }">
+   - 默认从 opacity 0 + translateY 8px 滑入，260ms ease-bx（与 prefers-reduced-motion 共存）
+*/
+.stagger-item {
+  opacity: 0;
+  transform: translateY(8px);
+  animation: bx-stagger-in var(--bx-dur-slow) var(--bx-ease) forwards;
+  animation-delay: var(--stagger-delay, 0ms);
+  will-change: opacity, transform;
+}
+@keyframes bx-stagger-in {
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .stagger-item {
+    animation-duration: 0.01ms !important;
+    animation-delay: 0ms !important;
+  }
+}
+
 /* ==================== 次世代全景驾驶舱原子样式 ==================== */
 .glass-panel {
   background: var(--bx-surface-glass);

@@ -143,6 +143,8 @@ usePolling(refresh, () => appStore.pollInterval || 30_000)
         sub-label="个产品线"
         icon="i-carbon-catalog"
         color="emerald"
+        :count-up="true"
+        :stagger-delay-ms="0"
       />
       <StatCard
         label="托管关联工程"
@@ -150,14 +152,18 @@ usePolling(refresh, () => appStore.pollInterval || 30_000)
         sub-label="个 Git 仓库"
         icon="i-carbon-cube"
         color="cyan"
+        :count-up="true"
+        :stagger-delay-ms="60"
       />
       <StatCard
         label="待发布脏变动"
-        :value="`+${overview?.changedRepoCount ?? 0}`"
+        :value="overview?.changedRepoCount ?? 0"
         sub-label="处变更"
         icon="i-carbon-git-commit"
         :accent="(overview?.changedRepoCount ?? 0) > 0"
         color="amber"
+        :count-up="true"
+        :stagger-delay-ms="120"
       />
       <!-- 扩展：M8 看板——脏仓库计数（status.dirty > 0） -->
       <StatCard
@@ -167,6 +173,8 @@ usePolling(refresh, () => appStore.pollInterval || 30_000)
         icon="i-carbon-document-unknown"
         :accent="(overview?.dirtyRepoCount ?? 0) > 0"
         color="orange"
+        :count-up="true"
+        :stagger-delay-ms="180"
       />
       <StatCard
         label="版本与备份审计"
@@ -174,6 +182,7 @@ usePolling(refresh, () => appStore.pollInterval || 30_000)
         sub-label="Git 审计"
         icon="i-carbon-security"
         color="purple"
+        :stagger-delay-ms="240"
       />
     </div>
 

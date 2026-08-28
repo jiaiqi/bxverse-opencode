@@ -410,6 +410,8 @@ usePolling(
                 :loading="statusLoading.has(repo.id)"
                 :tabindex="repoTabindexFor(idx)"
                 :focus-key="idx"
+                class="stagger-item"
+                :style="{ '--stagger-delay': Math.min(idx, 12) * 40 + 'ms' }"
                 @refresh="refreshRepo(repo.id)"
               />
             </div>
