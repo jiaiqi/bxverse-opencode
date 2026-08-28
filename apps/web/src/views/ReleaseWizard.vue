@@ -327,44 +327,46 @@ function goNext() {
       </div>
 
       <div class="glass-panel p-6 rounded-2xl mt-4">
-        <div v-show="store.step === 1">
-          <StepDetect
-            :project="project"
-            :statuses="statuses"
-            :failed-repos="failedRepos"
-            :detecting="detecting"
-            :branch-alignment="branchAlignment"
-            :failed-repo-ids="failedRepoIds"
-            :changed-repo-ids="changedRepoIds"
-            :visible-commits="visibleCommits"
-            :hidden-commits-count="hiddenCommitsCount"
-            :show-all-commits="showAllCommits"
-            @detect="detect()"
-            @detect-repo="detectRepo($event)"
-            @batch-checkout="doBatchCheckout($event)"
-            @batch-pull="doBatchPull()"
-          />
-        </div>
-        <div v-show="store.step === 2">
-          <StepVersion :project="project" />
-        </div>
-        <div v-show="store.step === 3">
-          <StepLogs :project="project" />
-        </div>
-        <div v-show="store.step === 4">
-          <StepDryRun :project="project" :statuses="statuses" />
-        </div>
-        <div v-show="store.step === 5">
-          <StepExecute />
-        </div>
-        <div v-show="store.step === 6">
-          <StepResult
-            :project-id="projectId"
-            @again="handleAgain"
-            @retry-bump="handleRetryBump"
-            @resume="handleResume"
-          />
-        </div>
+        <Transition name="step-fade" mode="out-in">
+          <div v-if="store.step === 1" :key="1">
+            <StepDetect
+              :project="project"
+              :statuses="statuses"
+              :failed-repos="failedRepos"
+              :detecting="detecting"
+              :branch-alignment="branchAlignment"
+              :failed-repo-ids="failedRepoIds"
+              :changed-repo-ids="changedRepoIds"
+              :visible-commits="visibleCommits"
+              :hidden-commits-count="hiddenCommitsCount"
+              :show-all-commits="showAllCommits"
+              @detect="detect()"
+              @detect-repo="detectRepo($event)"
+              @batch-checkout="doBatchCheckout($event)"
+              @batch-pull="doBatchPull()"
+            />
+          </div>
+          <div v-else-if="store.step === 2" :key="2">
+            <StepVersion :project="project" />
+          </div>
+          <div v-else-if="store.step === 3" :key="3">
+            <StepLogs :project="project" />
+          </div>
+          <div v-else-if="store.step === 4" :key="4">
+            <StepDryRun :project="project" :statuses="statuses" />
+          </div>
+          <div v-else-if="store.step === 5" :key="5">
+            <StepExecute />
+          </div>
+          <div v-else-if="store.step === 6" :key="6">
+            <StepResult
+              :project-id="projectId"
+              @again="handleAgain"
+              @retry-bump="handleRetryBump"
+              @resume="handleResume"
+            />
+          </div>
+        </Transition>
       </div>
 
       <!-- 底部步骤操作栏 -->
