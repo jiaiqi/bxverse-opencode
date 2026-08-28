@@ -92,6 +92,11 @@ function closeProjectMenu(returnFocus = true) {
   if (returnFocus) nextTick(() => projectTriggerEl.value?.focus())
 }
 
+function openAddProjectFromMenu() {
+  showAddProject.value = true
+  closeProjectMenu(true)
+}
+
 function onTriggerKeydown(e: KeyboardEvent) {
   if (e.key === 'Escape' && showProjectMenu.value) {
     e.preventDefault()
@@ -250,10 +255,7 @@ function triggerFastRelease() {
               <button
                 tabindex="0"
                 aria-label="新建项目"
-                @click="
-                  showAddProject = true
-                  closeProjectMenu(true)
-                "
+                @click="openAddProjectFromMenu"
                 class="text-brand-500 hover:underline flex items-center gap-0.5 bg-transparent border-0 cursor-pointer focus-ring rounded px-1"
               >
                 <i aria-hidden="true" class="i-carbon-add text-12px" /> 新建项目

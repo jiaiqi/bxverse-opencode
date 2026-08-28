@@ -181,6 +181,10 @@ async function loadLogs() {
     logLoading.value = false
   }
 }
+function pickLogLevel(lv: 'all' | 'info' | 'warn' | 'error') {
+  logLevel.value = lv
+  void loadLogs()
+}
 function levelClass(lv: string): string {
   if (lv === 'error') return 't-err'
   if (lv === 'warn') return 't-warn'
@@ -390,10 +394,7 @@ defineExpose({ loadDoctor, runDoctor })
           <button
             v-for="lv in ['all', 'info', 'warn', 'error'] as const"
             :key="lv"
-            @click="
-              logLevel = lv
-              loadLogs()
-            "
+            @click="pickLogLevel(lv)"
             class="px-3 py-1 rounded-full text-[10px] mono focus-ring border"
             :class="
               logLevel === lv

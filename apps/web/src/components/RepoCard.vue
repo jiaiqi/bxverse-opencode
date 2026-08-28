@@ -8,12 +8,19 @@ import StatusBadge from './StatusBadge.vue'
 import { useProjectsStore } from '../stores/projects'
 import { useRouter } from 'vue-router'
 
-const props = defineProps<{
-  to: string
-  repo: RepoDef
-  status?: RepoStatus | null
-  loading?: boolean
-}>()
+const props = withDefaults(
+  defineProps<{
+    to: string
+    repo: RepoDef
+    status?: RepoStatus | null
+    loading?: boolean
+    /** roving tabindex：容器控制单焦点态，0=当前可 Tab 进入，-1=其余 */
+    tabindex?: number
+    /** 容器级 data 属性，键盘导航按此查找 */
+    focusKey?: string | number
+  }>(),
+  { tabindex: 0, focusKey: undefined },
+)
 
 const emit = defineEmits<{ refresh: [] }>()
 
@@ -65,6 +72,8 @@ async function onManage(key: string | number) {
 <template>
   <RouterLink
     :to="to"
+    :tabindex="tabindex"
+    :data-repo-index="focusKey"
     class="p-4.5 rounded-xl border border-border bg-surface hover:border-border-strong transition-[border-color,box-shadow,background-color,transform] duration-base flex flex-col justify-between group shadow-sm hover:shadow-md focus-ring"
   >
     <template v-if="loading">

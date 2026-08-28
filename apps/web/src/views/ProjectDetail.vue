@@ -5,6 +5,7 @@ import type { ReleaseRecord, RepoStatus, BranchAlignmentResult } from '@bxverse/
 import { useProjectsStore } from '../stores/projects'
 import { useAppStore } from '../stores/app'
 import { usePolling } from '../composables/usePolling'
+import { useGridRovingTabindex } from '../composables/useGridRovingTabindex'
 import { api } from '../api'
 import RepoCard from '../components/RepoCard.vue'
 import MarkdownView from '../components/MarkdownView.vue'
@@ -28,6 +29,35 @@ const message = useMessage()
 const projectId = computed(() => String(route.params.id))
 const project = computed(() => projectsStore.byId(projectId.value))
 const showAddRepo = ref(false)
+
+// 仓库网格：响应式列数（与 CSS 媒体查询同步：md=768 → 2 列，lg=1024 → 3 列）
+const repoGridRef = ref<HTMLElement | null>(null)
+const colCount = ref(1)
+let ro: ResizeObserver | null = null
+function recalcCols() {
+  const w = window.innerWidth
+  colCount.value = w >= 1024 ? 3 : w >= 768 ? 2 : 1
+}
+if (typeof window !== 'undefined') {
+  recalcCols()
+  window.addEventListener('resize', recalcCols)
+  if (typeof ResizeObserver !== 'undefined' && repoGridRef.value) {
+    ro = new ResizeObserver(recalcCols)
+    ro.observe(repoGridRef.value)
+  }
+}
+onBeforeUnmount(() => {
+  window.removeEventListener('resize', recalcCols)
+  ro?.disconnect()
+})
+
+const { tabindexFor: repoTabindexFor, onKeydown: onRepoGridKeydown } = useGridRovingTabindex({
+  gridRef: repoGridRef,
+  itemSelector: '[data-repo-index]',
+  itemCount: () => sortedRepos.value.length,
+  colCount: () => colCount.value,
+  loop: true,
+})
 const showEdit = ref(false)
 
 const statuses = ref<Map<string, RepoStatus | null>>(new Map())
@@ -71,6 +101,11 @@ async function loadReleases() {
 
 function expandReleases() {
   releaseExpanded.value = true
+  void loadReleases()
+}
+
+function collapseReleases() {
+  releaseExpanded.value = false
   void loadReleases()
 }
 
@@ -358,14 +393,23 @@ usePolling(
                 @action="showAddRepo = true"
               />
             </div>
-            <div v-else class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div
+              v-else
+              ref="repoGridRef"
+              class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"
+              role="grid"
+              aria-label="仓库列表"
+              @keydown="onRepoGridKeydown"
+            >
               <RepoCard
-                v-for="repo in sortedRepos"
+                v-for="(repo, idx) in sortedRepos"
                 :key="repo.id"
                 :to="`/repo/${project.id}/${repo.id}`"
                 :repo="repo"
                 :status="statuses.get(repo.id)"
                 :loading="statusLoading.has(repo.id)"
+                :tabindex="repoTabindexFor(idx)"
+                :focus-key="idx"
                 @refresh="refreshRepo(repo.id)"
               />
             </div>
@@ -486,14 +530,7 @@ usePolling(
                 >
                   展开查看全部历史（最多 100 条）
                 </button>
-                <button
-                  v-else
-                  class="link text-xs focus-ring rounded"
-                  @click="
-                    releaseExpanded = false
-                    loadReleases()
-                  "
-                >
+                <button v-else class="link text-xs focus-ring rounded" @click="collapseReleases">
                   收起
                 </button>
               </div>
