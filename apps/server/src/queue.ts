@@ -29,19 +29,27 @@ export class PublishQueue {
   private readonly tasks = new Map<string, TaskState>()
   private nextSeq = 0
   private readonly journalStore: JournalStore
-  private withCfg?: <T>(mutator: (cfg: import('@bxverse/shared').AppConfig) => T | Promise<T>) => Promise<T>
+  private withCfg?: <T>(
+    mutator: (cfg: import('@bxverse/shared').AppConfig) => T | Promise<T>,
+  ) => Promise<T>
 
   constructor(
     private sse: SseHub,
     journalStore?: JournalStore,
-    withCfg?: <T>(mutator: (cfg: import('@bxverse/shared').AppConfig) => T | Promise<T>) => Promise<T>,
+    withCfg?: <T>(
+      mutator: (cfg: import('@bxverse/shared').AppConfig) => T | Promise<T>,
+    ) => Promise<T>,
   ) {
     this.journalStore = journalStore ?? new JournalStore()
     this.withCfg = withCfg
     this.restoreFromJournal()
   }
 
-  setWithCfg(withCfg: <T>(mutator: (cfg: import('@bxverse/shared').AppConfig) => T | Promise<T>) => Promise<T>): void {
+  setWithCfg(
+    withCfg: <T>(
+      mutator: (cfg: import('@bxverse/shared').AppConfig) => T | Promise<T>,
+    ) => Promise<T>,
+  ): void {
     this.withCfg = withCfg
   }
 
@@ -74,17 +82,20 @@ export class PublishQueue {
           break
         }
       }
-      if (!needTruncated && typeof replay[0].seq === 'number' && replay[0].seq !== 1) needTruncated = true
+      if (!needTruncated && typeof replay[0].seq === 'number' && replay[0].seq !== 1)
+        needTruncated = true
     }
     if (needTruncated && replay.length > 0) {
       const first = replay[0]
-      const baseData = first.data && typeof first.data === 'object' && !Array.isArray(first.data)
-        ? (first.data as Record<string, unknown>)
-        : {}
+      const baseData =
+        first.data && typeof first.data === 'object' && !Array.isArray(first.data)
+          ? (first.data as Record<string, unknown>)
+          : {}
       // 保留原 data 字段，附加 truncated 标志
       const merged = { ...baseData, truncated: true }
       // 若原 data 非对象，则直接用 {truncated:true} 作为 data
-      const data = first.data && typeof first.data === 'object' && !Array.isArray(first.data) ? merged : merged
+      const data =
+        first.data && typeof first.data === 'object' && !Array.isArray(first.data) ? merged : merged
       replay[0] = { ...first, data } as PublishEvent
     }
     return replay
@@ -100,7 +111,11 @@ export class PublishQueue {
     }
     // 优先恢复 interrupted/running，其次也恢复已完成但有事件流的历史任务（保证重启后可回放）
     const candidates = journals.filter(
-      j => j.status === 'interrupted' || j.status === 'running' || j.status === 'done' || j.status === 'failed',
+      (j) =>
+        j.status === 'interrupted' ||
+        j.status === 'running' ||
+        j.status === 'done' ||
+        j.status === 'failed',
     )
     // 按 startedAt 排序，保证插入顺序稳定
     candidates.sort((a, b) => a.startedAt.localeCompare(b.startedAt))
@@ -125,13 +140,14 @@ export class PublishQueue {
       // 解析 releaseId / failedRepos 供 current 接口使用
       let releaseId: string | null = null
       let failedRepos: string[] = []
-      const doneEv = events.find(e => e.type === 'done')
+      const doneEv = events.find((e) => e.type === 'done')
       if (doneEv) {
         releaseId = (doneEv.data as { releaseId?: string | null } | undefined)?.releaseId ?? null
-        failedRepos = ((doneEv.data as { failedRepos?: string[] } | undefined)?.failedRepos ?? [])
+        failedRepos = (doneEv.data as { failedRepos?: string[] } | undefined)?.failedRepos ?? []
       } else {
-        const errEv = events.find(e => e.type === 'error')
-        if (errEv) failedRepos = ((errEv.data as { failedRepos?: string[] } | undefined)?.failedRepos ?? [])
+        const errEv = events.find((e) => e.type === 'error')
+        if (errEv)
+          failedRepos = (errEv.data as { failedRepos?: string[] } | undefined)?.failedRepos ?? []
       }
 
       const task: TaskState = {
@@ -157,7 +173,7 @@ export class PublishQueue {
       // 取按 startedAt 最新的一个作为 current（只读）
       const sorted = [...this.tasks.values()].sort((a, b) => b.startedAt.localeCompare(a.startedAt))
       // 优先选 done/failed 的最新；running 的不设为 current（避免锁）
-      const pick = sorted.find(t => t.status !== 'running') ?? sorted[0]
+      const pick = sorted.find((t) => t.status !== 'running') ?? sorted[0]
       this.current = pick
       // 若 pick 是 running，需初始化 nextSeq 为最大 seq
       if (pick.status === 'running') {
@@ -219,7 +235,7 @@ export class PublishQueue {
         task.status = 'done'
         task.finishedAt = new Date().toISOString()
         task.releaseId = (e.data as { releaseId?: string | null } | undefined)?.releaseId ?? null
-        task.failedRepos = ((e.data as { failedRepos?: string[] } | undefined)?.failedRepos ?? [])
+        task.failedRepos = (e.data as { failedRepos?: string[] } | undefined)?.failedRepos ?? []
         // R28 快速发布快照（withCfg 原子化）+ R29 webhook done
         void (async () => {
           // 1) R28 快照
@@ -232,20 +248,16 @@ export class PublishQueue {
               backupSource: !!req.backupSource,
               backupArtifacts: !!req.backupArtifacts,
             }
-            if (this.withCfg) {
-              await this.withCfg(async (cfg) => {
-                const proj = cfg.projects.find(p => p.id === task.projectId)
-                if (proj) (proj as import('@bxverse/shared').ProjectDef).lastQuickPublish = snapshot
-                return cfg
-              })
-            } else {
-              const cfg = await store.loadAppConfig()
-              const proj = cfg.projects.find(p => p.id === task.projectId)
-              if (proj) {
-                (proj as import('@bxverse/shared').ProjectDef).lastQuickPublish = snapshot
-                await store.saveAppConfig(cfg)
-              }
+            if (!this.withCfg) {
+              throw new Error(
+                'withCfg 未注入：构造 PublishQueue 必须注入 withCfg（apps/server/src/app.ts:100 setWithCfg）',
+              )
             }
+            await this.withCfg(async (cfg) => {
+              const proj = cfg.projects.find((p) => p.id === task.projectId)
+              if (proj) (proj as import('@bxverse/shared').ProjectDef).lastQuickPublish = snapshot
+              return cfg
+            })
           } catch {
             // 绝不影响发布主流程
           }
@@ -269,7 +281,11 @@ export class PublishQueue {
             const data = e.data as { version?: string; failedRepos?: string[] } | undefined
             const version = data?.version ?? ''
             const failedRepos = data?.failedRepos ?? []
-            await dispatchWebhooks(cfg, 'error', { projectId: task.projectId, version, failedRepos })
+            await dispatchWebhooks(cfg, 'error', {
+              projectId: task.projectId,
+              version,
+              failedRepos,
+            })
           } catch {
             // 绝不影响发布主流程
           }
@@ -280,7 +296,11 @@ export class PublishQueue {
       const result = await engine.executePublish(req, { onEvent: push, taskId: task.taskId })
       if (task.status === 'running') {
         // 引擎未发终帧（异常兜底）：补发 error
-        const e: PublishEvent = { type: 'error', message: '发布异常结束', data: { failedRepos: result.failedRepos } }
+        const e: PublishEvent = {
+          type: 'error',
+          message: '发布异常结束',
+          data: { failedRepos: result.failedRepos },
+        }
         push(e)
       }
     } catch (e) {
