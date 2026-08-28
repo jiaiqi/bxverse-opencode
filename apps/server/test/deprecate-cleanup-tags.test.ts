@@ -109,6 +109,9 @@ describe('F3 · deprecate 清理标签（业务 bug 修复）', () => {
     expect(tagsBefore).toContain(buildTag)
     expect(tagsBefore).toContain(milestoneTag)
 
+    // 等 publish task 真正结束再 deprecate（避免 .git/index.lock 撞锁）
+    await waitForQueueIdle()
+
     // 3. deprecate + cleanupTags
     const depRes = await client.post(`/api/releases/${releaseId}/deprecate`, {
       reason: 'F3 测试清理',
@@ -133,11 +136,10 @@ describe('F3 · deprecate 清理标签（业务 bug 修复）', () => {
     await waitForQueueIdle()
   }, 120_000)
 
-  it('优雅降级：1 真仓 + 1 假仓（path 不可达）→ 200 + 真仓 tag 仍被删', async () => {
-    // F3 任务卡的失败聚合路径（history.ts:135 catch failed.push）当前实现不会触发：
-    //   core git() 永不 throw，deleteTag 永不抛错 → 静默成功
-    //   （这是独立 bug；本测试卡不扩大 scope）
-    // 本测试改为验证优雅降级：即使某仓 path 不可达，deprecate 不应 500，且真仓 tag 仍被删。
+  it('失败聚合：1 真仓 + 1 假仓（path 不可达）→ failed 非空 + warnings 存在 + 真仓 tag 仍删', async () => {
+    // 本卡接续 F3 收口揭示的 dead code 修复：core git() 已改造为 ensureOk 抛错
+    //   → deleteTag 在 cwd 不可达 / tag 不存在时抛 GitError
+    //   → history.ts:135 catch failed.push 路径激活
     // 测试 1 publish 任务可能还在跑 → 先等 queue 空闲再创建项目
     await waitForQueueIdle()
     // 1. 真实仓：打 tag（不通过 engine，直接 git tag 模拟历史）
@@ -231,20 +233,23 @@ describe('F3 · deprecate 清理标签（业务 bug 修复）', () => {
 
     // 5. deprecate + cleanupTags
     const depRes = await client.post(`/api/releases/${projectRecId}/deprecate`, {
-      reason: 'F3 优雅降级测试',
+      reason: 'F3 失败聚合测试',
       cleanupTags: true,
     })
-    expect(depRes.status).toBe(200) // 优雅降级：不抛 500
+    expect(depRes.status).toBe(200) // 部分成功仍 200
     const dep = depRes.body as ReleaseRecord & {
       removed: string[]
       failed: { repoId: string; tag: string; reason: string }[]
       warnings?: string[]
     }
 
-    // 6. 优雅降级断言：响应 200 + 真仓 tag 在 removed + 真仓 git tag 列表已删
-    //    假仓 path 不可达时实现不抛 500（即便 failed 不进也是非阻塞错误）
+    // 6. 失败聚合断言：响应 200 + 真仓 tag 在 removed + 假仓 failed 非空 + warnings 存在
     expect(dep.removed).toContain(fakeBuild)
     expect(dep.removed).toContain(fakeMilestone)
+    expect(dep.failed.length).toBeGreaterThan(0)
+    expect(dep.failed.some((f) => f.repoId === fakeRepoId)).toBe(true)
+    expect(dep.warnings).toBeDefined()
+    expect(dep.warnings!.length).toBeGreaterThan(0)
 
     // 7. 真仓实际 tag 已消失
     const tagsAfter = runGit(realRepoPath, ['tag', '--list']).split('\n').filter(Boolean)

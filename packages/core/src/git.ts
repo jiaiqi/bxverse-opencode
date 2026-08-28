@@ -6,7 +6,12 @@
 import { spawn } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
-import type { CommitInfo, DiffStat, BranchAlignmentItem, BranchAlignmentResult } from '@bxverse/shared'
+import type {
+  CommitInfo,
+  DiffStat,
+  BranchAlignmentItem,
+  BranchAlignmentResult,
+} from '@bxverse/shared'
 import { classifyCommit } from './changelog'
 import { CoreError, CORE_ERROR_CODES } from './errors'
 import type { CoreErrorCode } from './errors'
@@ -26,7 +31,8 @@ function mapGitCodeToCoreError(code: number | string, _stderr: string): CoreErro
   if (s === 'BAD_URL') return CORE_ERROR_CODES.VALIDATION
   if (s === 'TARGET_EXISTS') return CORE_ERROR_CODES.VALIDATION
   if (s === 'PATH_OUT_OF_REPO') return CORE_ERROR_CODES.VALIDATION
-  if (s === 'EMPTY_SUBJECT' || s === 'BAD_SUBJECT' || s === 'BAD_BRANCH' || s === 'BAD_TAG') return CORE_ERROR_CODES.VALIDATION
+  if (s === 'EMPTY_SUBJECT' || s === 'BAD_SUBJECT' || s === 'BAD_BRANCH' || s === 'BAD_TAG')
+    return CORE_ERROR_CODES.VALIDATION
   if (s === 'BUFFER' || s === 'SPAWN') return CORE_ERROR_CODES.GIT_FAILED
   // 数字退出码统一归为 GIT_FAILED（可通过 detail.gitCode 区分）
   return CORE_ERROR_CODES.GIT_FAILED
@@ -80,7 +86,12 @@ export function git(args: string[], opts: GitOpts = {}): Promise<GitResult> {
   return new Promise((resolve) => {
     let child
     try {
-      child = spawn('git', finalArgs, { cwd, windowsHide: true, env, stdio: ['ignore', 'pipe', 'pipe'] })
+      child = spawn('git', finalArgs, {
+        cwd,
+        windowsHide: true,
+        env,
+        stdio: ['ignore', 'pipe', 'pipe'],
+      })
     } catch (err) {
       resolve({ ok: false, code: 'SPAWN', stderr: (err as Error).message })
       return
@@ -110,7 +121,8 @@ export function git(args: string[], opts: GitOpts = {}): Promise<GitResult> {
     child.on('close', (code: number | null) => {
       clearTimeout(timer)
       if (overLimit) resolve({ ok: false, code: 'BUFFER', stderr: 'stdout 超过 50MB 上限' })
-      else if (killed) resolve({ ok: false, code: 'TIMEOUT', stderr: `git 执行超时（${timeoutMs}ms）` })
+      else if (killed)
+        resolve({ ok: false, code: 'TIMEOUT', stderr: `git 执行超时（${timeoutMs}ms）` })
       else if (code === 0) resolve({ ok: true, stdout, stderr })
       else resolve({ ok: false, code: code ?? 1, stderr })
     })
@@ -131,7 +143,12 @@ export async function runShell(
   timeoutMs = 30 * 60_000,
 ): Promise<GitResult> {
   return new Promise((resolve) => {
-    const child = spawn(command, { cwd, shell: true, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] })
+    const child = spawn(command, {
+      cwd,
+      shell: true,
+      windowsHide: true,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    })
     let stderr = ''
     let killed = false
     const timer = setTimeout(() => {
@@ -249,7 +266,8 @@ export async function createTag(
   const target = opts.target ?? 'HEAD'
   if (await tagExists(dir, tag)) {
     const existing = await tagTarget(dir, tag)
-    const want = target === 'HEAD' ? ensureOk(await git(['rev-parse', 'HEAD'], { cwd: dir })).trim() : target
+    const want =
+      target === 'HEAD' ? ensureOk(await git(['rev-parse', 'HEAD'], { cwd: dir })).trim() : target
     if (existing === want) return
     throw new GitError('TAG_CONFLICT', `标签 ${tag} 已存在且指向不同 commit`)
   }
@@ -279,7 +297,13 @@ export async function commitsSince(
   const maxCommits = opts.maxCommits ?? 3000
   const includeFiles = opts.includeFiles ?? true
   const buildArgs = (b: string | null) => {
-    const args = ['log', '--no-merges', '--reverse', '--date=short', '--pretty=format:%H%x1e%h%x1e%an%x1e%ad%x1e%s%x1f']
+    const args = [
+      'log',
+      '--no-merges',
+      '--reverse',
+      '--date=short',
+      '--pretty=format:%H%x1e%h%x1e%an%x1e%ad%x1e%s%x1f',
+    ]
     if (includeFiles) args.push('--name-only')
     if (b) args.push(`${b}..HEAD`)
     else args.push('--root')
@@ -352,8 +376,12 @@ export async function diffStat(
 const CLONE_SCHEMES = ['https://', 'ssh://', 'git@']
 
 /** 克隆仓库到本地（URL 白名单校验；目标目录必须不存在或为空） */
-export async function clone(url: string, targetDir: string, opts: { shallow?: boolean } = {}): Promise<void> {
-  if (!CLONE_SCHEMES.some(p => url.startsWith(p))) {
+export async function clone(
+  url: string,
+  targetDir: string,
+  opts: { shallow?: boolean } = {},
+): Promise<void> {
+  if (!CLONE_SCHEMES.some((p) => url.startsWith(p))) {
     throw new GitError('BAD_URL', `不支持的仓库地址协议（仅支持 https://、ssh://、git@）: ${url}`)
   }
   if (fs.existsSync(targetDir) && fs.readdirSync(targetDir).length > 0) {
@@ -377,7 +405,11 @@ export function resolveRepoPath(repoDir: string, relativeOrAbs: string): string 
   const repoNorm = path.resolve(repoDir)
   const target = path.resolve(repoNorm, relativeOrAbs)
   // 必须落在 repoDir 之内
-  if (target !== repoNorm && !target.startsWith(repoNorm + path.sep) && !target.startsWith(repoNorm + '/')) {
+  if (
+    target !== repoNorm &&
+    !target.startsWith(repoNorm + path.sep) &&
+    !target.startsWith(repoNorm + '/')
+  ) {
     throw new GitError('PATH_OUT_OF_REPO', `路径越界：${relativeOrAbs}`)
   }
   return target
@@ -387,7 +419,7 @@ export function resolveRepoPath(repoDir: string, relativeOrAbs: string): string 
 export function parsePorcelain(output: string): { index: string; work: string; path: string }[] {
   const out: { index: string; work: string; path: string }[] = []
   // 按 \0 分块；renames/copies 后续如需扩展（'R '/'C ' 后接 origin -> path）这里忽略
-  const chunks = output.split('\0').filter(c => c.length > 0 && c !== '\n')
+  const chunks = output.split('\0').filter((c) => c.length > 0 && c !== '\n')
   for (const c of chunks) {
     if (c.length < 3) continue
     const index = c[0]
@@ -402,7 +434,7 @@ export function parsePorcelain(output: string): { index: string; work: string; p
 function parseAheadBehind(s: string): { ahead: number; behind: number } {
   const t = s.trim()
   if (!t) return { ahead: 0, behind: 0 }
-  const [a, b] = t.split('\t').map(x => parseInt(x, 10) || 0)
+  const [a, b] = t.split('\t').map((x) => parseInt(x, 10) || 0)
   return { ahead: a ?? 0, behind: b ?? 0 }
 }
 
@@ -436,15 +468,20 @@ export async function gitStatus(repoDir: string): Promise<GitStatusResult> {
     return r.ok ? r.stdout.trim() : ''
   })()
   const hasRemote = !!remoteUrl
-  let ahead = 0, behind = 0
+  let ahead = 0,
+    behind = 0
   if (hasRemote) {
     const br = branch && branch !== 'HEAD' ? branch : 'HEAD'
-    const ab = await git(['rev-list', '--left-right', '--count', `origin/${br}...HEAD`], { cwd: repoDir })
+    const ab = await git(['rev-list', '--left-right', '--count', `origin/${br}...HEAD`], {
+      cwd: repoDir,
+    })
     if (ab.ok) ({ ahead, behind } = parseAheadBehind(ab.stdout))
   }
-  const st = await git(['status', '--porcelain=v1', '-z', '--untracked-files=normal'], { cwd: repoDir })
+  const st = await git(['status', '--porcelain=v1', '-z', '--untracked-files=normal'], {
+    cwd: repoDir,
+  })
   if (!st.ok) throw new GitError(st.code, st.stderr)
-  const files: GitStatusFileEntry[] = parsePorcelain(st.stdout).map(r => {
+  const files: GitStatusFileEntry[] = parsePorcelain(st.stdout).map((r) => {
     const untracked = r.index === '?' && r.work === '?'
     const staged = !untracked && r.index !== ' ' && r.index !== '?'
     return { indexStatus: r.index, workStatus: r.work, path: r.path, staged, untracked }
@@ -452,7 +489,12 @@ export async function gitStatus(repoDir: string): Promise<GitStatusResult> {
   return { branch, head, hasRemote, remoteUrl, ahead, behind, files }
 }
 
-export async function gitFileDiff(repoDir: string, filePath: string, range: 'staged' | 'unstaged' | 'untracked', opts: { maxBytes?: number } = {}): Promise<{ patch: string; truncated: boolean }> {
+export async function gitFileDiff(
+  repoDir: string,
+  filePath: string,
+  range: 'staged' | 'unstaged' | 'untracked',
+  opts: { maxBytes?: number } = {},
+): Promise<{ patch: string; truncated: boolean }> {
   const maxBytes = opts.maxBytes ?? 200_000
   if (range === 'untracked') {
     // 未追踪文件：cat 全文（限制大小，无则空）
@@ -462,7 +504,11 @@ export async function gitFileDiff(repoDir: string, filePath: string, range: 'sta
     if (stat.size > maxBytes) {
       const buf = Buffer.alloc(maxBytes)
       const fd = fs.openSync(abs, 'r')
-      try { fs.readSync(fd, buf, 0, maxBytes, 0) } finally { fs.closeSync(fd) }
+      try {
+        fs.readSync(fd, buf, 0, maxBytes, 0)
+      } finally {
+        fs.closeSync(fd)
+      }
       return { patch: buf.toString('utf8') + '\n... (truncated)', truncated: true }
     }
     return { patch: fs.readFileSync(abs, 'utf8'), truncated: false }
@@ -507,7 +553,10 @@ export async function gitReset(repoDir: string, paths: string[] | 'all'): Promis
 }
 
 /** 提交（subject + body；--no-verify 跳过 hook；--allow-empty 允许空提交） */
-export async function gitCommit(repoDir: string, opts: { subject: string; body?: string; allowEmpty?: boolean }): Promise<{ hash: string }> {
+export async function gitCommit(
+  repoDir: string,
+  opts: { subject: string; body?: string; allowEmpty?: boolean },
+): Promise<{ hash: string }> {
   const subject = opts.subject.trim()
   if (!subject) throw new GitError('EMPTY_SUBJECT', '提交标题不能为空')
   // subject 单行校验（block newline subject，避免钓鱼）
@@ -543,17 +592,24 @@ export async function checkoutBranch(repoDir: string, branch: string): Promise<v
   ensureOk(await git(['checkout', target], { cwd: repoDir }))
 }
 
-/** 安全删除 Tag（本地与可选远程） */
-export async function deleteTag(repoDir: string, tag: string, opts: { remote?: boolean } = {}): Promise<void> {
+/** 安全删除 Tag（本地与可选远程）
+ * 失败时抛 GitError（cwd 不可达 / tag 不存在 / push 失败等）；调用方用 try/catch 聚合 failed。 */
+export async function deleteTag(
+  repoDir: string,
+  tag: string,
+  opts: { remote?: boolean } = {},
+): Promise<void> {
   const targetTag = tag.trim()
   if (!targetTag) throw new GitError('BAD_TAG', '标签名不能为空')
-  // 1. 删除本地标签
-  await git(['tag', '-d', targetTag], { cwd: repoDir })
+  // 1. 删除本地标签（失败抛错：tag 不存在 / cwd 不可达 / 权限不足等）
+  ensureOk(await git(['tag', '-d', targetTag], { cwd: repoDir }))
   // 2. 若配置删除远程标签且存在 remote
   if (opts.remote) {
     const hasRem = await hasRemote(repoDir, 'origin')
     if (hasRem) {
-      await git(['push', 'origin', '--delete', targetTag], { cwd: repoDir, timeoutMs: 30_000 })
+      ensureOk(
+        await git(['push', 'origin', '--delete', targetTag], { cwd: repoDir, timeoutMs: 30_000 }),
+      )
     }
   }
 }
