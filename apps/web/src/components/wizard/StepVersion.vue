@@ -3,6 +3,7 @@ import type { ProjectDef } from '@bxverse/shared'
 import { PRERELEASE_RE } from '@bxverse/shared'
 import { usePublishStore } from '../../stores/publish'
 import StatusBadge from '../StatusBadge.vue'
+import LoadingState from '../LoadingState.vue'
 import { useDialog } from 'naive-ui'
 
 const props = defineProps<{ project: ProjectDef | undefined }>()
@@ -156,10 +157,19 @@ function resolvePrereleaseLocal(prev?: string, req?: string): string | undefined
 function bumpSemverLocal(v: string, bump: string, pre?: string): string {
   const m = SEMVER_PRERELEASE_RE_LOCAL.exec(v.trim())
   if (!m) throw new Error(`INVALID_SEMVER: ${v}`)
-  let major = Number(m[1]); let minor = Number(m[2]); let patch = Number(m[3])
-  if (bump === 'major') { major += 1; minor = 0; patch = 0 }
-  else if (bump === 'minor') { minor += 1; patch = 0 }
-  else { patch += 1 }
+  let major = Number(m[1])
+  let minor = Number(m[2])
+  let patch = Number(m[3])
+  if (bump === 'major') {
+    major += 1
+    minor = 0
+    patch = 0
+  } else if (bump === 'minor') {
+    minor += 1
+    patch = 0
+  } else {
+    patch += 1
+  }
   const base = `v${major}.${minor}.${patch}`
   const p = pre?.trim()
   if (p) {
@@ -171,7 +181,8 @@ function bumpSemverLocal(v: string, bump: string, pre?: string): string {
 
 const previewVersion = computed(() => {
   const base = props.project?.version ?? 'v0.0.0'
-  const bump = store.bumpOverride === 'auto' ? (store.plan?.suggestedBump ?? 'patch') : store.bumpOverride
+  const bump =
+    store.bumpOverride === 'auto' ? (store.plan?.suggestedBump ?? 'patch') : store.bumpOverride
   const raw = prereleaseKind.value === 'stable' ? '' : prereleaseInput.value.trim()
   if (prereleaseKind.value !== 'stable' && raw && !PRERELEASE_RE.test(raw)) return '— 格式非法'
   if (prereleaseKind.value !== 'stable' && !raw) return '— 待输入'
@@ -183,7 +194,9 @@ const previewVersion = computed(() => {
     return '—'
   }
 })
-const milestonePreview = computed(() => previewVersion.value.startsWith('v') ? previewVersion.value : `v${previewVersion.value}`)
+const milestonePreview = computed(() =>
+  previewVersion.value.startsWith('v') ? previewVersion.value : `v${previewVersion.value}`,
+)
 const buildTagPreview = computed(() => {
   const v = previewVersion.value.replace(/^v/, '')
   if (v.startsWith('—')) return '—'
@@ -193,9 +206,8 @@ const buildTagPreview = computed(() => {
 
 <template>
   <div>
-    <div v-if="store.planning || !store.plan" class="py-10 text-center text-text-3">
-      <NSpin size="small" />
-      <div class="mt-2 text-sm">正在计算发布计划…</div>
+    <div v-if="store.planning || !store.plan">
+      <LoadingState text="正在计算发布计划…" />
     </div>
     <template v-else>
       <div class="flex items-end justify-between gap-4 flex-wrap">
@@ -211,10 +223,16 @@ const buildTagPreview = computed(() => {
             </span>
           </div>
           <div class="text-xs text-text-3 mt-1">
-            build {{ store.plan.buildStamp }} · 里程碑标签 <span class="code-text">{{ store.plan.milestoneTag }}</span>
+            build {{ store.plan.buildStamp }} · 里程碑标签
+            <span class="code-text">{{ store.plan.milestoneTag }}</span>
           </div>
         </div>
-        <NSelect v-model:value="store.bumpOverride" :options="bumpOptions" class="w-44" @update:value="setBump" />
+        <NSelect
+          v-model:value="store.bumpOverride"
+          :options="bumpOptions"
+          class="w-44"
+          @update:value="setBump"
+        />
       </div>
 
       <!-- R30 prerelease 版本类型与预览 -->
@@ -227,7 +245,9 @@ const buildTagPreview = computed(() => {
         <div class="flex items-center gap-4 flex-wrap">
           <NRadioGroup :value="prereleaseKind" @update:value="onKindChange">
             <NSpace>
-              <NRadio v-for="o in prereleaseOptions" :key="o.value" :value="o.value">{{ o.label }}</NRadio>
+              <NRadio v-for="o in prereleaseOptions" :key="o.value" :value="o.value">{{
+                o.label
+              }}</NRadio>
             </NSpace>
           </NRadioGroup>
         </div>
@@ -243,7 +263,10 @@ const buildTagPreview = computed(() => {
             @update:value="onPrereleaseInput"
           />
           <span v-if="prereleaseError" class="text-xs text-error">{{ prereleaseError }}</span>
-          <span v-else class="text-xs text-text-3">校验：{{ PRERELEASE_RE.test(prereleaseInput.trim()) ? '合法' : '待输入' }} · 示例 beta.1 / rc.1</span>
+          <span v-else class="text-xs text-text-3"
+            >校验：{{ PRERELEASE_RE.test(prereleaseInput.trim()) ? '合法' : '待输入' }} · 示例
+            beta.1 / rc.1</span
+          >
         </div>
         <div class="rounded-lg bg-surface px-3 py-2.5 border border-border/60 space-y-1 text-xs">
           <div class="flex items-center gap-2 flex-wrap">
@@ -257,17 +280,28 @@ const buildTagPreview = computed(() => {
             <span>·</span>
             <span class="code-text font-mono">{{ buildTagPreview }}</span>
           </div>
-          <div class="text-[11px] text-text-3">链路：v1.2.0-beta.1 → v1.2.0-beta.2（同标识递增）→ v1.2.0（切正式版）；不同标识如 beta→rc 直接覆盖</div>
+          <div class="text-[11px] text-text-3">
+            链路：v1.2.0-beta.1 → v1.2.0-beta.2（同标识递增）→ v1.2.0（切正式版）；不同标识如
+            beta→rc 直接覆盖
+          </div>
         </div>
       </div>
 
       <div class="mt-6">
-        <div class="section-title text-base mb-3">参与发布的仓库（{{ store.plan.changed.length }}）</div>
+        <div class="section-title text-base mb-3">
+          参与发布的仓库（{{ store.plan.changed.length }}）
+        </div>
         <div class="card border divide-y divide-border overflow-hidden">
-          <div v-for="r in store.plan.changed" :key="r.repoId" class="px-4 py-3 flex items-center gap-3 flex-wrap">
+          <div
+            v-for="r in store.plan.changed"
+            :key="r.repoId"
+            class="px-4 py-3 flex items-center gap-3 flex-wrap"
+          >
             <i aria-hidden="true" class="i-carbon-git-branch text-brand-500" />
             <span class="font-medium text-text-1 text-sm min-w-30">{{ r.name }}</span>
-            <span class="code-text text-xs text-text-3">{{ r.from?.slice(0, 7) ?? '首次' }} → {{ r.to?.slice(0, 7) }}</span>
+            <span class="code-text text-xs text-text-3"
+              >{{ r.from?.slice(0, 7) ?? '首次' }} → {{ r.to?.slice(0, 7) }}</span
+            >
             <span class="version-badge"><span class="tick"></span>{{ r.version }}</span>
             <span class="chip">{{ r.commits.length }} 提交</span>
           </div>
@@ -276,12 +310,21 @@ const buildTagPreview = computed(() => {
 
       <div v-if="store.plan.syncedOnly.length" class="mt-4">
         <NCollapse>
-          <NCollapseItem :title="`仅同步基版 version.json（${store.plan.syncedOnly.length} 个未变动仓库）`" name="sync">
+          <NCollapseItem
+            :title="`仅同步基版 version.json（${store.plan.syncedOnly.length} 个未变动仓库）`"
+            name="sync"
+          >
             <div class="text-sm text-text-2 space-y-1">
-              <div v-for="s in store.plan.syncedOnly" :key="s.repoId" class="flex items-center gap-2">
+              <div
+                v-for="s in store.plan.syncedOnly"
+                :key="s.repoId"
+                class="flex items-center gap-2"
+              >
                 <i aria-hidden="true" class="i-carbon-renew text-text-3" />
                 <span>{{ s.name }}</span>
-                <span class="code-text text-xs text-text-3">→ {{ store.plan.projectVersion }}（无标签无记录）</span>
+                <span class="code-text text-xs text-text-3"
+                  >→ {{ store.plan.projectVersion }}（无标签无记录）</span
+                >
               </div>
             </div>
           </NCollapseItem>

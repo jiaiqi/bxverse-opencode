@@ -4,6 +4,7 @@
 import type { FileEntry } from '@bxverse/shared'
 import { useMessage } from 'naive-ui'
 import FileTreeNode from './FileTreeNode.vue'
+import LoadingState from './LoadingState.vue'
 import { useLazyTree } from '../composables/useLazyTree'
 
 const props = defineProps<{
@@ -14,7 +15,11 @@ const props = defineProps<{
 const emit = defineEmits<{ select: [path: string, entry: FileEntry] }>()
 
 const message = useMessage()
-const { root, childrenMap, expanded, loadingSet, rootLoading, loadRoot, toggleDir, reset } = useLazyTree(() => props.pid, () => props.rid)
+const { root, childrenMap, expanded, loadingSet, rootLoading, loadRoot, toggleDir, reset } =
+  useLazyTree(
+    () => props.pid,
+    () => props.rid,
+  )
 const selectedPath = ref('')
 
 async function wrappedLoadRoot(): Promise<void> {
@@ -39,18 +44,19 @@ function selectFile(path: string, entry: FileEntry) {
 }
 
 onMounted(wrappedLoadRoot)
-watch(() => props.rid, () => {
-  reset()
-  selectedPath.value = ''
-  void wrappedLoadRoot()
-})
+watch(
+  () => props.rid,
+  () => {
+    reset()
+    selectedPath.value = ''
+    void wrappedLoadRoot()
+  },
+)
 </script>
 
 <template>
   <div class="py-2">
-    <div v-if="rootLoading && !root" class="px-3 py-6 text-center text-text-3">
-      <NSpin size="small" />
-    </div>
+    <div v-if="rootLoading && !root"><LoadingState pad="compact" /></div>
     <template v-else-if="root">
       <FileTreeNode
         v-for="entry in root.entries"

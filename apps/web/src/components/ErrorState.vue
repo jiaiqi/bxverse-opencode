@@ -1,19 +1,22 @@
 <script setup lang="ts">
 // ErrorState.vue —— 错误态统一组件（对齐 EmptyState 家族）
 
-withDefaults(defineProps<{
-  icon?: string
-  title: string
-  reason?: string
-  hint?: string
-}>(), {
-  icon: 'i-carbon-warning',
-})
+withDefaults(
+  defineProps<{
+    icon?: string
+    title: string
+    reason?: string
+    hint?: string
+  }>(),
+  {
+    icon: 'i-carbon-warning',
+  },
+)
 </script>
 
 <template>
   <div class="empty-wrap">
-    <div class="e-ic !bg-error-soft !border-error/20 !text-error">
+    <div class="e-ic e-ic-error">
       <i aria-hidden="true" class="text-24px" :class="icon" />
     </div>
     <div class="text-base font-semibold text-text-1">{{ title }}</div>

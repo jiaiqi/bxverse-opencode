@@ -32,7 +32,11 @@ const exporting = ref(false)
 
 function repoName(repoId: string): string {
   const p = projectsStore.items.find((x) => x.id === props.projectId)
-  return p?.repos.find((r) => r.id === repoId)?.displayName || p?.repos.find((r) => r.id === repoId)?.name || repoId
+  return (
+    p?.repos.find((r) => r.id === repoId)?.displayName ||
+    p?.repos.find((r) => r.id === repoId)?.name ||
+    repoId
+  )
 }
 
 /** 错误码 → 严重度 chip color（前端读 code 决定视觉层级） */
@@ -47,7 +51,9 @@ async function doRollback() {
   if (!props.taskId) return message.warning('缺少 taskId，无法回滚')
   rollingBack.value = true
   try {
-    const r = await api.publishRollback(props.taskId, { repoIds: props.failedReports.map((x) => x.repoId) })
+    const r = await api.publishRollback(props.taskId, {
+      repoIds: props.failedReports.map((x) => x.repoId),
+    })
     message.success(
       `已回滚 · 删除 build 标签 ${r.deletedBuildTags.length} 个 / 标 deprecate release ${r.deprecatedReleases.length} 个 / 删里程碑 ${r.deletedMilestoneTags.length} 个`,
     )
@@ -69,9 +75,12 @@ async function exportDiag() {
       kind: 'bxverse-diagnostic-bundle',
       release: { version: props.version, taskId: props.taskId, projectId: props.projectId },
       failures: props.failedReports.map((f) => ({ ...f, repoName: repoName(f.repoId) })),
-      suggestions: 'paths: (1) 改用下一版本号重试失败仓库（bump 提一档 / patch）— 幂等仅补跑失败仓；(2) 接管 interrupted journal 续跑；(3) 回滚本次副作用（仅删 bxverse 自产 + 写 R24 审计）',
+      suggestions:
+        'paths: (1) 改用下一版本号重试失败仓库（bump 提一档 / patch）— 幂等仅补跑失败仓；(2) 接管 interrupted journal 续跑；(3) 回滚本次副作用（仅删 bxverse 自产 + 写 R24 审计）',
     }
-    const blob = new Blob([JSON.stringify(bundle, null, 2)], { type: 'application/json;charset=utf-8' })
+    const blob = new Blob([JSON.stringify(bundle, null, 2)], {
+      type: 'application/json;charset=utf-8',
+    })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
@@ -95,7 +104,7 @@ async function exportDiag() {
         {{ failedReports.length }} 个仓库未能完成 · 其余仓库已隔离完成
       </span>
       <button
-        class="ml-auto text-xs text-info hover:underline"
+        class="ml-auto text-xs text-info hover:underline focus-ring"
         @click="diagOpen = !diagOpen"
         :aria-expanded="diagOpen"
       >
@@ -126,19 +135,34 @@ async function exportDiag() {
             <code class="text-xs text-text-3 font-mono">{{ f.code }}</code>
           </div>
           <div class="grid grid-cols-2 md:grid-cols-4 gap-x-4 gap-y-1.5 text-[11px] font-mono">
-            <div class="flex justify-between gap-2"><span class="text-text-3">当前 HEAD</span><b class="text-text-1">{{ f.head || '—' }}</b></div>
-            <div class="flex justify-between gap-2"><span class="text-text-3">本次目标</span><b class="text-text-1">{{ f.target || '—' }}</b></div>
-            <div class="flex justify-between gap-2"><span class="text-text-3">上次发布基准</span><b class="text-text-1">{{ f.lastPublishCommit ? f.lastPublishCommit.slice(0, 8) : '从未发布' }}</b></div>
+            <div class="flex justify-between gap-2">
+              <span class="text-text-3">当前 HEAD</span
+              ><b class="text-text-1">{{ f.head || '—' }}</b>
+            </div>
+            <div class="flex justify-between gap-2">
+              <span class="text-text-3">本次目标</span
+              ><b class="text-text-1">{{ f.target || '—' }}</b>
+            </div>
+            <div class="flex justify-between gap-2">
+              <span class="text-text-3">上次发布基准</span
+              ><b class="text-text-1">{{
+                f.lastPublishCommit ? f.lastPublishCommit.slice(0, 8) : '从未发布'
+              }}</b>
+            </div>
             <div class="flex justify-between gap-2">
               <span class="text-text-3">标签</span>
-              <b class="text-text-1" :class="{ 'text-warning': f.tag && f.tagTarget && f.tagTarget !== f.target }">
+              <b
+                class="text-text-1"
+                :class="{ 'text-warning': f.tag && f.tagTarget && f.tagTarget !== f.target }"
+              >
                 {{ f.tag ?? '—' }}
               </b>
             </div>
             <div v-if="f.tagTarget" class="flex justify-between gap-2 col-span-2">
               <span class="text-text-3">标签指向 commit</span>
               <b class="text-text-1" :class="{ 'text-warning': f.tagTarget !== f.target }">
-                {{ f.tagTarget.slice(0, 8) }}{{ f.tagTarget !== f.target ? '（≠ HEAD）' : '（已对齐）' }}
+                {{ f.tagTarget.slice(0, 8)
+                }}{{ f.tagTarget !== f.target ? '（≠ HEAD）' : '（已对齐）' }}
               </b>
             </div>
             <div v-if="f.tagSource" class="col-span-2 text-text-3 leading-relaxed">
@@ -148,9 +172,15 @@ async function exportDiag() {
               <span class="font-semibold text-text-3">原始错误：</span>{{ f.message }}
             </div>
           </div>
-          <ul v-if="f.suggestions?.length" class="mt-2.5 list-none pl-0 text-[12px] text-text-2 space-y-1">
+          <ul
+            v-if="f.suggestions?.length"
+            class="mt-2.5 list-none pl-0 text-[12px] text-text-2 space-y-1"
+          >
             <li v-for="(s, i) in f.suggestions" :key="i" class="flex items-start gap-1.5">
-              <i aria-hidden="true" class="i-carbon-arrow-right text-info text-12px mt-0.5 shrink-0" />
+              <i
+                aria-hidden="true"
+                class="i-carbon-arrow-right text-info text-12px mt-0.5 shrink-0"
+              />
               <span>{{ s }}</span>
             </li>
           </ul>

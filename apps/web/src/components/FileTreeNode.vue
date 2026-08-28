@@ -3,6 +3,7 @@
 
 import type { FileEntry, TreeNode } from '@bxverse/shared'
 import { fileIcon } from '../constants/icons'
+import LoadingState from './LoadingState.vue'
 
 defineOptions({ name: 'FileTreeNode' })
 
@@ -28,7 +29,9 @@ const fullPath = computed(() => (props.dir ? `${props.dir}/${props.entry.name}` 
 const isDir = computed(() => props.entry.type === 'dir')
 const isExpanded = computed(() => isDir.value && props.expanded.has(fullPath.value))
 const isLoading = computed(() => props.loadingSet.has(fullPath.value))
-const childTree = computed(() => (isDir.value ? props.childrenMap.get(fullPath.value) ?? null : null))
+const childTree = computed(() =>
+  isDir.value ? (props.childrenMap.get(fullPath.value) ?? null) : null,
+)
 
 function onKeydown(e: KeyboardEvent) {
   if (isDir.value) {
@@ -64,23 +67,27 @@ function onKeydown(e: KeyboardEvent) {
     >
       <i
         v-if="isDir"
-        class="i-carbon-chevron-right text-12px text-text-3 transition-transform duration-150 shrink-0"
+        class="i-carbon-chevron-right text-12px text-text-3 transition-transform duration-fast shrink-0"
         :class="{ 'rotate-90': isExpanded }"
       />
       <i v-else class="w-3 shrink-0" />
       <i
         class="text-15px shrink-0"
-        :class="isDir
-          ? (isExpanded ? 'i-carbon-folder-open text-warning' : 'i-carbon-folder text-warning')
-          : `${fileIcon(entry.name)} text-text-3`"
+        :class="
+          isDir
+            ? isExpanded
+              ? 'i-carbon-folder-open text-warning'
+              : 'i-carbon-folder text-warning'
+            : `${fileIcon(entry.name)} text-text-3`
+        "
       />
       <span class="flex-1 truncate">{{ entry.name }}</span>
     </div>
 
     <!-- 展开的子目录 -->
     <template v-if="isExpanded">
-      <div v-if="isLoading" class="py-1 text-text-3" :style="{ paddingLeft: `${24 + depth * 14}px` }">
-        <NSpin size="small" />
+      <div v-if="isLoading" :style="{ paddingLeft: `${24 + depth * 14}px` }">
+        <LoadingState variant="inline" />
       </div>
       <template v-else-if="childTree">
         <FileTreeNode
@@ -95,15 +102,17 @@ function onKeydown(e: KeyboardEvent) {
           :children-map="childrenMap"
           :loading-set="loadingSet"
           :selected-path="selectedPath"
-          @toggle="p => emit('toggle', p)"
+          @toggle="(p) => emit('toggle', p)"
           @open-file="(p, e) => emit('open-file', p, e)"
         />
-        <div v-if="childTree.truncated" class="py-0.5 text-xs text-text-3" :style="{ paddingLeft: `${24 + depth * 14}px` }">
+        <div
+          v-if="childTree.truncated"
+          class="py-0.5 text-xs text-text-3"
+          :style="{ paddingLeft: `${24 + depth * 14}px` }"
+        >
           目录过大，已截断显示
         </div>
       </template>
     </template>
   </div>
 </template>
-
-

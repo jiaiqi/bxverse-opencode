@@ -14,6 +14,7 @@ import { useDetectPool } from '../composables/useDetectPool'
 import { useBranchAlignment } from '../composables/useBranchAlignment'
 import { useTakeover } from '../composables/useTakeover'
 import { useDialog, useMessage } from 'naive-ui'
+import LoadingState from '../components/LoadingState.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -29,8 +30,22 @@ const isQuick = computed(() => String(route.query.mode ?? '') === 'quick')
 const hasQuickSnapshot = computed(() => !!project.value?.lastQuickPublish)
 
 // composables
-const { statuses, failedRepos, detecting, failedRepoIds, changedRepoIds, detect, detectRepo, visibleCommits, hiddenCommitsCount, showAllCommits } = useDetectPool(projectId, project as never)
-const { branchAlignment, checkBranchAlignment, doBatchCheckout, doBatchPull } = useBranchAlignment(projectId, { detect, changedRepoIds })
+const {
+  statuses,
+  failedRepos,
+  detecting,
+  failedRepoIds,
+  changedRepoIds,
+  detect,
+  detectRepo,
+  visibleCommits,
+  hiddenCommitsCount,
+  showAllCommits,
+} = useDetectPool(projectId, project as never)
+const { branchAlignment, checkBranchAlignment, doBatchCheckout, doBatchPull } = useBranchAlignment(
+  projectId,
+  { detect, changedRepoIds },
+)
 const { checkRunningTask } = useTakeover()
 
 function applyQuickSnapshot(): void {
@@ -42,41 +57,50 @@ function applyQuickSnapshot(): void {
   store.backupSource = snap.backupSource
   store.backupArtifacts = snap.backupArtifacts
   const changed = changedRepoIds.value
-  const target = snap.repoIds.length ? snap.repoIds.filter(id => changed.includes(id)) : [...changed]
+  const target = snap.repoIds.length
+    ? snap.repoIds.filter((id) => changed.includes(id))
+    : [...changed]
   if (target.length > 0) store.setSelected(target)
   else store.setSelected([...changed])
 }
 
-watch(projectId, async (id) => {
-  if (!projectsStore.byId(id)) await projectsStore.load()
-  store.reset(id)
-  const q = Number(route.query.step)
-  if (q >= 1 && q <= 6) {
-    // 直接赋值以恢复深链刷新；守卫仍走 store.goTo
-    store.step = q
-  }
-  await Promise.all([detect(), checkBranchAlignment()])
-  if (isQuick.value && hasQuickSnapshot.value) {
-    applyQuickSnapshot()
-    // 快速通道：自动跳过反复重选，检测后直接进入版本与日志（仍需人审 confirm 与 dry-run 门禁）
-    // 仅在初始步骤 1 时自动推进，避免覆盖用户深链刷新到其他步骤的意图
-    if (store.step === 1 && store.selectedRepoIds.length > 0) {
-      if (store.goTo(2)) {
-        await store.loadPlan()
-        // 版本推演完成即展示日志草稿，用户只剩双轨确认 + dry-run + 执行 ≤5 步
-        if (store.plan) store.goTo(3)
-      }
+watch(
+  projectId,
+  async (id) => {
+    if (!projectsStore.byId(id)) await projectsStore.load()
+    store.reset(id)
+    const q = Number(route.query.step)
+    if (q >= 1 && q <= 6) {
+      // 直接赋值以恢复深链刷新；守卫仍走 store.goTo
+      store.step = q
     }
-  } else store.setSelected(changedRepoIds.value)
-  void checkRunningTask()
-}, { immediate: true })
+    await Promise.all([detect(), checkBranchAlignment()])
+    if (isQuick.value && hasQuickSnapshot.value) {
+      applyQuickSnapshot()
+      // 快速通道：自动跳过反复重选，检测后直接进入版本与日志（仍需人审 confirm 与 dry-run 门禁）
+      // 仅在初始步骤 1 时自动推进，避免覆盖用户深链刷新到其他步骤的意图
+      if (store.step === 1 && store.selectedRepoIds.length > 0) {
+        if (store.goTo(2)) {
+          await store.loadPlan()
+          // 版本推演完成即展示日志草稿，用户只剩双轨确认 + dry-run + 执行 ≤5 步
+          if (store.plan) store.goTo(3)
+        }
+      }
+    } else store.setSelected(changedRepoIds.value)
+    void checkRunningTask()
+  },
+  { immediate: true },
+)
 
 // route.query.mode 变化时同步应用快照（不重置检测结果）
-watch(() => String(route.query.mode ?? ''), (mode) => {
-  if (mode === 'quick' && hasQuickSnapshot.value && changedRepoIds.value.length > 0) {
-    applyQuickSnapshot()
-  }
-})
+watch(
+  () => String(route.query.mode ?? ''),
+  (mode) => {
+    if (mode === 'quick' && hasQuickSnapshot.value && changedRepoIds.value.length > 0) {
+      applyQuickSnapshot()
+    }
+  },
+)
 
 // 站内路由切换守卫：步骤 2-5 有未保存日志编辑或发布进行中时离开需确认
 onBeforeRouteLeave((_to, _from, next) => {
@@ -195,8 +219,15 @@ function goNext() {
         title="快速发布模式 · 已预填上次配置（≤5 步完成 patch）"
       >
         <div class="flex items-center justify-between gap-3 flex-wrap text-xs">
-          <span>已自动勾选上次仓库与 bump（{{ project.lastQuickPublish?.bump }}）及构建/离线/备份开关；仅需确认双轨日志与预检即可执行。门禁（dry-run 与双轨 confirmed）保持强制，人审为终。</span>
-          <NButton size="tiny" quaternary @click="router.replace(`/project/${projectId}/release`)">切换到详细模式</NButton>
+          <span
+            >已自动勾选上次仓库与 bump（{{
+              project.lastQuickPublish?.bump
+            }}）及构建/离线/备份开关；仅需确认双轨日志与预检即可执行。门禁（dry-run 与双轨
+            confirmed）保持强制，人审为终。</span
+          >
+          <NButton size="tiny" quaternary @click="router.replace(`/project/${projectId}/release`)"
+            >切换到详细模式</NButton
+          >
         </div>
       </NAlert>
       <NAlert
@@ -208,7 +239,9 @@ function goNext() {
       >
         <div class="flex items-center justify-between gap-3 flex-wrap text-xs">
           <span>首次发布请使用详细模式，完成一次发布后将自动记录配置供快速发布复用。</span>
-          <NButton size="tiny" quaternary @click="router.replace(`/project/${projectId}/release`)">去详细模式</NButton>
+          <NButton size="tiny" quaternary @click="router.replace(`/project/${projectId}/release`)"
+            >去详细模式</NButton
+          >
         </div>
       </NAlert>
       <!-- 6 步发版微流水线时间轴卡片 (Glass Panel Timeline) -->
@@ -217,11 +250,15 @@ function goNext() {
           <div>
             <h2 class="text-base font-bold text-text-1 flex items-center gap-2 m-0">
               <span>统一发版流水线</span>
-              <span class="text-xs font-mono px-2 py-0.5 rounded bg-brand-soft text-brand-500 border border-brand-200">
+              <span
+                class="text-xs font-mono px-2 py-0.5 rounded bg-brand-soft text-brand-500 border border-brand-200"
+              >
                 {{ project.version }} → {{ store.plan?.projectVersion ?? '推演中' }}
               </span>
             </h2>
-            <p class="text-xs text-text-3 mt-1 m-0">跨工程批量推演语义版本、审核双轨日志、打包归档与 Git 里程碑打 Tag</p>
+            <p class="text-xs text-text-3 mt-1 m-0">
+              跨工程批量推演语义版本、审核双轨日志、打包归档与 Git 里程碑打 Tag
+            </p>
           </div>
         </div>
         <div class="flex items-stretch gap-2 pt-2 overflow-x-auto">
@@ -232,7 +269,7 @@ function goNext() {
               { title: '双轨日志', desc: 'Changelog' },
               { title: '预检预演', desc: 'Dry-Run' },
               { title: '执行发版', desc: 'SSE Terminal' },
-              { title: '完成归档', desc: 'Done' }
+              { title: '完成归档', desc: 'Done' },
             ]"
             :key="idx"
             class="flex flex-col items-center text-center cursor-pointer min-w-[80px] flex-1 focus-ring rounded-md"
@@ -248,14 +285,20 @@ function goNext() {
             <div
               class="w-7 h-7 rounded-full flex items-center justify-center text-xs font-mono font-bold mb-1.5 transition-[background-color,border-color,color,box-shadow,transform,opacity]"
               :class="[
-                store.step > idx + 1 ? 'bg-brand-500 text-black shadow-glow-emerald' :
-                store.step === idx + 1 ? 'bg-info text-black animate-pulse font-extrabold shadow-glow-cyan' :
-                'bg-surface-alt text-text-3 border border-border'
+                store.step > idx + 1
+                  ? 'bg-brand-500 text-black shadow-glow-emerald'
+                  : store.step === idx + 1
+                    ? 'bg-info text-black animate-pulse font-extrabold shadow-glow-cyan'
+                    : 'bg-surface-alt text-text-3 border border-border',
               ]"
             >
               {{ idx + 1 }}
             </div>
-            <span class="text-xs font-medium" :class="store.step === idx + 1 ? 'text-text-1 font-bold' : 'text-text-2'">{{ st.title }}</span>
+            <span
+              class="text-xs font-medium"
+              :class="store.step === idx + 1 ? 'text-text-1 font-bold' : 'text-text-2'"
+              >{{ st.title }}</span
+            >
             <span class="text-[10px] text-text-3 font-mono">{{ st.desc }}</span>
           </div>
         </div>
@@ -310,7 +353,11 @@ function goNext() {
         </NButton>
         <div class="flex items-center gap-2.5">
           <template v-if="store.step === 1">
-            <NButton type="primary" :disabled="store.selectedRepoIds.length === 0" @click="gotoStep2">
+            <NButton
+              type="primary"
+              :disabled="store.selectedRepoIds.length === 0"
+              @click="gotoStep2"
+            >
               下一步
               <template #icon><i aria-hidden="true" class="i-carbon-arrow-right" /></template>
             </NButton>
@@ -330,7 +377,12 @@ function goNext() {
           <template v-else-if="store.step === 4">
             <NTooltip :disabled="store.canExecute" trigger="hover">
               <template #trigger>
-                <NButton type="primary" :disabled="!store.canExecute" :loading="store.phase === 'running'" @click="execute">
+                <NButton
+                  type="primary"
+                  :disabled="!store.canExecute"
+                  :loading="store.phase === 'running'"
+                  @click="execute"
+                >
                   <template #icon><i aria-hidden="true" class="i-carbon-rocket" /></template>
                   执行发布
                 </NButton>
@@ -347,8 +399,6 @@ function goNext() {
         </div>
       </div>
     </template>
-    <div v-else class="py-10 text-center text-text-3">
-      <NSpin size="small" />
-    </div>
+    <div v-else><LoadingState /></div>
   </div>
 </template>

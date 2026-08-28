@@ -91,7 +91,15 @@ const sparkBars = computed(() => {
     const xc = pad + i * slot + (slot - barW) / 2
     const ratio = x.releases / weeklyMax.value
     const bh = Math.max(1, ratio * (h - pad * 2))
-    return { x: xc, y: h - pad - bh, w: barW, h: bh, label: x.week, count: x.releases, projects: x.projects }
+    return {
+      x: xc,
+      y: h - pad - bh,
+      w: barW,
+      h: bh,
+      label: x.week,
+      count: x.releases,
+      projects: x.projects,
+    }
   })
 })
 
@@ -177,22 +185,48 @@ usePolling(refresh, () => appStore.pollInterval || 30_000)
           <div class="flex items-center gap-2">
             <i aria-hidden="true" class="i-carbon-chart-histogram text-brand-500" />
             <h3 class="text-sm font-semibold text-text-1">近 8 周发布节奏</h3>
-            <span class="text-[11px] text-text-3 font-mono">共 {{ totalRecent }} 次 · 跨项目聚合</span>
+            <span class="text-[11px] text-text-3 font-mono"
+              >共 {{ totalRecent }} 次 · 跨项目聚合</span
+            >
           </div>
           <div v-if="peakWeek" class="text-[11px] text-text-3 flex items-center gap-1">
             <i aria-hidden="true" class="i-carbon-storm-warning text-warning" />
             峰值 <b class="text-text-1 font-mono">{{ peakWeek.week }}</b> · {{ peakWeek.count }} 次
           </div>
         </div>
-        <div v-if="!weekly.length && !projectsStore.overviewLoading" class="text-xs text-text-3 text-center py-6">暂无发布数据</div>
+        <div
+          v-if="!weekly.length && !projectsStore.overviewLoading"
+          class="text-xs text-text-3 text-center py-6"
+        >
+          暂无发布数据
+        </div>
         <div v-else class="flex items-end gap-3">
-          <svg viewBox="0 0 120 40" class="w-44 h-14 shrink-0" preserveAspectRatio="none" aria-label="近 8 周发布次数柱状图">
-            <rect v-for="(b, i) in sparkBars" :key="i" :x="b.x" :y="b.y" :width="b.w" :height="b.h" rx="1.5"
-                  :class="b.count === weeklyMax && b.count > 0 ? 'fill-warn' : 'fill-brand-500'"
-                  :opacity="b.count === 0 ? 0.15 : 1" />
+          <svg
+            viewBox="0 0 120 40"
+            class="w-44 h-14 shrink-0"
+            preserveAspectRatio="none"
+            aria-label="近 8 周发布次数柱状图"
+          >
+            <rect
+              v-for="(b, i) in sparkBars"
+              :key="i"
+              :x="b.x"
+              :y="b.y"
+              :width="b.w"
+              :height="b.h"
+              rx="1.5"
+              :class="b.count === weeklyMax && b.count > 0 ? 'fill-warn' : 'fill-brand-500'"
+              :opacity="b.count === 0 ? 0.15 : 1"
+            />
           </svg>
-          <div class="flex-1 grid grid-cols-8 gap-1 text-center text-[10px] text-text-3 font-mono self-end">
-            <div v-for="b in sparkBars" :key="b.label" :title="`${b.label} · ${b.count} 次 · ${b.projects} 项目`">
+          <div
+            class="flex-1 grid grid-cols-8 gap-1 text-center text-[10px] text-text-3 font-mono self-end"
+          >
+            <div
+              v-for="b in sparkBars"
+              :key="b.label"
+              :title="`${b.label} · ${b.count} 次 · ${b.projects} 项目`"
+            >
               <div class="truncate">{{ b.label.slice(5) }}</div>
               <div class="text-text-1 font-semibold text-[11px]">{{ b.count }}</div>
             </div>
@@ -206,11 +240,20 @@ usePolling(refresh, () => appStore.pollInterval || 30_000)
           <h3 class="text-sm font-semibold text-text-1">分支巡检与一键对齐</h3>
         </div>
         <p class="text-xs text-text-3 leading-relaxed mb-3">
-          进入项目查看未停留在主发布分支的工程，并在向导里一键切回 + pull。每个项目支持独立 dry-run 预检。
+          进入项目查看未停留在主发布分支的工程，并在向导里一键切回 + pull。每个项目支持独立 dry-run
+          预检。
         </p>
         <div class="mt-auto flex gap-2">
-          <NButton size="small" type="primary" :disabled="!projectsStore.items.length"
-                   @click="router.push(projectsStore.items[0]?.id ? `/project/${projectsStore.items[0].id}` : '/')">
+          <NButton
+            size="small"
+            type="primary"
+            :disabled="!projectsStore.items.length"
+            @click="
+              router.push(
+                projectsStore.items[0]?.id ? `/project/${projectsStore.items[0].id}` : '/',
+              )
+            "
+          >
             前往首个项目
           </NButton>
           <NButton size="small" quaternary @click="$router.push('/ops')">查看健康页</NButton>
@@ -238,7 +281,7 @@ usePolling(refresh, () => appStore.pollInterval || 30_000)
             /></template>
           </NInput>
           <button
-            class="text-xs font-mono text-brand-500 hover:underline flex items-center gap-1 bg-transparent border-0 cursor-pointer"
+            class="text-xs font-mono text-brand-500 hover:underline flex items-center gap-1 bg-transparent border-0 cursor-pointer focus-ring rounded"
             @click="showAddProject = true"
           >
             <i aria-hidden="true" class="i-carbon-add text-12px" /> 新建业务项目
@@ -296,7 +339,7 @@ usePolling(refresh, () => appStore.pollInterval || 30_000)
                 v-for="r in group.repos"
                 :key="r.repoId"
                 :to="`/repo/${r.projectId}/${r.repoId}`"
-                class="no-underline flex items-center gap-2 px-3 py-1.5 rounded-lg border border-border bg-surface-alt hover:border-brand-300 hover:bg-brand-soft transition-colors duration-150 text-xs font-mono text-text-1 group"
+                class="no-underline flex items-center gap-2 px-3 py-1.5 rounded-lg border border-border bg-surface-alt hover:border-brand-300 hover:bg-brand-soft transition-colors duration-fast text-xs font-mono text-text-1 group"
               >
                 <i
                   aria-hidden="true"

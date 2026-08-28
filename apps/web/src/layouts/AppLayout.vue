@@ -222,7 +222,7 @@ function triggerFastRelease() {
                 currentProject ? `当前项目 ${currentProject.name}，点击切换项目` : '请选择项目'
               "
               @keydown="onTriggerKeydown"
-              class="flex items-center gap-2 px-2.5 py-1 rounded-md bg-surface-hover hover:bg-surface-alt border border-border text-xs transition-colors cursor-pointer text-text-1"
+              class="flex items-center gap-2 px-2.5 py-1 rounded-md bg-surface-hover hover:bg-surface-alt border border-border text-xs transition-colors cursor-pointer text-text-1 focus-ring"
             >
               <span class="w-2 h-2 rounded-full bg-brand-500" aria-hidden="true"></span>
               <span class="font-medium text-text-1">{{
@@ -251,8 +251,8 @@ function triggerFastRelease() {
                 tabindex="0"
                 aria-label="新建项目"
                 @click="
-                  showAddProject = true;
-                  closeProjectMenu(true);
+                  showAddProject = true
+                  closeProjectMenu(true)
                 "
                 class="text-brand-500 hover:underline flex items-center gap-0.5 bg-transparent border-0 cursor-pointer focus-ring rounded px-1"
               >
@@ -301,7 +301,7 @@ function triggerFastRelease() {
       <div class="flex-1 max-w-md mx-4">
         <button
           @click="uiStore.togglePalette(true)"
-          class="w-full flex items-center justify-between px-3 py-1 rounded-md bg-surface-alt hover:bg-surface-hover border border-border text-text-3 text-xs transition-[background-color,border-color,color] cursor-pointer"
+          class="w-full flex items-center justify-between px-3 py-1 rounded-md bg-surface-alt hover:bg-surface-hover border border-border text-text-3 text-xs transition-[background-color,border-color,color] cursor-pointer focus-ring"
         >
           <div class="flex items-center gap-2">
             <i aria-hidden="true" class="i-carbon-search text-text-3" />
@@ -320,7 +320,7 @@ function triggerFastRelease() {
         <button
           v-if="currentProject"
           @click="showAddRepo = true"
-          class="flex items-center gap-1 px-2.5 py-1 rounded-md bg-surface-hover hover:bg-surface-alt border border-border text-xs text-info hover:text-text-1 transition-colors cursor-pointer"
+          class="flex items-center gap-1 px-2.5 py-1 rounded-md bg-surface-hover hover:bg-surface-alt border border-border text-xs text-info hover:text-text-1 transition-colors cursor-pointer focus-ring"
           title="向当前项目接入新 Git 仓库"
         >
           <i aria-hidden="true" class="i-carbon-branch text-12px" />
@@ -330,7 +330,7 @@ function triggerFastRelease() {
         <!-- 新建项目 -->
         <button
           @click="showAddProject = true"
-          class="flex items-center gap-1 px-2.5 py-1 rounded-md bg-surface-hover hover:bg-surface-alt border border-border text-xs text-text-2 hover:text-text-1 transition-colors cursor-pointer"
+          class="flex items-center gap-1 px-2.5 py-1 rounded-md bg-surface-hover hover:bg-surface-alt border border-border text-xs text-text-2 hover:text-text-1 transition-colors cursor-pointer focus-ring"
           title="创建新业务项目"
         >
           <i aria-hidden="true" class="i-carbon-add text-12px text-brand-500" />
@@ -344,7 +344,7 @@ function triggerFastRelease() {
           <button
             @click="syncData('pull')"
             :disabled="syncing"
-            class="p-0.5 hover:text-text-1 bg-transparent border-0 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+            class="p-0.5 hover:text-text-1 bg-transparent border-0 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed focus-ring rounded"
             title="从远程数据仓库拉取 (git pull)"
             aria-label="拉取数据仓库"
           >
@@ -353,7 +353,7 @@ function triggerFastRelease() {
           <button
             @click="syncData('push')"
             :disabled="syncing"
-            class="p-0.5 hover:text-text-1 bg-transparent border-0 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+            class="p-0.5 hover:text-text-1 bg-transparent border-0 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed focus-ring rounded"
             title="向远程数据仓库推送 (git push)"
             aria-label="推送数据仓库"
           >
@@ -374,7 +374,7 @@ function triggerFastRelease() {
         <!-- 一键统一发布大按钮 -->
         <button
           @click="triggerFastRelease"
-          class="btn-primary h-7.5 px-3.5 text-xs font-bold font-mono"
+          class="btn-primary h-7.5 px-3.5 text-xs font-bold font-mono focus-ring"
         >
           <i aria-hidden="true" class="i-carbon-rocket text-13px" />
           <span>统一发版</span>
@@ -415,7 +415,7 @@ function triggerFastRelease() {
         <div class="space-y-2">
           <button
             @click="uiStore.toggleOnboarding(true)"
-            class="w-10 h-10 rounded-xl flex items-center justify-center text-text-3 hover:bg-surface-hover hover:text-text-1 cursor-pointer bg-transparent border-0"
+            class="w-10 h-10 rounded-xl flex items-center justify-center text-text-3 hover:bg-surface-hover hover:text-text-1 cursor-pointer bg-transparent border-0 focus-ring"
             title="重看新手引导（M5-08）"
             aria-label="重看新手引导"
           >

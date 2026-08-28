@@ -3,6 +3,7 @@ import type { ProjectDef, RepoStatus, BranchAlignmentResult } from '@bxverse/sha
 import { usePublishStore } from '../../stores/publish'
 import StatusBadge from '../StatusBadge.vue'
 import EmptyState from '../EmptyState.vue'
+import LoadingState from '../LoadingState.vue'
 
 const props = defineProps<{
   project: ProjectDef | undefined
@@ -51,9 +52,8 @@ function commitIncluded(repoId: string, fullHash: string): boolean {
 
 <template>
   <div>
-    <div v-if="detecting" class="flex items-center gap-3 py-8 justify-center text-text-3">
-      <NSpin size="small" />
-      正在检测各仓库变更…
+    <div v-if="detecting">
+      <LoadingState text="正在检测各仓库变更…" pad="compact" />
     </div>
     <template v-else>
       <!-- 分支协同巡检警示条 (R25 / 建议 1) -->
@@ -65,12 +65,21 @@ function commitIncluded(repoId: string, fullHash: string): boolean {
           <i aria-hidden="true" class="i-carbon-warning-filled text-warning shrink-0 text-base" />
           <span class="text-text-1">
             发版前分支巡检预警：检测到
-            <strong class="text-warning">{{ branchAlignment.items.filter(x => !x.isAligned).map(x => `${x.repoName} (${x.branch})`).join('、') }}</strong>
+            <strong class="text-warning">{{
+              branchAlignment.items
+                .filter((x) => !x.isAligned)
+                .map((x) => `${x.repoName} (${x.branch})`)
+                .join('、')
+            }}</strong>
             未在主发布分支 ({{ branchAlignment.defaultBranch }})
           </span>
         </div>
         <div class="flex items-center gap-2 shrink-0">
-          <NButton size="tiny" type="warning" @click="emit('batchCheckout', branchAlignment.defaultBranch)">
+          <NButton
+            size="tiny"
+            type="warning"
+            @click="emit('batchCheckout', branchAlignment.defaultBranch)"
+          >
             <template #icon><i aria-hidden="true" class="i-carbon-reset" /></template>
             一键切至主分支
           </NButton>
@@ -82,10 +91,18 @@ function commitIncluded(repoId: string, fullHash: string): boolean {
       </div>
 
       <div v-if="project" class="space-y-3">
-        <div v-for="repo in project.repos" :key="repo.id" class="wz-row rounded-md border bg-surface"
-          :class="failedRepos.has(repo.id)
-            ? 'border-error/50 bg-error-soft'
-            : statuses.get(repo.id)?.changed ? 'border-brand-200 bg-brand-soft hover:border-brand-300' : 'border-border opacity-65 hover:border-border-strong'">
+        <div
+          v-for="repo in project.repos"
+          :key="repo.id"
+          class="wz-row rounded-md border bg-surface"
+          :class="
+            failedRepos.has(repo.id)
+              ? 'border-error/50 bg-error-soft'
+              : statuses.get(repo.id)?.changed
+                ? 'border-brand-200 bg-brand-soft hover:border-brand-300'
+                : 'border-border opacity-65 hover:border-border-strong'
+          "
+        >
           <div
             class="flex items-center gap-3 px-4 py-3 cursor-pointer focus-ring rounded-sm"
             role="button"
@@ -106,21 +123,49 @@ function commitIncluded(repoId: string, fullHash: string): boolean {
             <i aria-hidden="true" class="i-carbon-git-branch text-text-3" />
             <div class="min-w-0 flex-1">
               <div class="flex items-center gap-2 flex-wrap">
-                <span class="font-medium text-text-1 text-sm">{{ repo.displayName || repo.name }}</span>
+                <span class="font-medium text-text-1 text-sm">{{
+                  repo.displayName || repo.name
+                }}</span>
                 <span class="code-text text-xs text-text-3" translate="no">{{ repo.name }}</span>
-                <StatusBadge v-if="statuses.get(repo.id)?.changed" type="changed" :count="statuses.get(repo.id)!.commits.length" />
-                <StatusBadge v-if="statuses.get(repo.id) && statuses.get(repo.id)!.dirty > 0" type="dirty" :count="statuses.get(repo.id)!.dirty" />
+                <StatusBadge
+                  v-if="statuses.get(repo.id)?.changed"
+                  type="changed"
+                  :count="statuses.get(repo.id)!.commits.length"
+                />
+                <StatusBadge
+                  v-if="statuses.get(repo.id) && statuses.get(repo.id)!.dirty > 0"
+                  type="dirty"
+                  :count="statuses.get(repo.id)!.dirty"
+                />
               </div>
               <div class="text-xs text-text-3 mt-0.5">
                 {{ statuses.get(repo.id)?.head.slice(0, 7) }} · {{ statuses.get(repo.id)?.branch }}
               </div>
             </div>
-            <div class="text-xs" :class="failedRepos.has(repo.id) ? 'text-error font-medium' : statuses.get(repo.id)?.changed ? 'text-brand-600' : 'text-text-3'">
-              {{ failedRepos.has(repo.id) ? '检测失败' : statuses.get(repo.id)?.changed ? '有变动' : '已同步' }}
+            <div
+              class="text-xs"
+              :class="
+                failedRepos.has(repo.id)
+                  ? 'text-error font-medium'
+                  : statuses.get(repo.id)?.changed
+                    ? 'text-brand-600'
+                    : 'text-text-3'
+              "
+            >
+              {{
+                failedRepos.has(repo.id)
+                  ? '检测失败'
+                  : statuses.get(repo.id)?.changed
+                    ? '有变动'
+                    : '已同步'
+              }}
             </div>
           </div>
           <!-- 失败原因 + 单仓库重试 -->
-          <div v-if="failedRepos.has(repo.id)" class="px-4 pb-3 -mt-1 flex items-center gap-2 text-xs text-error">
+          <div
+            v-if="failedRepos.has(repo.id)"
+            class="px-4 pb-3 -mt-1 flex items-center gap-2 text-xs text-error"
+          >
             <i aria-hidden="true" class="i-carbon-warning-alt shrink-0" />
             <span class="flex-1 break-all">{{ failedRepos.get(repo.id) }}</span>
             <button class="link shrink-0" @click.stop="emit('detectRepo', repo.id)">重试</button>
@@ -128,15 +173,30 @@ function commitIncluded(repoId: string, fullHash: string): boolean {
           <!-- 提交级条目确认（变化收件箱语义：人工甄别哪些提交进版本） -->
           <div v-if="statuses.get(repo.id)?.changed" class="px-4 pb-3 -mt-1">
             <button
-              class="text-xs flex items-center gap-1.5 transition-colors duration-150 focus-ring"
-              :class="excludedCount(repo.id) > 0 ? 'text-warning hover:text-text-1' : 'text-text-3 hover:text-brand-500'"
+              class="text-xs flex items-center gap-1.5 transition-colors duration-fast focus-ring"
+              :class="
+                excludedCount(repo.id) > 0
+                  ? 'text-warning hover:text-text-1'
+                  : 'text-text-3 hover:text-brand-500'
+              "
               @click.stop="toggleCommitsPanel(repo.id)"
             >
-              <i aria-hidden="true" class="i-carbon-chevron-down transition-transform duration-150" :class="{ 'rotate-180': commitsExpanded.has(repo.id) }" />
+              <i
+                aria-hidden="true"
+                class="i-carbon-chevron-down transition-transform duration-fast"
+                :class="{ 'rotate-180': commitsExpanded.has(repo.id) }"
+              />
               {{ commitsExpanded.has(repo.id) ? '收起提交明细' : '提交明细' }}
-              <span v-if="excludedCount(repo.id) > 0" class="chip text-warning border-warning/30 bg-warning-soft">已排除 {{ excludedCount(repo.id) }} 条</span>
+              <span
+                v-if="excludedCount(repo.id) > 0"
+                class="chip text-warning border-warning/30 bg-warning-soft"
+                >已排除 {{ excludedCount(repo.id) }} 条</span
+              >
             </button>
-            <div v-if="commitsExpanded.has(repo.id)" class="mt-2 max-h-64 overflow-y-auto rounded-md border border-border bg-surface divide-y divide-border">
+            <div
+              v-if="commitsExpanded.has(repo.id)"
+              class="mt-2 max-h-64 overflow-y-auto rounded-md border border-border bg-surface divide-y divide-border"
+            >
               <label
                 v-for="c in visibleCommits(repo.id)"
                 :key="c.fullHash"
@@ -145,18 +205,37 @@ function commitIncluded(repoId: string, fullHash: string): boolean {
                 <NCheckbox
                   size="small"
                   :checked="commitIncluded(repo.id, c.fullHash)"
-                  @update:checked="(v: unknown) => store.toggleCommit(repo.id, c.fullHash, v as boolean)"
+                  @update:checked="
+                    (v: unknown) => store.toggleCommit(repo.id, c.fullHash, v as boolean)
+                  "
                 />
                 <span class="chip shrink-0 text-11px">{{ c.type }}</span>
-                <span class="flex-1 truncate text-sm" :class="{ 'opacity-50 line-through decoration-text-3': !commitIncluded(repo.id, c.fullHash) }">{{ c.subject }}</span>
-                <span class="code-text text-xs text-text-3 shrink-0" translate="no">{{ c.hash.slice(0, 7) }}</span>
+                <span
+                  class="flex-1 truncate text-sm"
+                  :class="{
+                    'opacity-50 line-through decoration-text-3': !commitIncluded(
+                      repo.id,
+                      c.fullHash,
+                    ),
+                  }"
+                  >{{ c.subject }}</span
+                >
+                <span class="code-text text-xs text-text-3 shrink-0" translate="no">{{
+                  c.hash.slice(0, 7)
+                }}</span>
               </label>
-              <div v-if="(statuses.get(repo.id)?.commits ?? []).length === 0" class="px-3 py-4 text-center text-xs text-text-3">
+              <div
+                v-if="(statuses.get(repo.id)?.commits ?? []).length === 0"
+                class="px-3 py-4 text-center text-xs text-text-3"
+              >
                 无提交
               </div>
               <div v-if="hiddenCommitsCount(repo.id) > 0" class="text-center py-2.5 bg-surface-alt">
                 <button class="link text-xs" @click="showAllCommits(repo.id)">
-                  展开全部 {{ hiddenCommitsCount(repo.id) }} 条提交（{{ (statuses.get(repo.id)?.commits ?? []).length }} 条共）
+                  展开全部 {{ hiddenCommitsCount(repo.id) }} 条提交（{{
+                    (statuses.get(repo.id)?.commits ?? []).length
+                  }}
+                  条共）
                 </button>
               </div>
             </div>
@@ -170,8 +249,9 @@ function commitIncluded(repoId: string, fullHash: string): boolean {
         <NAlert type="error" :show-icon="true" title="部分仓库检测失败">
           <div class="flex items-center justify-between gap-3 flex-wrap">
             <span class="flex-1 min-w-56">
-              {{ failedRepoIds.length }} 个仓库状态获取失败，无法确认是否有变动：{{ failedRepoIds.join('、') }}。
-              请先处理下方列出的错误（如仓库路径失效、git 权限等），再重新检测。
+              {{ failedRepoIds.length }} 个仓库状态获取失败，无法确认是否有变动：{{
+                failedRepoIds.join('、')
+              }}。 请先处理下方列出的错误（如仓库路径失效、git 权限等），再重新检测。
             </span>
             <NButton size="tiny" type="primary" secondary @click="emit('detect')">重新检测</NButton>
           </div>

@@ -3,6 +3,7 @@
 
 import { useMessage } from 'naive-ui'
 import DirPickerNode from './DirPickerNode.vue'
+import LoadingState from './LoadingState.vue'
 import { useLazyTree } from '../composables/useLazyTree'
 
 const props = defineProps<{
@@ -15,7 +16,11 @@ const props = defineProps<{
 const emit = defineEmits<{ 'update:modelValue': [path: string] }>()
 
 const message = useMessage()
-const { root, childrenMap, expanded, loadingSet, rootLoading, loadRoot, toggleDir, reset } = useLazyTree(() => props.pid, () => props.rid)
+const { root, childrenMap, expanded, loadingSet, rootLoading, loadRoot, toggleDir, reset } =
+  useLazyTree(
+    () => props.pid,
+    () => props.rid,
+  )
 
 async function wrappedLoadRoot(): Promise<void> {
   try {
@@ -54,9 +59,11 @@ onMounted(wrappedLoadRoot)
     <!-- 当前选中 -->
     <div class="flex items-center gap-2 px-3 py-2 bg-surface-alt border-b border-border text-xs">
       <i aria-hidden="true" class="i-carbon-folder text-warning text-14px" />
-      <span class="code-text text-text-2 flex-1 truncate">{{ modelValue || '（仓库根目录）' }}</span>
+      <span class="code-text text-text-2 flex-1 truncate">{{
+        modelValue || '（仓库根目录）'
+      }}</span>
       <button
-        class="text-text-3 hover:text-brand-500 transition-colors duration-150"
+        class="text-text-3 hover:text-brand-500 transition-colors duration-fast focus-ring rounded p-0.5"
         aria-label="清空为仓库根目录"
         @click="select('')"
       >
@@ -78,12 +85,10 @@ onMounted(wrappedLoadRoot)
         <i aria-hidden="true" class="i-carbon-home text-14px text-text-3" />
         <span class="flex-1 truncate">（仓库根目录）</span>
       </div>
-      <div v-if="rootLoading && !root" class="px-3 py-4 text-center text-text-3">
-        <NSpin size="small" />
-      </div>
+      <div v-if="rootLoading && !root"><LoadingState pad="compact" /></div>
       <template v-else-if="root">
         <DirPickerNode
-          v-for="entry in root.entries.filter(e => e.type === 'dir')"
+          v-for="entry in root.entries.filter((e) => e.type === 'dir')"
           :key="entry.name"
           :pid="pid"
           :rid="rid"
@@ -97,12 +102,13 @@ onMounted(wrappedLoadRoot)
           @toggle="wrappedToggleDir"
           @select="select"
         />
-        <div v-if="root.entries.filter(e => e.type === 'dir').length === 0" class="px-3 py-4 text-center text-xs text-text-3">
+        <div
+          v-if="root.entries.filter((e) => e.type === 'dir').length === 0"
+          class="px-3 py-4 text-center text-xs text-text-3"
+        >
           仓库中没有子目录（可选用根目录）
         </div>
       </template>
     </div>
   </div>
 </template>
-
-

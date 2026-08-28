@@ -41,7 +41,8 @@ async function onManage(key: string | number) {
     return
   }
   if (key === 'remove') {
-    const ownerId = projectsStore.items.find(p => p.repos.some(r => r.id === props.repo.id))?.id ?? ''
+    const ownerId =
+      projectsStore.items.find((p) => p.repos.some((r) => r.id === props.repo.id))?.id ?? ''
     dialog.warning({
       title: '移除仓库',
       content: `确定将「${props.repo.displayName || props.repo.name}」从当前项目移除？\n仅移除管理定义，不会删除本地代码（不勾选 purge）。`,
@@ -64,7 +65,7 @@ async function onManage(key: string | number) {
 <template>
   <RouterLink
     :to="to"
-    class="p-4.5 rounded-xl border border-border bg-surface hover:border-border-strong transition-[border-color,box-shadow,background-color,transform] duration-200 flex flex-col justify-between group shadow-sm hover:shadow-md focus-ring"
+    class="p-4.5 rounded-xl border border-border bg-surface hover:border-border-strong transition-[border-color,box-shadow,background-color,transform] duration-base flex flex-col justify-between group shadow-sm hover:shadow-md focus-ring"
   >
     <template v-if="loading">
       <div class="skeleton h-5 w-2/3 mb-3" />
@@ -92,7 +93,7 @@ async function onManage(key: string | number) {
           </div>
 
           <button
-            class="p-1 rounded-md text-text-3 hover:bg-surface-hover hover:text-brand-500 transition-colors cursor-pointer bg-transparent border-0 shrink-0"
+            class="p-1 rounded-md text-text-3 hover:bg-surface-hover hover:text-brand-500 transition-colors cursor-pointer bg-transparent border-0 shrink-0 focus-ring"
             aria-label="刷新仓库状态"
             title="重新检测仓库状态"
             @click.stop="emit('refresh')"
@@ -100,14 +101,9 @@ async function onManage(key: string | number) {
             <i aria-hidden="true" class="i-carbon-renew text-14px" />
           </button>
           <!-- M8 治理中枢：设置菜单（编辑/移除）—— 整卡是 RouterLink，所有交互 .stop 防误导航 -->
-          <NDropdown
-            trigger="click"
-            :options="manageOptions"
-            @select="onManage"
-            @click.stop
-          >
+          <NDropdown trigger="click" :options="manageOptions" @select="onManage" @click.stop>
             <button
-              class="p-1 rounded-md text-text-3 hover:bg-surface-hover hover:text-brand-500 transition-colors cursor-pointer bg-transparent border-0 shrink-0"
+              class="p-1 rounded-md text-text-3 hover:bg-surface-hover hover:text-brand-500 transition-colors cursor-pointer bg-transparent border-0 shrink-0 focus-ring"
               aria-label="仓库设置"
               title="仓库设置（编辑/移除）"
               @click.stop

@@ -16,6 +16,7 @@ import BackupPanel from '../components/BackupPanel.vue'
 import ReleaseNoteActions from '../components/ReleaseNoteActions.vue'
 import { useDialog, useMessage } from 'naive-ui'
 import { formatDate } from '../utils/format'
+import LoadingState from '../components/LoadingState.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -343,7 +344,7 @@ usePolling(
                 <span>关联 Git 仓库列表 ({{ project.repos.length }})</span>
               </h2>
               <button
-                class="text-xs font-mono text-info hover:underline flex items-center gap-1 bg-transparent border-0 cursor-pointer"
+                class="text-xs font-mono text-info hover:underline flex items-center gap-1 bg-transparent border-0 cursor-pointer focus-ring rounded"
                 @click="showAddRepo = true"
               >
                 <i aria-hidden="true" class="i-carbon-add text-12px" /> 接入新工程
@@ -382,9 +383,7 @@ usePolling(
               >
             </div>
 
-            <div v-if="releasesLoading" class="p-5 text-center text-text-3">
-              <NSpin size="small" />
-            </div>
+            <div v-if="releasesLoading"><LoadingState pad="compact" /></div>
             <div v-else-if="releases.length === 0" class="p-5">
               <EmptyState
                 title="暂无发布记录"
@@ -444,14 +443,14 @@ usePolling(
                       <div class="flex flex-col items-end gap-1.5">
                         <div class="flex gap-2">
                           <button
-                            class="text-brand-500 hover:underline bg-transparent border-0 cursor-pointer p-0"
+                            class="text-brand-500 hover:underline bg-transparent border-0 cursor-pointer p-0 focus-ring rounded"
                             @click="openDetail(r)"
                           >
                             查看日志
                           </button>
                           <button
                             v-if="!r.deprecated"
-                            class="text-warning hover:underline bg-transparent border-0 cursor-pointer p-0"
+                            class="text-warning hover:underline bg-transparent border-0 cursor-pointer p-0 focus-ring rounded"
                             @click="openDeprecate(r)"
                           >
                             标为废弃
@@ -480,15 +479,19 @@ usePolling(
                 v-if="releases.length >= 5"
                 class="pt-3 border-t border-border flex justify-center"
               >
-                <button v-if="!releaseExpanded" class="link text-xs" @click="expandReleases">
+                <button
+                  v-if="!releaseExpanded"
+                  class="link text-xs focus-ring rounded"
+                  @click="expandReleases"
+                >
                   展开查看全部历史（最多 100 条）
                 </button>
                 <button
                   v-else
-                  class="link text-xs"
+                  class="link text-xs focus-ring rounded"
                   @click="
-                    releaseExpanded = false;
-                    loadReleases();
+                    releaseExpanded = false
+                    loadReleases()
                   "
                 >
                   收起
@@ -581,9 +584,7 @@ usePolling(
         </template>
       </NModal>
     </template>
-    <div v-else-if="projectsStore.loading" class="p-10 text-center text-text-3">
-      <NSpin size="small" />
-    </div>
+    <div v-else-if="projectsStore.loading"><LoadingState /></div>
     <NResult
       v-else
       status="404"

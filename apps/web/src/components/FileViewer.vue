@@ -5,6 +5,7 @@ import hljs from 'highlight.js'
 import { api } from '../api'
 import { useMessage } from 'naive-ui'
 import { useFsAccess } from '../composables/useFsAccess'
+import LoadingState from './LoadingState.vue'
 
 const props = defineProps<{
   pid: string
@@ -21,10 +22,30 @@ const loading = ref(false)
 const lang = computed(() => {
   const ext = props.path.split('.').pop()?.toLowerCase() ?? ''
   const map: Record<string, string> = {
-    ts: 'typescript', tsx: 'typescript', js: 'javascript', jsx: 'javascript', mjs: 'javascript', mts: 'typescript',
-    vue: 'xml', json: 'json', jsonc: 'json', md: 'markdown', html: 'xml', htm: 'xml',
-    css: 'css', scss: 'scss', less: 'less', yml: 'yaml', yaml: 'yaml', toml: 'ini',
-    sh: 'bash', bash: 'bash', py: 'python', java: 'java', xml: 'xml', sql: 'sql',
+    ts: 'typescript',
+    tsx: 'typescript',
+    js: 'javascript',
+    jsx: 'javascript',
+    mjs: 'javascript',
+    mts: 'typescript',
+    vue: 'xml',
+    json: 'json',
+    jsonc: 'json',
+    md: 'markdown',
+    html: 'xml',
+    htm: 'xml',
+    css: 'css',
+    scss: 'scss',
+    less: 'less',
+    yml: 'yaml',
+    yaml: 'yaml',
+    toml: 'ini',
+    sh: 'bash',
+    bash: 'bash',
+    py: 'python',
+    java: 'java',
+    xml: 'xml',
+    sql: 'sql',
   }
   return map[ext] ?? ''
 })
@@ -89,7 +110,12 @@ async function downloadFile() {
 watch(() => props.path, load, { immediate: true })
 
 const segments = computed(() => props.path.split('/').filter(Boolean))
-const fmtSize = (n: number): string => (n < 1024 ? `${n} B` : n < 1024 * 1024 ? `${(n / 1024).toFixed(1)} KB` : `${(n / 1024 / 1024).toFixed(1)} MB`)
+const fmtSize = (n: number): string =>
+  n < 1024
+    ? `${n} B`
+    : n < 1024 * 1024
+      ? `${(n / 1024).toFixed(1)} KB`
+      : `${(n / 1024 / 1024).toFixed(1)} MB`
 </script>
 
 <template>
@@ -106,7 +132,7 @@ const fmtSize = (n: number): string => (n < 1024 ? `${n} B` : n < 1024 * 1024 ? 
         {{ fmtSize(meta.size) }} · {{ meta.lines }} 行
       </span>
       <button
-        class="w-7 h-7 flex items-center justify-center rounded-md text-text-3 hover:bg-surface-hover hover:text-text-1 transition-colors duration-150"
+        class="w-7 h-7 flex items-center justify-center rounded-md text-text-3 hover:bg-surface-hover hover:text-text-1 transition-colors duration-fast focus-ring"
         aria-label="下载文件（另存为）"
         :title="meta?.truncated ? '文件已截断，下载内容可能不完整' : '下载文件（另存为）'"
         :disabled="!content || meta?.binary"
@@ -115,7 +141,7 @@ const fmtSize = (n: number): string => (n < 1024 ? `${n} B` : n < 1024 * 1024 ? 
         <i aria-hidden="true" class="i-carbon-download text-14px" />
       </button>
       <button
-        class="w-7 h-7 flex items-center justify-center rounded-md text-text-3 hover:bg-surface-hover hover:text-text-1 transition-colors duration-150"
+        class="w-7 h-7 flex items-center justify-center rounded-md text-text-3 hover:bg-surface-hover hover:text-text-1 transition-colors duration-fast focus-ring"
         aria-label="复制文件内容"
         :disabled="!content"
         @click="copyContent"
@@ -126,9 +152,7 @@ const fmtSize = (n: number): string => (n < 1024 ? `${n} B` : n < 1024 * 1024 ? 
 
     <!-- 内容 -->
     <div class="flex-1 overflow-auto min-h-0">
-      <div v-if="loading" class="p-6 text-center text-text-3">
-        <NSpin size="small" />
-      </div>
+      <div v-if="loading"><LoadingState pad="compact" /></div>
       <template v-else-if="meta?.binary">
         <div class="empty-wrap py-10">
           <i aria-hidden="true" class="i-carbon-document-blank text-40px text-text-3" />
@@ -137,11 +161,11 @@ const fmtSize = (n: number): string => (n < 1024 ? `${n} B` : n < 1024 * 1024 ? 
       </template>
       <template v-else-if="content !== null">
         <div v-if="meta?.truncated" class="px-4 pt-3">
-          <NAlert type="warning" :show-icon="true">
-            文件过大，仅展示前 {{ meta.lines }} 行
-          </NAlert>
+          <NAlert type="warning" :show-icon="true"> 文件过大，仅展示前 {{ meta.lines }} 行 </NAlert>
         </div>
-        <pre class="m-0 p-4 text-13px leading-6 overflow-auto"><code class="hljs font-mono" v-html="highlighted" /></pre>
+        <pre
+          class="m-0 p-4 text-13px leading-6 overflow-auto"
+        ><code class="hljs font-mono" v-html="highlighted" /></pre>
       </template>
       <template v-else>
         <div class="empty-wrap py-10">

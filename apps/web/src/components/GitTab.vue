@@ -9,6 +9,7 @@ import type { GitFileDiff, GitFileStatus, GitStatus, AiExplainDiffResult } from 
 import { api } from '../api'
 import { useMessage } from 'naive-ui'
 import ErrorState from './ErrorState.vue'
+import LoadingState from './LoadingState.vue'
 
 const props = defineProps<{ projectId: string; repoId: string }>()
 const message = useMessage()
@@ -30,8 +31,8 @@ const commitModal = reactive({
 })
 const commitSummary = computed(() => {
   if (!status.value) return ''
-  const staged = status.value.files.filter(f => f.staged)
-  return staged.map(f => `${f.indexStatus}${f.workStatus} ${f.path}`).join('\n')
+  const staged = status.value.files.filter((f) => f.staged)
+  return staged.map((f) => `${f.indexStatus}${f.workStatus} ${f.path}`).join('\n')
 })
 
 // ---------- AI 解读 ----------
@@ -59,8 +60,8 @@ async function selectFile(path: string) {
   diffLoading.value = true
   explainResult.value = null
   try {
-    const file = status.value?.files.find(f => f.path === path)
-    const range = file?.untracked ? 'untracked' : (file?.staged ? 'staged' : 'unstaged')
+    const file = status.value?.files.find((f) => f.path === path)
+    const range = file?.untracked ? 'untracked' : file?.staged ? 'staged' : 'unstaged'
     selectedDiff.value = await api.gitDiff(props.projectId, props.repoId, path, range)
   } catch (e) {
     message.error((e as Error).message)
@@ -69,7 +70,10 @@ async function selectFile(path: string) {
   }
 }
 
-async function runStage(op: 'stage' | 'unstage', payload: { all?: boolean; paths?: string[] }): Promise<void> {
+async function runStage(
+  op: 'stage' | 'unstage',
+  payload: { all?: boolean; paths?: string[] },
+): Promise<void> {
   const isStage = op === 'stage'
   const apiFn = isStage ? api.gitStage : api.gitUnstage
   try {
@@ -87,8 +91,6 @@ async function runStage(op: 'stage' | 'unstage', payload: { all?: boolean; paths
     message.error((e as Error).message)
   }
 }
-
-
 
 async function doPush() {
   try {
@@ -125,8 +127,8 @@ async function aiCommitMessage() {
   commitModal.generating = true
   try {
     const fileSummary = status.value.files
-      .filter(f => f.staged)
-      .map(f => `${f.indexStatus}${f.workStatus} ${f.path}`)
+      .filter((f) => f.staged)
+      .map((f) => `${f.indexStatus}${f.workStatus} ${f.path}`)
       .join('\n')
     const r = await api.aiCommitMessage({ fileSummary, diff: await stagedDiff() })
     commitModal.subject = r.subject
@@ -141,13 +143,15 @@ async function aiCommitMessage() {
 
 async function stagedDiff(): Promise<string> {
   if (!status.value) return ''
-  const staged = status.value.files.filter(f => f.staged)
+  const staged = status.value.files.filter((f) => f.staged)
   const parts: string[] = []
   for (const f of staged.slice(0, 6)) {
     try {
       const r = await api.gitDiff(props.projectId, props.repoId, f.path, 'staged')
       parts.push(r.patch)
-    } catch { /* 跳过 */ }
+    } catch {
+      /* 跳过 */
+    }
   }
   return parts.join('\n\n')
 }
@@ -159,7 +163,10 @@ async function submitCommit() {
   }
   commitModal.submitting = true
   try {
-    const r = await api.gitCommit(props.projectId, props.repoId, { subject: commitModal.subject, body: commitModal.body })
+    const r = await api.gitCommit(props.projectId, props.repoId, {
+      subject: commitModal.subject,
+      body: commitModal.body,
+    })
     message.success(`已提交：${r.hash}`)
     commitModal.open = false
     await loadStatus()
@@ -175,7 +182,10 @@ async function aiExplain() {
   explainResult.value = null
   explainLoading.value = true
   try {
-    const r = await api.aiExplainDiff({ filePath: selectedDiff.value.path, diff: selectedDiff.value.patch })
+    const r = await api.aiExplainDiff({
+      filePath: selectedDiff.value.path,
+      diff: selectedDiff.value.patch,
+    })
     explainResult.value = r
   } catch (e) {
     message.error((e as Error).message)
@@ -183,8 +193,6 @@ async function aiExplain() {
     explainLoading.value = false
   }
 }
-
-
 
 function statusClass(f: GitFileStatus): string {
   if (f.untracked) return 'chip chip-info'
@@ -208,7 +216,8 @@ onMounted(loadStatus)
       <div class="flex items-center justify-between mb-3">
         <div class="flex items-center gap-2.5 flex-wrap">
           <span class="text-sm font-medium text-text-1">
-            <i aria-hidden="true" class="i-carbon-branch text-brand-500" /> {{ status?.branch || 'HEAD' }}
+            <i aria-hidden="true" class="i-carbon-branch text-brand-500" />
+            {{ status?.branch || 'HEAD' }}
           </span>
           <span v-if="status?.head" class="code-text text-xs text-text-3">{{ status.head }}</span>
           <span v-if="status && (status.ahead || status.behind)" class="text-xs text-text-2">
@@ -217,15 +226,31 @@ onMounted(loadStatus)
           </span>
         </div>
         <div class="flex items-center gap-1.5">
-          <NButton size="tiny" quaternary :disabled="!status?.hasRemote" :title="status?.hasRemote ? '拉取 (--ff-only)' : '无远端'" @click="doPull">
+          <NButton
+            size="tiny"
+            quaternary
+            :disabled="!status?.hasRemote"
+            :title="status?.hasRemote ? '拉取 (--ff-only)' : '无远端'"
+            @click="doPull"
+          >
             <template #icon><i aria-hidden="true" class="i-carbon-cloud-download" /></template>
             拉取
           </NButton>
-          <NButton size="tiny" quaternary :disabled="!status?.hasRemote" :title="status?.hasRemote ? '推送' : '无远端'" @click="doPush">
+          <NButton
+            size="tiny"
+            quaternary
+            :disabled="!status?.hasRemote"
+            :title="status?.hasRemote ? '推送' : '无远端'"
+            @click="doPush"
+          >
             <template #icon><i aria-hidden="true" class="i-carbon-cloud-upload" /></template>
             推送
           </NButton>
-          <NButton size="tiny" @click="openCommit" :disabled="!status || status.summary.staged === 0">
+          <NButton
+            size="tiny"
+            @click="openCommit"
+            :disabled="!status || status.summary.staged === 0"
+          >
             <template #icon><i aria-hidden="true" class="i-carbon-checkmark" /></template>
             提交
           </NButton>
@@ -233,13 +258,22 @@ onMounted(loadStatus)
       </div>
 
       <div class="flex items-center gap-3 text-xs text-text-2 mb-3">
-        <span>已暂存 <span class="font-semibold text-text-1">{{ status?.summary.staged ?? 0 }}</span></span>
-        <span>未暂存 <span class="font-semibold text-text-1">{{ status?.summary.unstaged ?? 0 }}</span></span>
-        <span>未追踪 <span class="font-semibold text-text-1">{{ status?.summary.untracked ?? 0 }}</span></span>
+        <span
+          >已暂存
+          <span class="font-semibold text-text-1">{{ status?.summary.staged ?? 0 }}</span></span
+        >
+        <span
+          >未暂存
+          <span class="font-semibold text-text-1">{{ status?.summary.unstaged ?? 0 }}</span></span
+        >
+        <span
+          >未追踪
+          <span class="font-semibold text-text-1">{{ status?.summary.untracked ?? 0 }}</span></span
+        >
         <NButton size="tiny" quaternary class="ml-auto" @click="loadStatus">刷新</NButton>
       </div>
 
-      <div v-if="statusLoading" class="py-12 text-center"><NSpin size="small" /></div>
+      <div v-if="statusLoading"><LoadingState pad="loose" /></div>
       <div v-else-if="statusError" class="py-6">
         <ErrorState title="加载失败" :reason="statusError" hint="请检查仓库状态或稍后重试">
           <template #actions>
@@ -247,16 +281,33 @@ onMounted(loadStatus)
           </template>
         </ErrorState>
       </div>
-      <div v-else-if="!status || status.files.length === 0" class="py-12 text-center text-xs text-text-3">
+      <div
+        v-else-if="!status || status.files.length === 0"
+        class="py-12 text-center text-xs text-text-3"
+      >
         <i aria-hidden="true" class="i-carbon-checkmark-outline text-2xl mb-2 block text-success" />
         工作区干净～无未提交变更
       </div>
       <div v-else>
-        <div v-if="status.summary.staged > 0 || status.summary.unstaged > 0" class="flex items-center gap-2 mb-2">
-          <NButton size="tiny" quaternary @click="runStage('stage', { all: true })" title="暂存全部">
+        <div
+          v-if="status.summary.staged > 0 || status.summary.unstaged > 0"
+          class="flex items-center gap-2 mb-2"
+        >
+          <NButton
+            size="tiny"
+            quaternary
+            @click="runStage('stage', { all: true })"
+            title="暂存全部"
+          >
             <i aria-hidden="true" class="i-carbon-add" /> 全部暂存
           </NButton>
-          <NButton size="tiny" quaternary v-if="status.summary.staged > 0" @click="runStage('unstage', { all: true })" title="撤销全部暂存">
+          <NButton
+            size="tiny"
+            quaternary
+            v-if="status.summary.staged > 0"
+            @click="runStage('unstage', { all: true })"
+            title="撤销全部暂存"
+          >
             <i aria-hidden="true" class="i-carbon-subtract" /> 全部撤销
           </NButton>
         </div>
@@ -304,7 +355,13 @@ onMounted(loadStatus)
         <div class="text-sm font-medium text-text-1 truncate">
           {{ selectedPath ? selectedPath : '选择一个文件查看 diff' }}
         </div>
-        <NButton v-if="selectedDiff" size="tiny" quaternary :loading="explainLoading" @click="aiExplain">
+        <NButton
+          v-if="selectedDiff"
+          size="tiny"
+          quaternary
+          :loading="explainLoading"
+          @click="aiExplain"
+        >
           <template #icon><i aria-hidden="true" class="i-carbon-sparkle" /></template>
           AI 解读
         </NButton>
@@ -314,16 +371,21 @@ onMounted(loadStatus)
         <i aria-hidden="true" class="i-carbon-document-blank text-2xl mb-2 block" />
         点击左侧文件查看差异
       </div>
-      <div v-else-if="diffLoading" class="py-12 text-center"><NSpin size="small" /></div>
+      <div v-else-if="diffLoading"><LoadingState pad="loose" /></div>
       <div v-else-if="selectedDiff" class="space-y-3">
-        <div v-if="explainResult" class="rounded-md border border-brand-soft bg-brand-soft/30 px-3 py-2.5 space-y-2">
+        <div
+          v-if="explainResult"
+          class="rounded-md border border-brand-soft bg-brand-soft/30 px-3 py-2.5 space-y-2"
+        >
           <div class="text-xs text-text-3 flex items-center justify-between">
             <span class="flex items-center gap-1.5">
               <i aria-hidden="true" class="i-carbon-sparkle text-brand-500" />
               AI 解读（由「{{ explainResult.provider ?? 'AI' }}」生成，仅供参考）
             </span>
           </div>
-          <div class="text-13px text-text-1"><span class="font-medium">意图：</span>{{ explainResult.intent }}</div>
+          <div class="text-13px text-text-1">
+            <span class="font-medium">意图：</span>{{ explainResult.intent }}
+          </div>
           <div v-if="explainResult.keyChanges.length">
             <div class="text-xs text-text-3 mb-1">关键变更</div>
             <ul class="text-13px text-text-2 space-y-0.5 list-disc pl-5">
@@ -337,7 +399,8 @@ onMounted(loadStatus)
             </ul>
           </div>
         </div>
-        <pre class="code-text text-xs bg-surface-alt rounded-md p-3 max-h-130 overflow-auto whitespace-pre-wrap break-all">{{ selectedDiff.patch }}<span v-if="selectedDiff.truncated" class="text-warning">\n... (diff 已截断，AI 解读可能不完整)</span></pre>
+        <pre
+          class="code-text text-xs bg-surface-alt rounded-md p-3 max-h-130 overflow-auto whitespace-pre-wrap break-all">{{ selectedDiff.patch }}<span v-if="selectedDiff.truncated" class="text-warning">\n... (diff 已截断，AI 解读可能不完整)</span></pre>
       </div>
     </div>
 
@@ -345,10 +408,17 @@ onMounted(loadStatus)
     <NModal v-model:show="commitModal.open" preset="card" title="提交" class="w-180 max-w-95vw">
       <div class="space-y-3">
         <div class="text-xs text-text-3">
-          <span class="font-medium text-text-1">已暂存 {{ status?.summary.staged ?? 0 }} 个文件</span>
+          <span class="font-medium text-text-1"
+            >已暂存 {{ status?.summary.staged ?? 0 }} 个文件</span
+          >
           <div class="flex items-center justify-between mb-1 mt-2">
             <span>提交信息（Conventional Commits）</span>
-            <NButton size="tiny" quaternary :loading="commitModal.generating" @click="aiCommitMessage">
+            <NButton
+              size="tiny"
+              quaternary
+              :loading="commitModal.generating"
+              @click="aiCommitMessage"
+            >
               <template #icon><i aria-hidden="true" class="i-carbon-sparkle" /></template>
               AI 生成
             </NButton>
@@ -356,21 +426,36 @@ onMounted(loadStatus)
         </div>
         <div class="field">
           <label for="cm-sub">标题</label>
-          <NInput id="cm-sub" v-model:value="commitModal.subject" placeholder="feat(scope): 简明描述" :input-props="{ autocomplete: 'off', spellcheck: 'false' }" />
+          <NInput
+            id="cm-sub"
+            v-model:value="commitModal.subject"
+            placeholder="feat(scope): 简明描述"
+            :input-props="{ autocomplete: 'off', spellcheck: 'false' }"
+          />
         </div>
         <div class="field">
           <label for="cm-body">详细说明</label>
-          <NInput id="cm-body" v-model:value="commitModal.body" type="textarea" :autosize="{ minRows: 4, maxRows: 10 }" placeholder="- 变更点 1&#10;- 变更点 2" />
+          <NInput
+            id="cm-body"
+            v-model:value="commitModal.body"
+            type="textarea"
+            :autosize="{ minRows: 4, maxRows: 10 }"
+            placeholder="- 变更点 1&#10;- 变更点 2"
+          />
         </div>
         <details v-if="commitSummary" class="text-xs text-text-3">
           <summary class="cursor-pointer">查看已暂存文件</summary>
-          <pre class="code-text mt-2 bg-surface-alt rounded-md p-2 max-h-60 overflow-auto">{{ commitSummary }}</pre>
+          <pre class="code-text mt-2 bg-surface-alt rounded-md p-2 max-h-60 overflow-auto">{{
+            commitSummary
+          }}</pre>
         </details>
       </div>
       <template #footer>
         <div class="flex justify-end gap-2.5">
           <NButton quaternary @click="commitModal.open = false">取消</NButton>
-          <NButton type="primary" :loading="commitModal.submitting" @click="submitCommit">提交</NButton>
+          <NButton type="primary" :loading="commitModal.submitting" @click="submitCommit"
+            >提交</NButton
+          >
         </div>
       </template>
     </NModal>

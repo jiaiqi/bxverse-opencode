@@ -2,6 +2,7 @@
 // DirPickerNode.vue —— 目录选择器递归节点（DirPicker 内部使用，仅目录）
 
 import type { FileEntry, TreeNode } from '@bxverse/shared'
+import LoadingState from './LoadingState.vue'
 
 defineOptions({ name: 'DirPickerNode' })
 
@@ -26,7 +27,7 @@ const fullPath = computed(() => (props.dir ? `${props.dir}/${props.entry.name}` 
 const isExpanded = computed(() => props.expanded.has(fullPath.value))
 const isLoading = computed(() => props.loadingSet.has(fullPath.value))
 const childTree = computed(() => props.childrenMap.get(fullPath.value) ?? null)
-const childDirs = computed(() => childTree.value?.entries.filter(e => e.type === 'dir') ?? [])
+const childDirs = computed(() => childTree.value?.entries.filter((e) => e.type === 'dir') ?? [])
 
 function onKeydown(e: KeyboardEvent) {
   if (e.key === 'ArrowRight' && !isExpanded.value) {
@@ -54,7 +55,9 @@ function onKeydown(e: KeyboardEvent) {
       :class="{ 'tree-row-active': selectedPath === fullPath }"
       @keydown="onKeydown"
     >
-      <i aria-hidden="true" class="i-carbon-chevron-right text-12px text-text-3 transition-transform duration-150 shrink-0 cursor-pointer hover:text-brand-500"
+      <i
+        aria-hidden="true"
+        class="i-carbon-chevron-right text-12px text-text-3 transition-transform duration-fast shrink-0 cursor-pointer hover:text-brand-500"
         :class="{ 'rotate-90': isExpanded }"
         @click.stop="emit('toggle', fullPath)"
       />
@@ -65,8 +68,8 @@ function onKeydown(e: KeyboardEvent) {
       <span class="flex-1 truncate" @click="emit('select', fullPath)">{{ entry.name }}</span>
     </div>
     <template v-if="isExpanded">
-      <div v-if="isLoading" class="py-1 text-text-3" :style="{ paddingLeft: `${24 + depth * 14}px` }">
-        <NSpin size="small" />
+      <div v-if="isLoading" :style="{ paddingLeft: `${24 + depth * 14}px` }">
+        <LoadingState variant="inline" />
       </div>
       <template v-else-if="childTree">
         <DirPickerNode
@@ -81,12 +84,10 @@ function onKeydown(e: KeyboardEvent) {
           :children-map="childrenMap"
           :loading-set="loadingSet"
           :selected-path="selectedPath"
-          @toggle="p => emit('toggle', p)"
-          @select="p => emit('select', p)"
+          @toggle="(p) => emit('toggle', p)"
+          @select="(p) => emit('select', p)"
         />
       </template>
     </template>
   </div>
 </template>
-
-
