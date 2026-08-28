@@ -23,7 +23,7 @@ function relTime(days: number): string {
 <template>
   <RouterLink
     :to="`/project/${project.id}`"
-    class="p-5 rounded-2xl border border-border bg-surface hover:border-border-strong transition-[border-color,box-shadow,background-color,transform] duration-base flex flex-col justify-between group shadow-sm hover:shadow-md focus-ring"
+    class="p-5 rounded-2xl border border-border bg-surface hover:border-border-strong transition-[border-color,box-shadow,background-color,transform] duration-base ease-spring hover:-translate-y-1 flex flex-col justify-between group shadow-sm hover:shadow-md focus-ring"
   >
     <div>
       <!-- 顶部：项目名称与版本号 -->

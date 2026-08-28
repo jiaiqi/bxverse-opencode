@@ -57,6 +57,7 @@ export default defineConfig({
     ['ease-bx', 'ease-[var(--bx-ease)]'],
     ['ease-bx-in', 'ease-[var(--bx-ease-in)]'],
     ['ease-bx-out', 'ease-[var(--bx-ease-out)]'],
+    ['ease-spring', 'ease-[var(--bx-ease-spring)]'],
     ['duration-fast', 'duration-[var(--bx-dur-fast)]'],
     ['duration-base', 'duration-[var(--bx-dur-base)]'],
     ['duration-slow', 'duration-[var(--bx-dur-slow)]'],

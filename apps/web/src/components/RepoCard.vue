@@ -74,7 +74,7 @@ async function onManage(key: string | number) {
     :to="to"
     :tabindex="tabindex"
     :data-repo-index="focusKey"
-    class="p-4.5 rounded-xl border border-border bg-surface hover:border-border-strong transition-[border-color,box-shadow,background-color,transform] duration-base flex flex-col justify-between group shadow-sm hover:shadow-md focus-ring"
+    class="p-4.5 rounded-xl border border-border bg-surface hover:border-border-strong transition-[border-color,box-shadow,background-color,transform] duration-base ease-spring hover:-translate-y-1 flex flex-col justify-between group shadow-sm hover:shadow-md focus-ring"
   >
     <template v-if="loading">
       <div class="skeleton h-5 w-2/3 mb-3" />

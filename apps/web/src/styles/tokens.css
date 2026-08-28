@@ -117,6 +117,8 @@
   --bx-ease: cubic-bezier(0.23, 1, 0.32, 1);
   --bx-ease-in: cubic-bezier(0.4, 0, 1, 1);
   --bx-ease-out: cubic-bezier(0, 0, 0.2, 1);
+  /* spring（back ease-out）：轻微过冲后回稳，用于卡片 hover 抬升等「活泼」反馈 */
+  --bx-ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
   /* 品牌主按钮文字色（亮色：近黑；暗色：深绿以保对比） */
   --bx-on-brand: #04140b;
   /* 控制台样式（code viewer/console-wrap 家族） */
