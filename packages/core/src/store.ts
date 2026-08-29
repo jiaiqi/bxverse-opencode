@@ -42,8 +42,8 @@ function deepMergeDefault(raw: Partial<AppConfig>): AppConfig {
       (raw as Record<string, unknown>).schemaVersion != null
         ? Number((raw as Record<string, unknown>).schemaVersion)
         : DEFAULT_APP_CONFIG.schemaVersion,
-    pwa: { ...DEFAULT_APP_CONFIG.pwa, ...(raw.pwa ?? {}) },
-    ai: { ...DEFAULT_APP_CONFIG.ai, ...(raw.ai ?? {}) },
+    pwa: { ...DEFAULT_APP_CONFIG.pwa, ...(raw.pwa as Partial<AppConfig['pwa']> | undefined) },
+    ai: { ...DEFAULT_APP_CONFIG.ai, ...(raw.ai as Partial<AppConfig['ai']> | undefined) },
     backup: raw.backup
       ? {
           ...DEFAULT_APP_CONFIG.backup!,
@@ -671,9 +671,7 @@ export class DataStore {
     return { kind, scopeId, versionSafe: versionSafePart }
   }
 
-  private readScopeIndexSync(
-    scopeId: string,
-  ):
+  private readScopeIndexSync(scopeId: string):
     | {
         id: string
         kind: ReleaseRecord['kind']
