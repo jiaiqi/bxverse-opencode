@@ -140,6 +140,11 @@ const grouped = computed(() => {
   return [...map.entries()]
 })
 
+function runCmd(cmd: Command) {
+  uiStore.togglePalette(false)
+  cmd.run()
+}
+
 watch(
   () => uiStore.paletteOpen,
   (open) => {
@@ -231,10 +236,7 @@ const flatActive = (groupIdx: number, itemIdx: number): number => {
                   : 'text-text-2 hover:bg-surface-hover border-l-transparent'
               "
               @mouseenter="activeIndex = flatActive(gi, ii)"
-              @click="
-                uiStore.togglePalette(false)
-                cmd.run()
-              "
+              @click="runCmd(cmd)"
             >
               <i aria-hidden="true" class="text-15px shrink-0" :class="cmd.icon" />
               <span class="flex-1 truncate text-left text-sm">{{ cmd.title }}</span>

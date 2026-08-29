@@ -685,11 +685,26 @@ html.dark .hljs-regexp {
   opacity: 0;
 }
 
-/* ==================== 入场 stagger（页面/列表元素错位淡入） ====================
-   模板用法：<div class="stagger-item" :style="{ '--stagger-delay': (idx * 40) + 'ms' }">
-   - 默认从 opacity 0 + translateY 8px 滑入，260ms ease-bx（与 prefers-reduced-motion 共存）
+/* ==================== a11y：skip-link ====================
+   键盘用户按 Tab 首键出现「跳到主内容」链接，跳过侧栏/顶栏直奔 main 区域。
+   视觉：默认 -translate-y-16 隐藏屏幕上方；focus 时 translate-y-0 滑入（spring 曲线）。
+   关联：AppLayout.vue 模板首元素，href="#main-content"（main 元素已加 id="main-content"）。
 */
-.stagger-item {
+模板用法：<div
+  class='stagger-item'
+  :style="{ '--stagger-delay': (idx * 40) + 'ms' }"
+  > -
+  默认从
+  opacity
+  0
+  + translateY
+  8px
+  滑入，260ms
+  ease-bx（与
+  prefers-reduced-motion
+  共存）
+  */
+  .stagger-item {
   opacity: 0;
   transform: translateY(8px);
   animation: bx-stagger-in var(--bx-dur-slow) var(--bx-ease) forwards;

@@ -184,6 +184,12 @@ function triggerFastRelease() {
 <template>
   <!-- 文本默认可选（版本号/日志等需复制），仅交互组件按需禁选 -->
   <div class="flex flex-col h-screen overflow-hidden bg-bg font-sans text-text-1">
+    <!-- a11y：键盘用户按 Tab 首键出现「跳到主内容」链接，跳过侧栏/顶栏直奔 main 区域 -->
+    <a
+      href="#main-content"
+      class="skip-link fixed top-2 left-2 z-50 px-3 py-2 rounded-md bg-brand-500 text-[var(--bx-on-brand)] text-sm font-semibold shadow-lg -translate-y-16 focus:translate-y-0 transition-transform duration-fast ease-spring focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
+      >跳到主内容</a
+    >
     <!-- 顶栏全局控制台 -->
     <header
       class="h-12 border-b border-border bg-surface/90 backdrop-blur px-4 flex items-center justify-between shrink-0 z-30"
