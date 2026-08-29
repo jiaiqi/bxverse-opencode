@@ -30,8 +30,6 @@ export function useLazyTree(pid: () => string, rid: () => string) {
     loadingSet.value = next
     try {
       childrenMap.value.set(dir, await api.tree(pid(), rid(), dir))
-    } catch (e) {
-      throw e
     } finally {
       const done = new Set(loadingSet.value)
       done.delete(dir)
