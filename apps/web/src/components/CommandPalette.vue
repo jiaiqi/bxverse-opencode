@@ -24,8 +24,20 @@ const inputRef = ref<HTMLInputElement | null>(null)
 
 const commands = computed<Command[]>(() => {
   const list: Command[] = [
-    { group: '页面', title: '总览', icon: 'i-carbon-dashboard', keywords: 'overview dashboard', run: () => router.push('/') },
-    { group: '页面', title: '设置', icon: 'i-carbon-settings', keywords: 'settings', run: () => router.push('/settings') },
+    {
+      group: '页面',
+      title: '总览',
+      icon: 'i-carbon-dashboard',
+      keywords: 'overview dashboard',
+      run: () => router.push('/'),
+    },
+    {
+      group: '页面',
+      title: '设置',
+      icon: 'i-carbon-settings',
+      keywords: 'settings',
+      run: () => router.push('/settings'),
+    },
   ]
   for (const p of projectsStore.items) {
     list.push({
@@ -58,7 +70,10 @@ const commands = computed<Command[]>(() => {
     icon: 'i-carbon-rocket',
     keywords: 'release publish',
     run: () => {
-      const p = projectsStore.items.find(x => (projectsStore.overview?.projects.find(o => o.id === x.id)?.changedRepoCount ?? 0) > 0)
+      const p = projectsStore.items.find(
+        (x) =>
+          (projectsStore.overview?.projects.find((o) => o.id === x.id)?.changedRepoCount ?? 0) > 0,
+      )
       if (p) router.push(`/project/${p.id}/release`)
     },
   })
@@ -84,7 +99,10 @@ const filtered = computed(() => {
   if (!q) return commands.value
   // 模糊匹配：标题中字符按顺序出现即命中（支持缩写）
   return commands.value
-    .map((c) => ({ c, score: fuzzyScore(c.title, q) || (c.keywords.toLowerCase().includes(q) ? 1 : 0) }))
+    .map((c) => ({
+      c,
+      score: fuzzyScore(c.title, q) || (c.keywords.toLowerCase().includes(q) ? 1 : 0),
+    }))
     .filter((x) => x.score > 0)
     .sort((a, b) => b.score - a.score)
     .map((x) => x.c)
@@ -122,13 +140,16 @@ const grouped = computed(() => {
   return [...map.entries()]
 })
 
-watch(() => uiStore.paletteOpen, (open) => {
-  if (open) {
-    query.value = ''
-    activeIndex.value = 0
-    nextTick(() => inputRef.value?.focus())
-  }
-})
+watch(
+  () => uiStore.paletteOpen,
+  (open) => {
+    if (open) {
+      query.value = ''
+      activeIndex.value = 0
+      nextTick(() => inputRef.value?.focus())
+    }
+  },
+)
 
 function onKeydown(e: KeyboardEvent) {
   if (e.key === 'ArrowDown') {
@@ -168,7 +189,9 @@ const flatActive = (groupIdx: number, itemIdx: number): number => {
     @update:show="(v: boolean) => uiStore.togglePalette(v)"
     transform-origin="center"
   >
-    <div class="w-160 max-w-90vw rounded-lg bg-surface border border-border shadow-lg overflow-hidden">
+    <div
+      class="w-160 max-w-90vw rounded-lg bg-surface border border-border shadow-lg overflow-hidden"
+    >
       <div class="flex items-center gap-2.5 px-4 h-12 border-b border-border">
         <i aria-hidden="true" class="i-carbon-search text-text-3 text-16px" />
         <input
@@ -201,14 +224,25 @@ const flatActive = (groupIdx: number, itemIdx: number): number => {
               :id="`cmd-${flatActive(gi, ii)}`"
               role="option"
               :aria-selected="flatActive(gi, ii) === activeIndex ? 'true' : 'false'"
-              class="w-full flex items-center gap-2.5 mx-2 px-3 h-9 rounded-md cursor-pointer transition-colors duration-100 focus-ring"
-              :class="flatActive(gi, ii) === activeIndex ? 'bg-brand-soft text-brand-600' : 'text-text-2 hover:bg-surface-hover'"
+              class="w-full flex items-center gap-2.5 mx-2 pl-[9px] pr-3 h-9 rounded-md cursor-pointer transition-[background-color,color,border-color,transform,box-shadow] duration-fast ease-spring focus-ring border-l-[3px]"
+              :class="
+                flatActive(gi, ii) === activeIndex
+                  ? 'bg-brand-soft text-brand-600 border-l-brand-500 shadow-glow-emerald'
+                  : 'text-text-2 hover:bg-surface-hover border-l-transparent'
+              "
               @mouseenter="activeIndex = flatActive(gi, ii)"
-              @click="uiStore.togglePalette(false); cmd.run()"
+              @click="
+                uiStore.togglePalette(false)
+                cmd.run()
+              "
             >
               <i aria-hidden="true" class="text-15px shrink-0" :class="cmd.icon" />
               <span class="flex-1 truncate text-left text-sm">{{ cmd.title }}</span>
-              <span v-if="cmd.group" class="text-[10px] text-text-3 font-mono shrink-0 hidden md:inline">{{ cmd.group }}</span>
+              <span
+                v-if="cmd.group"
+                class="text-[10px] text-text-3 font-mono shrink-0 hidden md:inline"
+                >{{ cmd.group }}</span
+              >
             </button>
           </template>
         </template>
@@ -218,10 +252,15 @@ const flatActive = (groupIdx: number, itemIdx: number): number => {
           role="status"
           aria-live="polite"
         >
-          没有匹配的命令 · 试试「<span class="text-text-2">发布</span>」「<span class="text-text-2">设置</span>」或项目名
+          没有匹配的命令 · 试试「<span class="text-text-2">发布</span>」「<span class="text-text-2"
+            >设置</span
+          >」或项目名
         </div>
       </div>
-      <div class="flex items-center gap-4 px-4 h-9 border-t border-border text-xs text-text-3" aria-hidden="true">
+      <div
+        class="flex items-center gap-4 px-4 h-9 border-t border-border text-xs text-text-3"
+        aria-hidden="true"
+      >
         <span><b class="text-text-2">↑↓</b> 选择</span>
         <span><b class="text-text-2">Enter</b> 执行</span>
         <span><b class="text-text-2">Esc</b> 关闭</span>
