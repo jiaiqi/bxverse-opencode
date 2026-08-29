@@ -89,6 +89,9 @@ export default defineConfig({
   },
   build: {
     outDir: 'dist',
+    // vendor-naive 实际 145 KB gzip（Naive UI 35 组件 + 共享 _internal/_mixins + lodash + date-fns + cssr），
+    // 是这个 UI 库的固有开销，进一步压榨 ROI 低、风险大。把告警阈值提到 600 KB。
+    chunkSizeWarningLimit: 600,
     rollupOptions: {
       output: {
         // vendor 拆分：把频繁复用的第三方库独立成长期缓存的 chunk

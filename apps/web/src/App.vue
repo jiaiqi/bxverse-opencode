@@ -2,7 +2,14 @@
 // App.vue —— 全局 Provider + 布局壳
 
 import { RouterView } from 'vue-router'
-import { darkTheme, NConfigProvider, NDialogProvider, NMessageProvider, NNotificationProvider, useOsTheme } from 'naive-ui'
+import {
+  darkTheme,
+  NConfigProvider,
+  NDialogProvider,
+  NMessageProvider,
+  NNotificationProvider,
+  useOsTheme,
+} from 'naive-ui'
 import { darkThemeOverrides, lightThemeOverrides, wenxiThemeOverrides } from './theme'
 import { useAppStore } from './stores/app'
 import { useUiStore, ONBOARDING_DONE_KEY } from './stores/ui'
@@ -18,9 +25,15 @@ const projectsStore = useProjectsStore()
 const osTheme = useOsTheme()
 
 // R20 主题风格：wenxi 为纯深色玻璃拟态套件（theme=dark + wenxiThemeOverrides）；indigo 走亮/暗双套件
-const naiveTheme = computed(() => (appStore.themeStyle === 'wenxi' ? darkTheme : appStore.isDark ? darkTheme : null))
+const naiveTheme = computed(() =>
+  appStore.themeStyle === 'wenxi' ? darkTheme : appStore.isDark ? darkTheme : null,
+)
 const naiveOverrides = computed(() =>
-  appStore.themeStyle === 'wenxi' ? wenxiThemeOverrides : appStore.isDark ? darkThemeOverrides : lightThemeOverrides,
+  appStore.themeStyle === 'wenxi'
+    ? wenxiThemeOverrides
+    : appStore.isDark
+      ? darkThemeOverrides
+      : lightThemeOverrides,
 )
 
 const bootError = ref('')
@@ -31,16 +44,23 @@ onMounted(async () => {
     await appStore.boot()
     // PWA 运行时开关（M5-01）：启动即按配置注册/注销 SW
     void applyPwa(appStore.config?.pwa.enabled ?? true)
-    await Promise.allSettled([projectsStore.load(), projectsStore.loadOverview()])
+  } catch (e) {
+    bootError.value = (e as Error).message
+    return
+  } finally {
+    // config 拿到即解除 layout 阻塞；projects/overview 改 fire-and-forget，
+    // 首屏可见时间从 boot+load+loadOverview 缩到 boot 阶段。
+    // 渐进加载由各 page 内部 skeleton / EmptyState / Stagger 承接。
+    booting.value = false
+  }
+  // 首屏数据 fire-and-forget：load 必须先于 Onboarding 判断（依赖 items 长度）
+  void projectsStore.load().then(() => {
     // M5-08：首次启动（尚无项目且未完成过引导）自动弹出新手引导
     if (projectsStore.items.length === 0 && !localStorage.getItem(ONBOARDING_DONE_KEY)) {
       uiStore.toggleOnboarding(true)
     }
-  } catch (e) {
-    bootError.value = (e as Error).message
-  } finally {
-    booting.value = false
-  }
+  })
+  void projectsStore.loadOverview()
 })
 
 // 设置页修改 PWA 开关后即时生效（配置变更 → 注册/注销）
@@ -52,9 +72,12 @@ watch(
 )
 
 // 系统主题变化 → 重新解析（仅 system 模式生效）
-watch(() => osTheme.value, () => {
-  if (appStore.themeMode === 'system') appStore.applyTheme()
-})
+watch(
+  () => osTheme.value,
+  () => {
+    if (appStore.themeMode === 'system') appStore.applyTheme()
+  },
+)
 
 // Ctrl+K 命令面板
 onMounted(() => {
@@ -80,34 +103,54 @@ onMounted(() => {
       <NDialogProvider>
         <NNotificationProvider>
           <template v-if="booting">
-              <div class="flex h-screen items-center justify-center gap-3 bg-bg">
-                <div class="flex flex-col items-center gap-4">
-                  <span class="sb-logo-mark w-11 h-11 rounded-xl"><i aria-hidden="true" class="i-carbon-cube text-18px" /></span>
-                  <span class="text-text-3 text-sm">正在连接本地服务…</span>
-                </div>
+            <div class="flex h-screen items-center justify-center gap-3 bg-bg">
+              <div class="flex flex-col items-center gap-4">
+                <span class="sb-logo-mark w-11 h-11 rounded-xl"
+                  ><i aria-hidden="true" class="i-carbon-cube text-18px"
+                /></span>
+                <span class="text-text-3 text-sm">正在连接本地服务…</span>
               </div>
-            </template>
-            <template v-else-if="bootError">
-              <div class="empty-wrap">
-                <span class="e-ic"><i aria-hidden="true" class="i-carbon-cloud-off text-24px text-text-3" /></span>
-                <div class="text-lg font-semibold text-text-1">无法连接 BX 版本管理台服务</div>
-                <div class="text-sm text-text-3 max-w-md">{{ bootError }}</div>
-                <button class="btn-primary mt-2" @click="() => { bootError = ''; booting = true; appStore.boot().catch(e => { bootError = e.message }).finally(() => { booting = false }) }">
-                  <i aria-hidden="true" class="i-carbon-renew" /> 重试
-                </button>
-              </div>
-            </template>
-            <AppLayout v-else>
-              <RouterView v-slot="{ Component }">
-                <Transition name="fade-slide" mode="out-in">
-                  <component :is="Component" />
-                </Transition>
-              </RouterView>
-            </AppLayout>
-            <CommandPalette />
-            <OnboardingWizard />
-          </NNotificationProvider>
-        </NDialogProvider>
-      </NMessageProvider>
+            </div>
+          </template>
+          <template v-else-if="bootError">
+            <div class="empty-wrap">
+              <span class="e-ic"
+                ><i aria-hidden="true" class="i-carbon-cloud-off text-24px text-text-3"
+              /></span>
+              <div class="text-lg font-semibold text-text-1">无法连接 BX 版本管理台服务</div>
+              <div class="text-sm text-text-3 max-w-md">{{ bootError }}</div>
+              <button
+                class="btn-primary mt-2"
+                @click="
+                  () => {
+                    bootError = ''
+                    booting = true
+                    appStore
+                      .boot()
+                      .catch((e) => {
+                        bootError = e.message
+                      })
+                      .finally(() => {
+                        booting = false
+                      })
+                  }
+                "
+              >
+                <i aria-hidden="true" class="i-carbon-renew" /> 重试
+              </button>
+            </div>
+          </template>
+          <AppLayout v-else>
+            <RouterView v-slot="{ Component }">
+              <Transition name="fade-slide" mode="out-in">
+                <component :is="Component" />
+              </Transition>
+            </RouterView>
+          </AppLayout>
+          <CommandPalette />
+          <OnboardingWizard />
+        </NNotificationProvider>
+      </NDialogProvider>
+    </NMessageProvider>
   </NConfigProvider>
 </template>
