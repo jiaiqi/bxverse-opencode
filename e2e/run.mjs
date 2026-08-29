@@ -72,12 +72,12 @@ try {
 if (!stat || !stat.isFile()) fail('缺少 apps/server/dist/index.js，请先执行 pnpm build')
 
 // ── 场景 1：中断续跑 ──
-console.log('\n===== [1/2] resume.mjs（中断续跑）=====')
+console.log('\n===== [1/3] resume.mjs（中断续跑）=====')
 const homeResume = mkdtempSync(path.join(tmpdir(), 'bx-e2e-resume-'))
 run(process.execPath, ['e2e/resume.mjs'], { BX_HOME: homeResume, BX_PORT: '18898' })
 
 // ── 场景 2：六步向导 ──
-console.log('\n===== [2/2] wizard-flow.py（发布向导六步）=====')
+console.log('\n===== [2/3] wizard-flow.py（发布向导六步）=====')
 let python = null
 for (const cand of ['python', 'python3']) {
   try {
@@ -108,7 +108,7 @@ if (!python) {
   }
 
   // ── 场景 3：首次使用引导（空 BX_HOME → 自动弹出） ──
-  console.log('\n===== [3/3] onboarding.py（M5-08 首次使用引导）=====')
+  // label 已在上面 [3/3] 标好；本场景在 python 检测成功后才执行
   const homeOb = mkdtempSync(path.join(tmpdir(), 'bx-e2e-ob-'))
   const ob = spawn(process.execPath, [SERVER], {
     stdio: 'ignore',
