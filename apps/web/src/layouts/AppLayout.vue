@@ -251,7 +251,7 @@ function triggerFastRelease() {
             role="menu"
             aria-label="项目切换菜单"
             tabindex="-1"
-            class="w-72 bg-surface border border-border-strong rounded-xl shadow-lg p-2 animate-fadeIn outline-none"
+            class="w-72 bg-surface border border-border-strong rounded-xl shadow-lg p-2 bx-popover-in outline-none"
             @keydown="onMenuKeydown"
           >
             <div

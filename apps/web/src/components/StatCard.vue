@@ -25,7 +25,7 @@ withDefaults(
 
 <template>
   <div
-    class="stagger-item p-4 rounded-xl border transition-[border-color,background-color,box-shadow] duration-fast relative overflow-hidden bg-surface hover:border-border-strong group"
+    class="stagger-item p-4 rounded-xl border transition-[border-color,background-color,box-shadow,transform] duration-base ease-spring relative overflow-hidden bg-surface hover:border-border-strong hover:-translate-y-0.5 hover:shadow-md group"
     :class="[
       color === 'cyan'
         ? 'border-l-[3px] border-l-info'
@@ -65,11 +65,13 @@ withDefaults(
       <span
         v-if="countUp && typeof value === 'number'"
         v-count-up="value"
-        class="text-2xl font-bold font-mono tracking-tight text-text-1"
+        class="text-2xl font-bold font-mono tracking-tight text-text-1 inline-block transition-transform duration-fast ease-spring group-hover:scale-[1.06]"
       />
-      <span v-else class="text-2xl font-bold font-mono tracking-tight text-text-1">{{
-        value
-      }}</span>
+      <span
+        v-else
+        class="text-2xl font-bold font-mono tracking-tight text-text-1 inline-block transition-transform duration-fast ease-spring group-hover:scale-[1.06]"
+        >{{ value }}</span
+      >
       <span v-if="subLabel" class="text-xs font-mono text-text-3 font-normal">{{ subLabel }}</span>
     </div>
   </div>

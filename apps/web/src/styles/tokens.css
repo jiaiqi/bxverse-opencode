@@ -797,3 +797,29 @@ html.dark .hljs-regexp {
 .shadow-panel {
   box-shadow: 0 12px 40px 0 rgba(0, 0, 0, 0.6);
 }
+
+/* ==================== 弹出层（popover / menu）进入 ====================
+   「自下而上 4px 弹入 + 微缩放 0.97→1 + 透明度」—— 比纯 fadeIn 更精致。
+   适用：NPopover/NDropdown 项目菜单等从下边缘弹出的容器。
+   不破坏 prefers-reduced-motion（reduce 时直接落到 to 态，0.01ms 完成）。
+*/
+.bx-popover-in {
+  animation: bx-popover-in var(--bx-dur-base) var(--bx-ease) both;
+  transform-origin: top center;
+  will-change: opacity, transform;
+}
+@keyframes bx-popover-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .bx-popover-in {
+    animation-duration: 0.01ms !important;
+  }
+}
