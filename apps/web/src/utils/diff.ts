@@ -15,7 +15,7 @@ export function diffLines(a: string, b: string): DiffLine[] {
   if (A.length > MAX_DIFF_LINES || B.length > MAX_DIFF_LINES) return []
   const m = A.length
   const n = B.length
-  const dp: number[][] = Array.from({ length: m + 1 }, () => new Array<number>(n + 1).fill(0))
+  const dp: number[][] = Array.from({ length: m + 1 }, () => Array.from({ length: n + 1 }, () => 0))
   for (let i = m - 1; i >= 0; i--) {
     for (let j = n - 1; j >= 0; j--) {
       dp[i][j] = A[i] === B[j] ? dp[i + 1][j + 1] + 1 : Math.max(dp[i + 1][j], dp[i][j + 1])

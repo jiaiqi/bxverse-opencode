@@ -7,7 +7,15 @@
 // 旧单表单配置（ai.baseUrl/model/apiKey）在首次解析时惰性迁移为默认 provider（id 'legacy'）。
 
 import type { AiProvider, AppConfig } from '@bxverse/shared'
-import { explainDiff, fetchModels, generateCommitMessage, normalizeBaseUrl, polishLog, testConnection, store } from '@bxverse/core'
+import {
+  explainDiff,
+  fetchModels,
+  generateCommitMessage,
+  normalizeBaseUrl,
+  polishLog,
+  testConnection,
+  store,
+} from '@bxverse/core'
 import type { Ctx } from '../http/router'
 import { apiError, readJsonBody, sendJson } from '../http/json'
 
@@ -24,11 +32,11 @@ export async function applyLegacyMigration(cfg: AppConfig): Promise<boolean> {
   if ((ai.providers?.length ?? 0) > 0 || !ai.baseUrl) {
     // 仍需处理 apiKey 遗留？若 providers 已存在但 apiKey 仍有残留，迁入首个 provider
     if (ai.apiKey && (ai.providers?.length ?? 0) > 0) {
-      const target = ai.providers?.find(p => p.id === ai.activeProviderId) ?? ai.providers?.[0]
+      const target = ai.providers?.find((p) => p.id === ai.activeProviderId) ?? ai.providers?.[0]
       if (target) {
         const cred = await store.loadCredentials()
         if (!cred.aiKeys?.[target.id]) {
-          cred.aiKeys = { ...(cred.aiKeys ?? {}), [target.id]: ai.apiKey }
+          cred.aiKeys = { ...cred.aiKeys, [target.id]: ai.apiKey }
           await store.saveCredentials(cred)
         }
         ai.apiKey = ''
@@ -49,7 +57,7 @@ export async function applyLegacyMigration(cfg: AppConfig): Promise<boolean> {
   ai.activeProviderId = 'legacy'
   if (ai.apiKey) {
     const cred = await store.loadCredentials()
-    cred.aiKeys = { ...(cred.aiKeys ?? {}), legacy: ai.apiKey }
+    cred.aiKeys = { ...cred.aiKeys, legacy: ai.apiKey }
     await store.saveCredentials(cred)
     ai.apiKey = ''
   }
@@ -80,20 +88,22 @@ export async function ensureLegacyMigration(cfg: AppConfig, services: AiServices
 }
 
 /** 解析当前生效供应商（支持根据场景路由特化指定，如 commit / polish / explain） */
-function providerForTask(cfg: AppConfig, task?: 'commit' | 'polish' | 'explain'): AiProvider | null {
+function providerForTask(
+  cfg: AppConfig,
+  task?: 'commit' | 'polish' | 'explain',
+): AiProvider | null {
   const providers = cfg.ai.providers ?? []
   if (task && cfg.ai.routes?.[task]) {
     const targetId = cfg.ai.routes[task]
-    const hit = providers.find(p => p.id === targetId && p.enabled)
+    const hit = providers.find((p) => p.id === targetId && p.enabled)
     if (hit) return hit
   }
   if (cfg.ai.activeProviderId) {
-    const hit = providers.find(p => p.id === cfg.ai.activeProviderId && p.enabled)
+    const hit = providers.find((p) => p.id === cfg.ai.activeProviderId && p.enabled)
     if (hit) return hit
   }
-  return providers.find(p => p.enabled) ?? null
+  return providers.find((p) => p.enabled) ?? null
 }
-
 
 async function apiKeyOf(providerId: string): Promise<string> {
   const cred = await store.loadCredentials()
@@ -105,7 +115,7 @@ function toView(p: AiProvider, hasKey: boolean): AiProvider & { hasKey: boolean 
 }
 
 function providerOf(cfg: AppConfig, id: string): AiProvider {
-  const p = (cfg.ai.providers ?? []).find(x => x.id === id)
+  const p = (cfg.ai.providers ?? []).find((x) => x.id === id)
   if (!p) throw apiError(404, 'NOT_FOUND', 'AI 供应商不存在')
   return p
 }
@@ -116,7 +126,7 @@ export function register(router: import('../http/router').Router, services: AiSe
     const cfg = await services.loadCfg()
     await ensureLegacyMigration(cfg, services)
     const cred = await store.loadCredentials()
-    const list = (cfg.ai.providers ?? []).map(p => toView(p, !!((cred.aiKeys ?? {})[p.id])))
+    const list = (cfg.ai.providers ?? []).map((p) => toView(p, !!(cred.aiKeys ?? {})[p.id]))
     sendJson(ctx.res, 200, list)
   })
 
@@ -129,7 +139,8 @@ export function register(router: import('../http/router').Router, services: AiSe
     const model = String(body.model ?? '').trim()
     const enabled = body.enabled !== false
     if (!name) throw apiError(400, 'VALIDATION', '供应商名称必填')
-    if (!baseUrl || !/^https?:\/\//i.test(baseUrl)) throw apiError(400, 'VALIDATION', 'Base URL 必须为有效 http(s) 地址')
+    if (!baseUrl || !/^https?:\/\//i.test(baseUrl))
+      throw apiError(400, 'VALIDATION', 'Base URL 必须为有效 http(s) 地址')
     if (!model) throw apiError(400, 'VALIDATION', '模型必填')
 
     const provider = await services.withCfg(async (cfg) => {
@@ -156,7 +167,8 @@ export function register(router: import('../http/router').Router, services: AiSe
       if (typeof body.name === 'string' && body.name.trim()) prov.name = body.name.trim()
       if (typeof body.baseUrl === 'string' && body.baseUrl.trim()) {
         const normalized = normalizeBaseUrl(body.baseUrl.trim())
-        if (!/^https?:\/\//i.test(normalized)) throw apiError(400, 'VALIDATION', 'Base URL 必须为有效 http(s) 地址')
+        if (!/^https?:\/\//i.test(normalized))
+          throw apiError(400, 'VALIDATION', 'Base URL 必须为有效 http(s) 地址')
         prov.baseUrl = normalized
       }
       if (typeof body.model === 'string' && body.model.trim()) prov.model = body.model.trim()
@@ -170,7 +182,7 @@ export function register(router: import('../http/router').Router, services: AiSe
       return prov
     })
     const cred = await store.loadCredentials()
-    sendJson(ctx.res, 200, toView(p, !!((cred.aiKeys ?? {})[p.id])))
+    sendJson(ctx.res, 200, toView(p, !!(cred.aiKeys ?? {})[p.id]))
   })
 
   // ---------- 删除 ----------
@@ -178,7 +190,7 @@ export function register(router: import('../http/router').Router, services: AiSe
     const p = await services.withCfg(async (cfg) => {
       await applyLegacyMigration(cfg)
       const prov = providerOf(cfg, ctx.params.id)
-      cfg.ai.providers = (cfg.ai.providers ?? []).filter(x => x.id !== prov.id)
+      cfg.ai.providers = (cfg.ai.providers ?? []).filter((x) => x.id !== prov.id)
       if (cfg.ai.activeProviderId === prov.id) cfg.ai.activeProviderId = ''
       return prov
     })
@@ -201,7 +213,7 @@ export function register(router: import('../http/router').Router, services: AiSe
     const apiKey = String(body.apiKey ?? '').trim()
     if (!apiKey) throw apiError(400, 'VALIDATION', 'apiKey 必填')
     const cred = await store.loadCredentials()
-    cred.aiKeys = { ...(cred.aiKeys ?? {}), [ctx.params.id]: apiKey }
+    cred.aiKeys = { ...cred.aiKeys, [ctx.params.id]: apiKey }
     await store.saveCredentials(cred)
     sendJson(ctx.res, 200, { ok: true, hasKey: true })
   }
@@ -303,7 +315,10 @@ export function register(router: import('../http/router').Router, services: AiSe
     const key = await apiKeyOf(provider.id)
     if (!key) throw apiError(400, 'AI_CONFIG', `「${provider.name}」未设置 API Key`)
     try {
-      const out = await generateCommitMessage(provider, key, { fileSummary, diff: diff.slice(0, 60_000) })
+      const out = await generateCommitMessage(provider, key, {
+        fileSummary,
+        diff: diff.slice(0, 60_000),
+      })
       sendJson(ctx.res, 200, { ok: true, ...out, provider: provider.name })
     } catch (e) {
       throw apiError(502, 'AI_FAILED', `「${provider.name}」${(e as Error).message}`)

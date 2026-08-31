@@ -15,9 +15,6 @@ export function useLazyTree(pid: () => string, rid: () => string) {
     rootLoading.value = true
     try {
       root.value = await api.tree(pid(), rid(), '')
-    } catch (e) {
-      // 调用方已有 useMessage 兜底，这里静默；若需提示可在调用处捕获
-      throw e
     } finally {
       rootLoading.value = false
     }

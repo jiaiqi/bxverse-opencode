@@ -239,7 +239,7 @@ describe('发布全链路（api.md §8）', () => {
     expect(events.some((e) => e.type === 'repo-done')).toBe(true)
     expect(events.some((e) => e.type === 'done')).toBe(true)
     const done = events.find((e) => e.type === 'done')
-    expect((done?.data as { releaseId: string }).releaseId).toBeTruthy()
+    expect((done!.data as { releaseId: string }).releaseId).toBeTruthy()
   })
 
   it('发布后：历史/项目版本/基准/第二次 plan 无变动', async () => {

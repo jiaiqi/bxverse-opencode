@@ -14,8 +14,15 @@ export interface AppServices {
 }
 
 /** 项目概要（api.md §3.1） */
-function projectSummaries(cfg: AppConfig): { id: string; name: string; version: string; repoCount: number }[] {
-  return cfg.projects.map(p => ({ id: p.id, name: p.name, version: p.version, repoCount: p.repos.length }))
+function projectSummaries(
+  cfg: AppConfig,
+): { id: string; name: string; version: string; repoCount: number }[] {
+  return cfg.projects.map((p) => ({
+    id: p.id,
+    name: p.name,
+    version: p.version,
+    repoCount: p.repos.length,
+  }))
 }
 
 export function register(router: import('../http/router').Router, services: AppServices): void {
@@ -47,7 +54,11 @@ export function register(router: import('../http/router').Router, services: AppS
     const allowed = ['theme', 'themeStyle', 'pwa', 'pollInterval', 'ai', 'backup', 'notifications']
     for (const key of Object.keys(body)) {
       if (!allowed.includes(key)) {
-        throw apiError(400, 'VALIDATION', `字段不支持在线修改: ${key}（仅支持 ${allowed.join('/')}）`)
+        throw apiError(
+          400,
+          'VALIDATION',
+          `字段不支持在线修改: ${key}（仅支持 ${allowed.join('/')}）`,
+        )
       }
     }
 
@@ -89,10 +100,16 @@ export function register(router: import('../http/router').Router, services: AppS
         if (backup.dir !== undefined && backup.dir !== null && typeof backup.dir !== 'string') {
           throw apiError(400, 'VALIDATION', 'backup.dir 必须为字符串')
         }
-        if (backup.source !== undefined && !['both', 'bundle', 'archive'].includes(String(backup.source))) {
+        if (
+          backup.source !== undefined &&
+          !['both', 'bundle', 'archive'].includes(String(backup.source))
+        ) {
           throw apiError(400, 'VALIDATION', 'backup.source 必须为 both/bundle/archive')
         }
-        if (backup.onFailure !== undefined && !['warn', 'fail'].includes(String(backup.onFailure))) {
+        if (
+          backup.onFailure !== undefined &&
+          !['warn', 'fail'].includes(String(backup.onFailure))
+        ) {
           throw apiError(400, 'VALIDATION', 'backup.onFailure 必须为 warn/fail')
         }
         if (backup.retention !== undefined) {
@@ -101,27 +118,46 @@ export function register(router: import('../http/router').Router, services: AppS
           }
           const r = backup.retention as Record<string, unknown> | null
           if (r) {
-            if (r.keepLast !== undefined && r.keepLast !== null && (!Number.isInteger(r.keepLast as number) || (r.keepLast as number) < 1)) {
+            if (
+              r.keepLast !== undefined &&
+              r.keepLast !== null &&
+              (!Number.isInteger(r.keepLast as number) || (r.keepLast as number) < 1)
+            ) {
               throw apiError(400, 'VALIDATION', 'backup.retention.keepLast 必须为 >=1 的整数')
             }
-            if (r.maxBytes !== undefined && r.maxBytes !== null && (!Number.isInteger(r.maxBytes as number) || (r.maxBytes as number) < 0)) {
+            if (
+              r.maxBytes !== undefined &&
+              r.maxBytes !== null &&
+              (!Number.isInteger(r.maxBytes as number) || (r.maxBytes as number) < 0)
+            ) {
               throw apiError(400, 'VALIDATION', 'backup.retention.maxBytes 必须为 >=0 的整数')
             }
-            if (r.keepDays !== undefined && r.keepDays !== null && (!Number.isInteger(r.keepDays as number) || (r.keepDays as number) < 1)) {
+            if (
+              r.keepDays !== undefined &&
+              r.keepDays !== null &&
+              (!Number.isInteger(r.keepDays as number) || (r.keepDays as number) < 1)
+            ) {
               throw apiError(400, 'VALIDATION', 'backup.retention.keepDays 必须为 >=1 的整数')
             }
           }
         }
         cfg.backup = {
-          enabled: typeof backup.enabled === 'boolean' ? backup.enabled : cfg.backup?.enabled ?? true,
+          enabled:
+            typeof backup.enabled === 'boolean' ? backup.enabled : (cfg.backup?.enabled ?? true),
           dir: typeof backup.dir === 'string' ? backup.dir : cfg.backup?.dir,
-          source: (backup.source as BackupConfig['source'] | undefined) ?? cfg.backup?.source ?? 'both',
-          onFailure: (backup.onFailure as BackupConfig['onFailure'] | undefined) ?? cfg.backup?.onFailure ?? 'warn',
-          retention: (backup.retention as BackupConfig['retention'] | undefined) !== undefined
-            ? (backup.retention as BackupConfig['retention'])
-            : cfg.backup?.retention,
+          source:
+            (backup.source as BackupConfig['source'] | undefined) ?? cfg.backup?.source ?? 'both',
+          onFailure:
+            (backup.onFailure as BackupConfig['onFailure'] | undefined) ??
+            cfg.backup?.onFailure ??
+            'warn',
+          retention:
+            (backup.retention as BackupConfig['retention'] | undefined) !== undefined
+              ? (backup.retention as BackupConfig['retention'])
+              : cfg.backup?.retention,
         }
-        if (cfg.backup.retention && Object.keys(cfg.backup.retention).length === 0) cfg.backup.retention = undefined
+        if (cfg.backup.retention && Object.keys(cfg.backup.retention).length === 0)
+          cfg.backup.retention = undefined
       }
 
       if (body.notifications !== undefined) {
@@ -131,7 +167,8 @@ export function register(router: import('../http/router').Router, services: AppS
         }
         const webhooks = n.webhooks
         if (webhooks !== undefined) {
-          if (!Array.isArray(webhooks)) throw apiError(400, 'VALIDATION', 'notifications.webhooks 必须为数组')
+          if (!Array.isArray(webhooks))
+            throw apiError(400, 'VALIDATION', 'notifications.webhooks 必须为数组')
           // 校验每条 webhook（url https、events 白名单、id 唯一等）
           const { validateWebhooks } = await import('../notifications')
           try {
@@ -140,7 +177,14 @@ export function register(router: import('../http/router').Router, services: AppS
             throw apiError(400, 'VALIDATION', (e as Error).message)
           }
           cfg.notifications = {
-            webhooks: (webhooks as { id: string; url: string; events: ('done' | 'error')[]; enabled: boolean }[]).map(w => ({
+            webhooks: (
+              webhooks as {
+                id: string
+                url: string
+                events: ('done' | 'error')[]
+                enabled: boolean
+              }[]
+            ).map((w) => ({
               id: String(w.id).trim(),
               url: String(w.url).trim(),
               events: [...w.events] as ('done' | 'error')[],
@@ -161,15 +205,22 @@ export function register(router: import('../http/router').Router, services: AppS
         const model = typeof ai.model === 'string' ? ai.model.trim() : ''
         if (baseUrl) cfg.ai.baseUrl = baseUrl
         if (model) cfg.ai.model = model
-        if (!(cfg.ai.providers?.length) && baseUrl) {
-          cfg.ai.providers = [{
-            id: 'legacy', name: '默认', kind: 'openai-compatible' as const,
-            baseUrl, model: model || 'gpt-4o-mini', enabled: true,
-          }]
+        if (!cfg.ai.providers?.length && baseUrl) {
+          cfg.ai.providers = [
+            {
+              id: 'legacy',
+              name: '默认',
+              kind: 'openai-compatible' as const,
+              baseUrl,
+              model: model || 'gpt-4o-mini',
+              enabled: true,
+            },
+          ]
           cfg.ai.activeProviderId = 'legacy'
         }
-        const active = cfg.ai.providers?.find(p => p.id === cfg.ai.activeProviderId && p.enabled)
-          ?? cfg.ai.providers?.find(p => p.enabled)
+        const active =
+          cfg.ai.providers?.find((p) => p.id === cfg.ai.activeProviderId && p.enabled) ??
+          cfg.ai.providers?.find((p) => p.enabled)
         if (active) {
           if (baseUrl) active.baseUrl = baseUrl
           if (model) active.model = model
@@ -177,9 +228,11 @@ export function register(router: import('../http/router').Router, services: AppS
         if (typeof ai.apiKey === 'string' && ai.apiKey.trim()) {
           const target = active ?? cfg.ai.providers?.[0]
           if (target) {
-            const { loadCredentials, saveCredentials } = await import('@bxverse/core').then(m => m.store)
+            const { loadCredentials, saveCredentials } = await import('@bxverse/core').then(
+              (m) => m.store,
+            )
             const cred = await loadCredentials()
-            cred.aiKeys = { ...(cred.aiKeys ?? {}), [target.id]: ai.apiKey.trim() }
+            cred.aiKeys = { ...cred.aiKeys, [target.id]: ai.apiKey.trim() }
             await saveCredentials(cred)
           }
           cfg.ai.apiKey = ''
@@ -187,12 +240,13 @@ export function register(router: import('../http/router').Router, services: AppS
         cfg.ai.enabled = typeof ai.enabled === 'boolean' ? ai.enabled : cfg.ai.enabled
         if (Array.isArray(ai.providers)) {
           for (const p of ai.providers as Record<string, unknown>[]) {
-            if (typeof p !== 'object' || p === null) throw apiError(400, 'VALIDATION', 'providers 元素必须为对象')
+            if (typeof p !== 'object' || p === null)
+              throw apiError(400, 'VALIDATION', 'providers 元素必须为对象')
           }
           cfg.ai.providers = ai.providers as AppConfig['ai']['providers']
         }
         if (typeof ai.activeProviderId === 'string') {
-          if (!cfg.ai.providers?.some(p => p.id === ai.activeProviderId)) {
+          if (!cfg.ai.providers?.some((p) => p.id === ai.activeProviderId)) {
             throw apiError(400, 'VALIDATION', 'activeProviderId 不存在于 providers')
           }
           cfg.ai.activeProviderId = ai.activeProviderId
