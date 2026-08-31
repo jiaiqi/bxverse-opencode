@@ -30,6 +30,7 @@ import { register as registerGit } from './api/git'
 import { register as registerDoctor } from './api/doctor'
 import { register as registerOps } from './api/ops'
 import { register as registerMatrix } from './api/matrix'
+import { register as registerRollback } from './api/rollback'
 
 export type WithCfg = <T>(mutator: (cfg: AppConfig) => T | Promise<T>) => Promise<T>
 
@@ -155,6 +156,7 @@ export function createApp(opts: { token?: string } = {}): App {
   registerDoctor(router, { loadCfg })
   registerOps(router)
   registerMatrix(router, registerOverviewServices)
+  registerRollback(router, { loadCfg, getDataStore: () => dataStore as store.DataStore })
 
   const server = http.createServer(async (req, res) => {
     const url = new URL(req.url ?? '/', 'http://127.0.0.1')

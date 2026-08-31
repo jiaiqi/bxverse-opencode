@@ -24,6 +24,9 @@ import type {
   RepoDef,
   RepoStatus,
   RepoVersionItem,
+  RollbackPreview,
+  RollbackRequest,
+  RollbackResult,
   TreeNode,
   VersionMatrix,
 } from '@bxverse/shared'
@@ -65,6 +68,18 @@ export const api = {
 
   // R31 版本矩阵（多项目跨工程 0 入侵聚合）
   matrix: () => http.get<VersionMatrix>('/matrix'),
+
+  // R32 升级后回退到历史版本
+  rollbackPreview: (projectId: string, targetReleaseId: string) =>
+    http.get<RollbackPreview>(
+      `/projects/${projectId}/rollback/preview?targetReleaseId=${encodeURIComponent(targetReleaseId)}`,
+    ),
+  rollbackExecute: (projectId: string, body: RollbackRequest) =>
+    http.post<RollbackResult>(`/projects/${projectId}/rollback`, body),
+  rollbackDiff: (projectId: string, fromReleaseId: string, toReleaseId: string) =>
+    http.get<unknown>(
+      `/projects/${projectId}/rollback/diff?fromReleaseId=${encodeURIComponent(fromReleaseId)}&toReleaseId=${encodeURIComponent(toReleaseId)}`,
+    ),
 
   // 版本清单导出（R18）
   projectVersions: (projectId: string) =>

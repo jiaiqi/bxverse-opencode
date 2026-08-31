@@ -19,6 +19,12 @@ const router = createRouter({
       meta: { title: '项目详情' },
     },
     {
+      path: '/project/:id/rollback',
+      name: 'rollback',
+      component: () => import('../views/RollbackWizard.vue'),
+      meta: { title: '回退' },
+    },
+    {
       path: '/project/:id/release',
       name: 'release',
       component: () => import('../views/ReleaseWizard.vue'),

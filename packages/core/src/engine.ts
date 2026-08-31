@@ -34,7 +34,18 @@ import { CoreError, CORE_ERROR_CODES } from './errors'
 // ==================== 变更检测 ====================
 
 /** 单仓实时状态（GET /api/repos/:pid/:rid/status 的数据源） */
-export async function collectChanges(repo: RepoDef): Promise<RepoStatus> {
+/** 扩展：R33 借鉴 l-pc-front 描述生成的 since 模式——支持 4 档探测起点 */
+export type CollectSince = 'lastPublishCommit' | 'lastBuildTag' | 'lastReleaseTag' | 'all'
+
+export interface CollectChangesOptions {
+  /** 扩展：R33 探测起点模式；缺省 'lastPublishCommit'（保持既有行为） */
+  since?: CollectSince
+}
+
+export async function collectChanges(
+  repo: RepoDef,
+  options: CollectChangesOptions = {},
+): Promise<RepoStatus> {
   const st: RepoStatus = {
     id: repo.id,
     name: repo.name,
@@ -95,8 +106,20 @@ export async function collectChanges(repo: RepoDef): Promise<RepoStatus> {
 
   if (st.head) {
     const diagnostics: string[] = []
-    const maxCommits = repo.lastPublishCommit ? 3000 : 500
-    st.commits = await git.commitsSince(repo.path, repo.lastPublishCommit ?? null, {
+    // 扩展：R33 since 模式——支持按 build/release tag 探测起点
+    const since = options.since ?? 'lastPublishCommit'
+    let baseRef: string | null = repo.lastPublishCommit ?? null
+    if (since === 'lastBuildTag') {
+      const buildTags = await git.listTags(repo.path, 'build/*')
+      const sorted = buildTags.sort((a, b) => (a < b ? -1 : 1))
+      baseRef = sorted[sorted.length - 1] ?? null
+    } else if (since === 'lastReleaseTag') {
+      baseRef = st.milestoneTag ?? null
+    } else if (since === 'all') {
+      baseRef = null
+    }
+    const maxCommits = baseRef ? 3000 : 500
+    st.commits = await git.commitsSince(repo.path, baseRef, {
       maxCommits,
       warnings: diagnostics,
     })

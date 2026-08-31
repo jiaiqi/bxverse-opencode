@@ -302,6 +302,11 @@ usePolling(
               <template #icon><i aria-hidden="true" class="i-carbon-rocket" /></template>
               统一发版
             </NButton>
+            <!-- R32 升级后回退到历史版本 -->
+            <NButton quaternary @click="router.push(`/project/${project.id}/rollback`)">
+              <template #icon><i aria-hidden="true" class="i-carbon-undo" /></template>
+              回退
+            </NButton>
             <!-- R28 快速发布：预填上次配置，≤5 步完成 patch；无记录时禁用并提示 -->
             <NTooltip :disabled="!!project.lastQuickPublish">
               <template #trigger>

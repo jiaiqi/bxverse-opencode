@@ -709,3 +709,102 @@ export interface VersionMatrix {
     driftColumns: number
   }
 }
+
+// ==================== R32 升级后回退 ====================
+// 扩展：R32 升级后回退到历史版本（端到端 0 入侵：仅打标签 + 写数据仓库 + 写 release record）
+/** 单仓回退影响 */
+export interface RollbackRepoImpact {
+  repoId: string
+  repoName: string
+  path: string
+  branch: string
+  /** 目标 commit（= targetRelease.repos[repoId].to 或 fall back 该仓 record 的 to） */
+  targetCommit: string | null
+  /** 当前 commit（HEAD 实际指向） */
+  currentCommit: string | null
+  /** 是否落后（currentCommit 领先 targetCommit → 回退会"丢弃"新提交；提示用户） */
+  isAhead: boolean
+  /** 工作区脏文件数（dirty > 0 阻断） */
+  dirty: number
+  /** 兼容性：目标版本的 versionSource / packageManager / buildCommand 与当前 RepoDef 是否一致 */
+  compatibility: 'ok' | 'mismatch' | 'unknown'
+  compatibilityHints: string[]
+}
+
+/** 风险等级：ok（兼容 + dirty=0）/ warn（有 ahead/drift/mismatch）/ block（dirty>0 或 critical） */
+export type RollbackRiskLevel = 'ok' | 'warn' | 'block'
+
+/** 扩展：R32 回退预览结果 */
+export interface RollbackPreview {
+  /** 目标版本（历史 release 的 version 字段） */
+  targetVersion: string
+  /** 目标 release 记录 */
+  targetRelease: ReleaseRecord
+  /** 当前 release（HEAD 实际指向；非 deprecated 的最新一条） */
+  currentRelease: ReleaseRecord | null
+  /** 目标 release 的 tag 集合（要被回退的"事故版本"标签） */
+  tagsToDeprecate: { build?: string; milestone?: string }
+  /** 受影响仓库列表 */
+  repos: RollbackRepoImpact[]
+  /** 全局风险：跨项目 drift（R31 VersionMatrix driftColumns 命中本仓的 app） */
+  driftColumnsAffected: string[]
+  /** 自动生成的「下一步版本号」（基于 targetRelease.version 决定 bump 方向） */
+  nextVersionSuggestion: string
+  /** preview 阶段生成的对外/对内日志草稿（用户可编辑） */
+  externalDraft: string
+  internalDraft: string
+  /** 风险等级 */
+  riskLevel: RollbackRiskLevel
+  riskReasons: string[]
+}
+
+/** 扩展：R32 回退执行请求 */
+export interface RollbackRequest {
+  projectId: string
+  /** 目标 release id（POST /api/projects/:id/releases 返回的 id） */
+  targetReleaseId: string
+  /** 下一步发布版本号（用户可覆盖 nextVersionSuggestion） */
+  nextVersion: string
+  /** bump 方向：patch（默认）/ minor / major */
+  bump: 'patch' | 'minor' | 'major'
+  /** 用户编辑后的对外/对内日志（不传则用 preview 阶段的草稿） */
+  externalContent?: string
+  internalContent?: string
+  /** 是否跳过构建（默认 false） */
+  skipBuild?: boolean
+  /** 是否离线发布（默认 false） */
+  offline?: boolean
+  /** 二次确认：必须为 true 才执行（防误操作） */
+  confirmed: boolean
+  /** 受影响仓库 ID 列表（不传则默认 targetRelease.repos 全量；用户可勾选部分仓） */
+  repoIds?: string[]
+}
+
+/** 扩展：R32 单仓回退失败 */
+export interface RollbackFailedRepo {
+  repoId: string
+  repoName: string
+  reason: string
+}
+
+/** 扩展：R32 删除的标签 */
+export interface RollbackDeletedTag {
+  repoId: string
+  tag: string
+  kind: 'build' | 'milestone'
+}
+
+/** 扩展：R32 回退执行结果 */
+export interface RollbackResult {
+  ok: boolean
+  /** 新发布记录 id（指向 nextVersion 对应的新 release） */
+  newReleaseId: string | null
+  /** 被 deprecate 的旧 release ID 列表（含目标 release + 中间跳过的可选） */
+  deprecatedReleaseIds: string[]
+  /** 跳过的仓（dirty>0 / 失败仓） */
+  failedRepos: RollbackFailedRepo[]
+  /** 删除的 build/milestone 标签（仅删指向目标 commit 的，保护历史） */
+  deletedTags: RollbackDeletedTag[]
+  /** 警告（drift / ahead / compatibility） */
+  warnings: string[]
+}
