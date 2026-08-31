@@ -552,11 +552,45 @@ NConfigProvider(theme + themeOverrides)
 
 **文件**：`apps/web/src/views/CrossProjectSearch.vue`（新增）；`apps/web/src/components/CrossProjectCard.vue`（新增，C 方向复用单元）；`apps/web/src/api/index.ts` 增 `api.crossSearch(q, type, limit)`；`apps/web/src/router/index.ts` 增 `/cross` 路由；`apps/web/src/layouts/AppLayout.vue` 顶栏加「跨项目搜」RouterLink；`apps/web/src/components/CommandPalette.vue` 加 `cross-search` 命令。
 
-### 3.10 404 `/：pathMatch(.*)*`
+### 3.10 升级日志聚合 `/feed`（UpgradeFeed.vue，D 方向）
+
+跨项目发布历史聚合页：时间线 mini + feed 列表 + 导出 .md。
+
+**顶部 PageHeader**：标题「升级日志聚合」+ 副标题「跨项目发布历史 · 时间线 · 导出」+ 右侧 `actions` slot 放「导出 .md」按钮（`i-carbon-download` icon，`<a href={exportUrl}>` 触发浏览器下载，Content-Disposition 头由后端下发）。
+
+**过滤行**（3 组 chip / select，全部 `aria-pressed`）：
+- 粒度：日 / 周 / 月（`granularity`，默认 day）
+- 范围：近 7 / 30 / 90 / 365 天（`days`，默认 30）
+- 项目：`<select>` 下拉（`api.projects()` 拉列表 + 「全部」选项；`change` 事件过滤）
+
+**Timeline mini section**（h-24 高度的 bar chart）：
+- 顶部副文本：「{{ timeline.total }} 次发布 · {{ timeline.projectCount }} 个项目」
+- bar 高度按 `count / maxBucketCount * 100%` 比例渲染，bar 宽度 flex-1（按桶数等分），底部 key 末 5 字符 mono 标签
+- 鼠标 hover 显示 `title` tooltip：`{key}: {count} 次（{projectCount} 项目）`
+- 加载/错误/空态：`<LoadingState compact>` / `<ErrorState :retry="loadTimeline">` / `<EmptyState icon="i-carbon-chart-histogram">`
+
+**Feed 列表 section**：
+- 顶部副文本：「共 {{ feed.total }} 条 · {{ feed.tookMs }}ms」
+- 每条 `<ReleaseFeedCard>`：
+  - 顶部 header：项目首字 avatar（与 ProjectCard 同款 brand-soft + brand-200 border）+ 版本 + 项目名 RouterLink + 「已废弃」chip（`chip chip-error text-[10px]`）
+  - meta 行：`date.slice(0,10) · commitCount 提交 · bump=xxx`
+  - 涉及仓库 chip 行：每个仓库 `@version` RouterLink 跳 RepoDetail
+  - 外部日志：`<MarkdownView :content="item.externalContent" />` 渲染；长文（>240 字符）默认截断，「展开全文 → / ← 收起」按钮切换
+- 加载/错误/空态：`<LoadingState>` / `<ErrorState>` / `<EmptyState icon="i-carbon-document">`
+
+**URL 状态同步**：`/feed?granularity=&days=&projectId=`（与 CrossProjectSearch 同模式，`router.replace` 写回 + watch query 重新加载）
+
+**嵌入入口**（2 条）：
+1. **AppLayout 顶栏右侧**：新增「升级日志」RouterLink（`i-carbon-time` icon，`title="跨项目升级日志聚合（时间线 + 导出）"`）
+2. **CommandPalette**：页面组新增「升级日志」命令（icon `i-carbon-time`，keywords 含 `upgrade feed timeline aggregate release notes`）
+
+**文件**：`apps/web/src/views/UpgradeFeed.vue`（新增）；`apps/web/src/components/ReleaseFeedCard.vue`（新增，D 方向复用单元）；`apps/web/src/api/index.ts` 增 `api.aggregateFeed/timeline/exportUrl` 3 资源；`apps/web/src/router/index.ts` 增 `/feed` 路由；`apps/web/src/layouts/AppLayout.vue` 顶栏加「升级日志」RouterLink；`apps/web/src/components/CommandPalette.vue` 加 `upgrade-feed` 命令。
+
+### 3.11 404 `/：pathMatch(.*)*`
 
 `NResult status="404"` + 「返回总览」按钮，2s 后自动重定向 `/`（可取消）。
 
-### 3.11 徽标规则汇总（StatusBadge 统一实现，禁止散落自绘）
+### 3.12 徽标规则汇总（StatusBadge 统一实现，禁止散落自绘）
 
 | 场景 | 判定条件 | 文案/图标 | 色 |
 |---|---|---|---|
@@ -1216,3 +1250,4 @@ const routes = [
 | 2026-08-31 | 新增 R32 升级后回退到历史版本：§3.8 RollbackWizard.vue（4 步：选 release → 影响面预览 → 版本与日志确认 → 执行；3 入口 ProjectDetail/RepoDetail/CommandPalette；confirmed 必填 + riskLevel='block' 409 拒绝 + 业务仓 0 入侵 + 与 R31 drift 共享）；§3.9/3.10 章节编号顺延 |
 | 2026-08-31 | B 方向多栈 versionSource：RepoSettings NSelect 扩 5 选 1（derived/packageJson/gradle/cargo/goModule，gradle/cargo 描述含构建系统识别；goModule 标"tag-only，go.mod 不存版本"）；与 R26 commitVersionFiles 链路解耦，引擎主路径不变 |
 | 2026-08-31 | C 方向跨项目搜索：§3.9 CrossProjectSearch.vue（搜索框 + 3 类型 chip + 结果列表 + 空/加载/错误态 + URL `?q=&type=` 同步）+ CrossProjectCard.vue 复用单元（3 色 type chip + commit/version/name 分支展示）；2 入口 AppLayout 顶栏 + CommandPalette；§3.10/3.11 章节编号顺延 |
+| 2026-08-31 | D 方向升级日志聚合：§3.10 UpgradeFeed.vue（粒度/范围/项目 3 组过滤 + Timeline mini bar chart + ReleaseFeedCard 列表 + 导出 .md 按钮 + URL `?granularity=&days=&projectId=` 同步）+ ReleaseFeedCard.vue 复用单元（项目 avatar + 版本 + 涉及仓库 chip 行 + MarkdownView 渲染 external 日志 + 展开/收起）；2 入口 AppLayout 顶栏 + CommandPalette；§3.11/3.12 章节编号顺延 |

@@ -854,3 +854,67 @@ export interface CrossSearchResponse {
   /** 搜索耗时毫秒 */
   tookMs: number
 }
+
+// ==================== D 方向 跨项目升级日志聚合 ====================
+
+/** 扩展：D 方向时间线分桶粒度 */
+export type AggregateGranularity = 'day' | 'week' | 'month'
+
+/** 扩展：D 方向导出格式 */
+export type AggregateExportFormat = 'md' | 'json'
+
+/** 扩展：D 方向时间线分桶（按 day/week/month 聚合） */
+export interface AggregateTimelineBucket {
+  /** 分桶键（day=YYYY-MM-DD / week=YYYY-Www / month=YYYY-MM） */
+  key: string
+  /** 起始时间 ISO（包含） */
+  start: string
+  /** 结束时间 ISO（不包含） */
+  end: string
+  /** 该桶发布次数（去重后的 release 数） */
+  count: number
+  /** 涉及的项目数 */
+  projectCount: number
+  /** 涉及的项目 ID 列表（去重） */
+  projectIds: string[]
+}
+
+/** 扩展：D 方向时间线响应 */
+export interface AggregateTimelineResponse {
+  granularity: AggregateGranularity
+  /** 查询起止时间（包含） */
+  since: string
+  until: string
+  buckets: AggregateTimelineBucket[]
+  /** 总发布次数 */
+  total: number
+  /** 涉及项目数 */
+  projectCount: number
+  tookMs: number
+}
+
+/** 扩展：D 方向 feed 单条（跨项目聚合，单条 release 完整 external 日志） */
+export interface AggregateFeedItem {
+  releaseId: string
+  projectId: string
+  projectName: string
+  version: string
+  date: string
+  bump: BumpType
+  deprecated: boolean
+  /** 该 release 涉及仓库列表（用于跳转 RepoDetail） */
+  repos: Array<{ repoId: string; repoName: string; version: string }>
+  /** 外部日志 markdown 原文（来自 record.logs.external.content） */
+  externalContent: string
+  /** 提交数（来自 stats.commits） */
+  commitCount: number
+}
+
+/** 扩展：D 方向 feed 响应（按时间倒序） */
+export interface AggregateFeedResponse {
+  /** ISO 时间戳，分页基准 */
+  until: string
+  total: number
+  items: AggregateFeedItem[]
+  tookMs: number
+}

@@ -67,6 +67,12 @@ const router = createRouter({
       meta: { title: '跨项目搜索' },
     },
     {
+      path: '/feed',
+      name: 'upgrade-feed',
+      component: () => import('../views/UpgradeFeed.vue'),
+      meta: { title: '升级日志' },
+    },
+    {
       path: '/:pathMatch(.*)*',
       name: 'not-found',
       component: () => import('../views/NotFound.vue'),

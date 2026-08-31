@@ -1364,6 +1364,102 @@ data: {"type":"done","message":"发布完成","data":{"releaseId":"rel_p_3f1_v1.
 
 ---
 
+### 10.13 跨项目升级日志聚合（D 方向）
+
+**目标**：跨项目 release 聚合（feed 流 + 时间线分桶 + 导出 md/json），纯查询不写记录。复用既有 `dataStore.listRecords` + `cfg.projects`，零依赖、零 git 调用。
+
+#### 10.13.1 端点总览
+
+| 方法 | 路径 | 用途 | 关键 shared 类型 |
+|---|---|---|---|
+| GET | `/api/aggregate/feed` | 跨项目 release 列表（按时间倒序） | `AggregateFeedResponse` |
+| GET | `/api/aggregate/timeline` | 跨项目发布频率分桶（day/week/month） | `AggregateTimelineResponse` |
+| GET | `/api/aggregate/export` | 导出 md 或 json 附件 | — |
+
+#### 10.13.2 `GET /api/aggregate/feed`
+
+**Query 参数**：
+
+| 字段 | 必填 | 默认 | 校验 |
+|---|---|---|---|
+| `since` | 否 | 30 天前 ISO | 必须合法 ISO |
+| `until` | 否 | now ISO | 必须合法 ISO 且 ≥ since |
+| `projectId` | 否 | — | 仅返回该项目 release |
+| `limit` | 否 | 50 | 正整数，上限 200 |
+
+**响应** `200 AggregateFeedResponse`：
+
+```ts
+{
+  until: string              // ISO
+  total: number              // 窗口内总 release 数
+  items: AggregateFeedItem[] // 按 date 倒序
+  tookMs: number
+}
+```
+
+`AggregateFeedItem` 字段：
+- `releaseId` / `projectId` / `projectName` / `version` / `date` / `bump` / `deprecated`
+- `repos`：仓库列表（repoId/repoName/version）用于跳 RepoDetail
+- `externalContent`：外部日志 markdown 原文（来自 `record.logs.external.content`）
+- `commitCount`：提交数
+
+#### 10.13.3 `GET /api/aggregate/timeline`
+
+**Query 参数**：
+
+| 字段 | 必填 | 默认 | 校验 |
+|---|---|---|---|
+| `granularity` | 否 | `day` | `day` \| `week` \| `month` |
+| `days` | 否 | 30 | 正整数，上限 365 |
+| `projectId` | 否 | — | 仅该项目 release |
+
+**响应** `200 AggregateTimelineResponse`：
+
+```ts
+{
+  granularity: 'day' | 'week' | 'month'
+  since: string
+  until: string
+  buckets: AggregateTimelineBucket[]  // 按 start asc
+  total: number                       // 总 release 数
+  projectCount: number                // 涉及项目数
+  tookMs: number
+}
+```
+
+`AggregateTimelineBucket` 字段：
+- `key`：day=`YYYY-MM-DD` / week=`YYYY-Www`（ISO 周） / month=`YYYY-MM`
+- `start` / `end`：桶起止 ISO
+- `count`：桶内 release 数
+- `projectCount` / `projectIds`：桶内涉及项目
+
+#### 10.13.4 `GET /api/aggregate/export`
+
+**Query 参数**：
+
+| 字段 | 必填 | 默认 | 校验 |
+|---|---|---|---|
+| `since` | 否 | 30 天前 | ISO |
+| `until` | 否 | now | ISO |
+| `projectId` | 否 | — | 过滤 |
+| `format` | 否 | `md` | `md` \| `json` |
+
+**响应** `200`：直接返回附件流（Content-Disposition: `attachment; filename="upgrade-feed-YYYY-MM-DD-YYYY-MM-DD.md"`）
+- `md`：`text/markdown; charset=utf-8`，按项目分组 + 每 release 完整 external content 嵌入
+- `json`：`application/json; charset=utf-8`，结构 `{ since, until, items: AggregateFeedItem[] }`
+
+#### 10.13.5 错误码
+
+- `400 VALIDATION`：since/until 非法 / until<since / granularity 非法 / format 非法 / limit 非法 / days 非法
+- `401 UNAUTHORIZED`：无 `X-BX-Token`
+
+**核心不变性**：①纯查询（不调 git、不写记录、不影响发布队列）；②复用 `dataStore.listRecords` 既有契约（不动 core）；③非项目级独立端点（路径 `/api/aggregate/*`，不挂在 `/api/projects/:id` 下）；④导出 Content-Disposition 触发浏览器下载流；⑤时间线分桶用纯 JS `Date` 计算（无库依赖）。
+
+实现：`apps/server/src/api/aggregate.ts`（新增 3 端点）；`AggregateFeedItem` / `AggregateFeedResponse` / `AggregateTimelineBucket` / `AggregateTimelineResponse` / `AggregateGranularity` / `AggregateExportFormat` 在 `shared/types.ts` 定义；web 端有 `ReleaseFeedCard.vue` 复用单元 + `UpgradeFeed.vue` 视图。
+
+---
+
 ## 11. 与 architecture.md §3.2 路由表的差异
 
 | # | architecture.md 原设计 | 本设计 | 原因 |
@@ -1395,6 +1491,7 @@ data: {"type":"done","message":"发布完成","data":{"releaseId":"rel_p_3f1_v1.
 | §10.10 Version Matrix | R31 | 多项目跨工程版本矩阵；0 入侵纯聚合 |
 | §10.11 Rollback | R32 | 升级后回退到历史版本；confirmed 必填 + riskLevel='block' 拒绝 + 业务仓 0 入侵 |
 | §10.12 Cross-Project Search | C 方向 | 跨项目搜 commit/version/name；零依赖纯查询，不影响发布队列 |
+| §10.13 Aggregate Feed/Timeline/Export | D 方向 | 跨项目升级日志聚合（feed 倒序 + 时间线分桶 + md/json 导出） |
 
 ---
 
@@ -1420,3 +1517,4 @@ data: {"type":"done","message":"发布完成","data":{"releaseId":"rel_p_3f1_v1.
 | 2026-08-31 | R32 升级后回退立项：§2 路由表增 3 端点（preview/execute/diff）、§10.11 详细设计（字段语义 + 执行流 + 核心不变性 + 错误码 CONFIRM_REQUIRED / RISK_BLOCKED）、§12 对应关系 |
 | 2026-08-31 | B 方向多栈 versionSource：core/repo-policy.ts 扩 detectVersionSource / readVersionBySource / writeVersionBySource（gradle/cargo/goModule）；shared RepoDef.versionSource 枚举扩 5 值 |
 | 2026-08-31 | C 方向跨项目搜索：§2 路由表增 `GET /api/cross/search`、§10.12 详细设计（3 type 行为 + CrossSearchResult/Response 契约）、§12 对应关系；web 增 `CrossProjectCard.vue` + `CrossProjectSearch.vue` 视图 + `/cross` 路由 + AppLayout 入口 + CommandPalette 命令 |
+| 2026-08-31 | D 方向升级日志聚合：§2 路由表增 `GET /api/aggregate/{feed,timeline,export}` 3 端点、§10.13 详细设计（feed 倒序 / 时间线 day/week/month 分桶 / md+json 导出 + Content-Disposition）、§12 对应关系；web 增 `ReleaseFeedCard.vue` + `UpgradeFeed.vue` 视图 + `/feed` 路由 + 顶栏时间线 mini + 导出按钮 + AppLayout/CommandPalette 入口 |

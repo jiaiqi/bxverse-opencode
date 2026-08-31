@@ -32,6 +32,7 @@ import { register as registerOps } from './api/ops'
 import { register as registerMatrix } from './api/matrix'
 import { register as registerRollback } from './api/rollback'
 import { register as registerCross } from './api/cross'
+import { register as registerAggregate } from './api/aggregate'
 
 export type WithCfg = <T>(mutator: (cfg: AppConfig) => T | Promise<T>) => Promise<T>
 
@@ -159,6 +160,7 @@ export function createApp(opts: { token?: string } = {}): App {
   registerMatrix(router, registerOverviewServices)
   registerRollback(router, { loadCfg, getDataStore: () => dataStore as store.DataStore })
   registerCross(router, { loadCfg, getDataStore: () => dataStore as store.DataStore })
+  registerAggregate(router, { loadCfg, getDataStore: () => dataStore as store.DataStore })
 
   const server = http.createServer(async (req, res) => {
     const url = new URL(req.url ?? '/', 'http://127.0.0.1')

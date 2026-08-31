@@ -4,6 +4,10 @@
 import type {
   AiTestResult,
   AppConfig,
+  AggregateExportFormat,
+  AggregateFeedResponse,
+  AggregateGranularity,
+  AggregateTimelineResponse,
   BackupCleanupResult,
   BackupRetention,
   BackupUsage,
@@ -426,5 +430,40 @@ export const api = {
   crossSearch: (q: string, type: CrossSearchType, limit = 50) => {
     const params = new URLSearchParams({ q, type, limit: String(limit) })
     return http.get<CrossSearchResponse>(`/cross/search?${params.toString()}`)
+  },
+
+  // D 方向：跨项目升级日志聚合（feed 流 / 时间线 / 导出）
+  aggregateFeed: (
+    params: { since?: string; until?: string; projectId?: string; limit?: number } = {},
+  ) => {
+    const q = new URLSearchParams()
+    if (params.since) q.set('since', params.since)
+    if (params.until) q.set('until', params.until)
+    if (params.projectId) q.set('projectId', params.projectId)
+    if (params.limit) q.set('limit', String(params.limit))
+    const qs = q.toString() ? `?${q.toString()}` : ''
+    return http.get<AggregateFeedResponse>(`/aggregate/feed${qs}`)
+  },
+  aggregateTimeline: (
+    params: { granularity?: AggregateGranularity; days?: number; projectId?: string } = {},
+  ) => {
+    const q = new URLSearchParams()
+    if (params.granularity) q.set('granularity', params.granularity)
+    if (params.days) q.set('days', String(params.days))
+    if (params.projectId) q.set('projectId', params.projectId)
+    const qs = q.toString() ? `?${q.toString()}` : ''
+    return http.get<AggregateTimelineResponse>(`/aggregate/timeline${qs}`)
+  },
+  aggregateExportUrl: (params: {
+    since?: string
+    until?: string
+    projectId?: string
+    format: AggregateExportFormat
+  }) => {
+    const q = new URLSearchParams({ format: params.format })
+    if (params.since) q.set('since', params.since)
+    if (params.until) q.set('until', params.until)
+    if (params.projectId) q.set('projectId', params.projectId)
+    return `/aggregate/export?${q.toString()}`
   },
 }

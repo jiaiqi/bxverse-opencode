@@ -45,6 +45,13 @@ const commands = computed<Command[]>(() => {
       keywords: 'cross search global query commit version name',
       run: () => router.push('/cross'),
     },
+    {
+      group: '页面',
+      title: '升级日志',
+      icon: 'i-carbon-time',
+      keywords: 'upgrade feed timeline aggregate release notes',
+      run: () => router.push('/feed'),
+    },
   ]
   for (const p of projectsStore.items) {
     list.push({

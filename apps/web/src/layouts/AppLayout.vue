@@ -340,6 +340,15 @@ function triggerFastRelease() {
           <i aria-hidden="true" class="i-carbon-search text-12px" />
           <span>跨项目搜</span>
         </RouterLink>
+        <!-- 升级日志聚合入口（D 方向） -->
+        <RouterLink
+          to="/feed"
+          class="flex items-center gap-1.5 px-2 py-1 rounded-md text-[11px] text-text-3 hover:text-brand-500 hover:bg-surface-hover border border-border transition-[color,background-color,border-color] cursor-pointer focus-ring"
+          title="跨项目升级日志聚合（时间线 + 导出）"
+        >
+          <i aria-hidden="true" class="i-carbon-time text-12px" />
+          <span>升级日志</span>
+        </RouterLink>
         <!-- 接入仓库快捷按钮 -->
         <button
           v-if="currentProject"
