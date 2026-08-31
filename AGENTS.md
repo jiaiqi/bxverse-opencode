@@ -100,6 +100,7 @@ apps/@bxverse/cli ──────┘
 - 常量：`V_STAMP_RE=/^V(\d{10,12})$/`、`SEMVER_TOLERANT_RE=/^v?(\d+)\.(\d+)\.(\d+)(?:\.(\d{6,12}))?$/`、`buildStampMinute()`（10 位）；`formatRepoVersion()` 统一渲染矩阵。
 - 标签：里程碑 `X.Y.Z`（新）/`vX.Y.Z`（旧）、构建 `build/{格式化串}`（如 `build/V2608241530`）；tag 创建幂等（同名同 commit 跳过）。
 - bump 建议：breaking→major / feat→minor / fix→patch；`ProjectDef.bump='manual'` 时默认 patch。
+- **多栈 versionSource（B 方向，R26 扩）**：`RepoDef.versionSource: 'derived' | 'packageJson' | 'gradle' | 'cargo' | 'goModule'`。derived/packageJson=默认（保持现行为）；gradle=读/写 `build.gradle(.kts)` 的 `version = "X.Y.Z"`（Groovy/Kotlin DSL）；cargo=读/写 `Cargo.toml [package] version`（[workspace.package] 不动）；goModule=tag-only（go.mod 不存版本，由 git tag + CI ldflags 注入）。core 层提供 `detectVersionSource` + `readVersionBySource` + `writeVersionBySource`（goModule/derived write 抛清晰错）。引擎主路径当前仍仅消费 packageJson，gradle/cargo/goModule 走 §10.4 后续扩展点。详见 `docs/r26-build-pipeline.md` §10。
 
 ### 4.6 日志双轨规则
 

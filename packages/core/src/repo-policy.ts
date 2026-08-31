@@ -38,7 +38,10 @@ export function readPackageVersion(repoPath: string): string | null {
 }
 
 /** 仅替换仓库根 package.json 的顶层 version，不自动提交。 */
-export function updatePackageVersion(repoPath: string, projectVersion: string): { previous: string | null; next: string } {
+export function updatePackageVersion(
+  repoPath: string,
+  projectVersion: string,
+): { previous: string | null; next: string } {
   const file = packagePath(repoPath)
   if (!fs.existsSync(file)) throw new Error(`未找到仓库根 package.json: ${file}`)
   let parsed: Record<string, unknown>
@@ -47,7 +50,8 @@ export function updatePackageVersion(repoPath: string, projectVersion: string): 
   } catch (error) {
     throw new Error(`package.json 不是合法 JSON: ${(error as Error).message}`)
   }
-  if (!parsed || Array.isArray(parsed) || typeof parsed !== 'object') throw new Error('package.json 顶层必须为对象')
+  if (!parsed || Array.isArray(parsed) || typeof parsed !== 'object')
+    throw new Error('package.json 顶层必须为对象')
   const next = projectSemver(projectVersion)
   const previous = typeof parsed.version === 'string' ? parsed.version : null
   if (previous === next) return { previous, next }
@@ -57,7 +61,10 @@ export function updatePackageVersion(repoPath: string, projectVersion: string): 
 }
 
 export async function worktreeStatus(repoPath: string): Promise<WorktreeStatus> {
-  const result = await git(['status', '--porcelain=v1', '-z', '--untracked-files=all', '--ignored=matching'], { cwd: repoPath })
+  const result = await git(
+    ['status', '--porcelain=v1', '-z', '--untracked-files=all', '--ignored=matching'],
+    { cwd: repoPath },
+  )
   if (!result.ok) throw new Error(result.stderr || '无法读取工作树状态')
   const trackedPaths: string[] = []
   const untrackedPaths: string[] = []
@@ -81,7 +88,13 @@ export async function worktreeStatus(repoPath: string): Promise<WorktreeStatus> 
 /** 当前差异是否仅为根 package.json 顶层 version。 */
 export async function packageJsonVersionOnlyChanged(repoPath: string): Promise<boolean> {
   const status = await worktreeStatus(repoPath)
-  if (status.tracked !== 1 || status.untracked !== 0 || status.ignored !== 0 || status.paths[0] !== 'package.json') return false
+  if (
+    status.tracked !== 1 ||
+    status.untracked !== 0 ||
+    status.ignored !== 0 ||
+    status.paths[0] !== 'package.json'
+  )
+    return false
   const currentFile = packagePath(repoPath)
   try {
     const current = JSON.parse(fs.readFileSync(currentFile, 'utf8')) as Record<string, unknown>
@@ -101,7 +114,12 @@ export function fileHash(file: string): string {
 }
 
 /** 在外部 tmp 中建立 detached worktree，构建完成后只移除外部目录。 */
-export async function createBuildWorkspace(repoPath: string, commit: string, tmpRoot: string, taskId: string): Promise<BuildWorkspace> {
+export async function createBuildWorkspace(
+  repoPath: string,
+  commit: string,
+  tmpRoot: string,
+  taskId: string,
+): Promise<BuildWorkspace> {
   const workspace = path.join(tmpRoot, 'build', taskId, path.basename(repoPath))
   fs.mkdirSync(path.dirname(workspace), { recursive: true })
   ensureOk(await git(['worktree', 'add', '--detach', workspace, commit], { cwd: repoPath }))
@@ -116,6 +134,190 @@ export async function createBuildWorkspace(repoPath: string, commit: string, tmp
       }
     },
   }
+}
+
+// ==================== B 方向多栈 versionSource 探测与读写 ====================
+//
+// 背景：R26 已落 `versionSource: 'derived' | 'packageJson'`；B 方向扩 3 栈：gradle（Android/JVM）/
+// cargo（Rust）/ goModule（Go）。引擎主路径消费仍在 R26 scope（仅 packageJson 走 version-sync），
+// 本模块提供 read/write/detect 能力函数，供后续 server 端点 + web UI + 引擎扩展复用。
+//
+// goModule 特殊：go.mod 不存版本字段（Go 社区规范），版本由 git tag + CI 阶段 ldflags 注入
+// （`go build -ldflags="-X main.Version=$(git describe)"`）。bxverse 端只打 tag + 记录，不写文件。
+
+/** 扩展：B 方向多栈版本源（与 RepoDef.versionSource 枚举一致） */
+export type VersionSource = 'derived' | 'packageJson' | 'gradle' | 'cargo' | 'goModule'
+
+/** 自动探测仓库版本源（优先级：gradle > cargo > goModule > packageJson > derived） */
+export function detectVersionSource(repoPath: string): VersionSource {
+  if (
+    fs.existsSync(path.join(repoPath, 'build.gradle')) ||
+    fs.existsSync(path.join(repoPath, 'build.gradle.kts'))
+  )
+    return 'gradle'
+  if (fs.existsSync(path.join(repoPath, 'Cargo.toml'))) return 'cargo'
+  if (fs.existsSync(path.join(repoPath, 'go.mod'))) return 'goModule'
+  if (fs.existsSync(path.join(repoPath, 'package.json'))) return 'packageJson'
+  return 'derived'
+}
+
+/**
+ * 按 versionSource 读取仓库当前版本
+ * @returns 解析到的版本字符串（去掉 v 前缀）；不存在或不支持返回 null
+ */
+export function readVersionBySource(repoPath: string, source: VersionSource): string | null {
+  switch (source) {
+    case 'packageJson':
+      return readPackageVersion(repoPath)
+    case 'gradle':
+      return readGradleVersion(repoPath)
+    case 'cargo':
+      return readCargoVersion(repoPath)
+    case 'goModule':
+      // go.mod 无 version 字段（Go 社区规范）
+      return null
+    case 'derived':
+      return null
+  }
+}
+
+/**
+ * 按 versionSource 写入仓库版本
+ * @throws {Error} goModule / derived 模式不维护文件，调用即抛错
+ */
+export function writeVersionBySource(
+  repoPath: string,
+  source: VersionSource,
+  projectVersion: string,
+): { previous: string | null; next: string } {
+  switch (source) {
+    case 'packageJson':
+      return updatePackageVersion(repoPath, projectVersion)
+    case 'gradle':
+      return writeGradleVersion(repoPath, projectVersion)
+    case 'cargo':
+      return writeCargoVersion(repoPath, projectVersion)
+    case 'goModule':
+      throw new Error(
+        'goModule 模式不支持写版本：go.mod 不存版本字段（版本由 git tag + CI ldflags 控制）',
+      )
+    case 'derived':
+      throw new Error('derived 模式不维护版本文件：版本由 bxverse 派生')
+  }
+}
+
+// ---------- gradle 辅助函数 ----------
+// 支持 build.gradle（Groovy DSL）与 build.gradle.kts（Kotlin DSL）。
+// 匹配 `version = "X.Y.Z"` 形式（单/双引号均可）；跳过注释行 `//` 与 `*`。
+
+function findGradleFile(repoPath: string): string | null {
+  for (const name of ['build.gradle', 'build.gradle.kts']) {
+    const p = path.join(repoPath, name)
+    if (fs.existsSync(p)) return p
+  }
+  return null
+}
+
+const GRADLE_VERSION_RE = /^\s*version\s*=\s*['"]([^'"]+)['"]\s*$/
+
+function readGradleVersion(repoPath: string): string | null {
+  const file = findGradleFile(repoPath)
+  if (!file) return null
+  for (const raw of fs.readFileSync(file, 'utf8').split(/\r?\n/)) {
+    const line = raw
+      .replace(/\/\/.*$/, '')
+      .replace(/\/\*.*\*\//g, '')
+      .trim()
+    const m = line.match(GRADLE_VERSION_RE)
+    if (m && m[1]) return m[1].replace(/^v/i, '')
+  }
+  return null
+}
+
+function writeGradleVersion(
+  repoPath: string,
+  projectVersion: string,
+): { previous: string | null; next: string } {
+  const file = findGradleFile(repoPath)
+  if (!file) throw new Error(`未找到 build.gradle(.kts): ${repoPath}`)
+  const next = projectSemver(projectVersion)
+  const lines = fs.readFileSync(file, 'utf8').split(/\r?\n/)
+  let previous: string | null = null
+  let matched = false
+  const out = lines.map((raw) => {
+    const noComment = raw.replace(/\/\/.*$/, '').replace(/\/\*.*\*\//g, '')
+    const m = noComment.match(GRADLE_VERSION_RE)
+    if (m && m[1]) {
+      previous = m[1].replace(/^v/i, '')
+      matched = true
+      return raw.replace(GRADLE_VERSION_RE, (full) => full.replace(m[1] ?? '', next))
+    }
+    return raw
+  })
+  if (!matched) throw new Error(`build.gradle 中未找到 version = "..." 行: ${file}`)
+  if (previous === next) return { previous, next }
+  atomicWrite(file, out.join('\n'))
+  return { previous, next }
+}
+
+// ---------- cargo 辅助函数 ----------
+// 解析 Cargo.toml [package] section 的 version = "X.Y.Z"。
+// 跳过 [workspace.package] / [dependencies] 等其他 section。
+
+const CARGO_VERSION_RE = /^\s*version\s*=\s*"([^"]+)"\s*$/
+
+function readCargoVersion(repoPath: string): string | null {
+  const file = path.join(repoPath, 'Cargo.toml')
+  if (!fs.existsSync(file)) return null
+  const lines = fs.readFileSync(file, 'utf8').split(/\r?\n/)
+  let inPackage = false
+  for (const raw of lines) {
+    const line = raw.split('#')[0]?.trim() ?? ''
+    if (!line) continue
+    if (line.startsWith('[')) {
+      inPackage = line === '[package]'
+      continue
+    }
+    if (inPackage) {
+      const m = line.match(CARGO_VERSION_RE)
+      if (m && m[1]) return m[1].replace(/^v/i, '')
+    }
+  }
+  return null
+}
+
+function writeCargoVersion(
+  repoPath: string,
+  projectVersion: string,
+): { previous: string | null; next: string } {
+  const file = path.join(repoPath, 'Cargo.toml')
+  if (!fs.existsSync(file)) throw new Error(`未找到 Cargo.toml: ${file}`)
+  const next = projectSemver(projectVersion)
+  const lines = fs.readFileSync(file, 'utf8').split(/\r?\n/)
+  let previous: string | null = null
+  let matched = false
+  let inPackage = false
+  const out = lines.map((raw) => {
+    const noComment = raw.split('#')[0] ?? ''
+    const stripped = noComment.trim()
+    if (stripped.startsWith('[')) {
+      inPackage = stripped === '[package]'
+      return raw
+    }
+    if (inPackage) {
+      const m = stripped.match(CARGO_VERSION_RE)
+      if (m && m[1]) {
+        previous = m[1].replace(/^v/i, '')
+        matched = true
+        return raw.replace(CARGO_VERSION_RE, (full) => full.replace(m[1] ?? '', next))
+      }
+    }
+    return raw
+  })
+  if (!matched) throw new Error(`Cargo.toml [package] section 未找到 version = "..." 行: ${file}`)
+  if (previous === next) return { previous, next }
+  atomicWrite(file, out.join('\n'))
+  return { previous, next }
 }
 
 // ==================== R26 锁文件与包管理器探测 ====================
@@ -156,16 +358,25 @@ export function listLockFiles(repoPath: string): string[] {
 /** 按包管理器推导默认 frozen 安装命令；无匹配返回 null */
 export function getDefaultInstallCommand(pm: PackageManager | null): string | null {
   switch (pm) {
-    case 'pnpm': return 'pnpm install --frozen-lockfile'
-    case 'npm': return 'npm ci'
-    case 'yarn': return 'yarn install --frozen-lockfile'
-    case 'bun': return 'bun install --frozen-lockfile'
-    default: return null
+    case 'pnpm':
+      return 'pnpm install --frozen-lockfile'
+    case 'npm':
+      return 'npm ci'
+    case 'yarn':
+      return 'yarn install --frozen-lockfile'
+    case 'bun':
+      return 'bun install --frozen-lockfile'
+    default:
+      return null
   }
 }
 
 /** 解析安装命令：显式配置优先，'skip' 表示跳过，否则按探测推导 */
-export function resolveInstallCommand(repoPath: string, explicit?: string, pmOverride?: PackageManager | null): string | null {
+export function resolveInstallCommand(
+  repoPath: string,
+  explicit?: string,
+  pmOverride?: PackageManager | null,
+): string | null {
   if (explicit !== undefined) {
     const v = explicit.trim()
     if (v.toLowerCase() === 'skip' || v === '') return null
@@ -179,9 +390,12 @@ export function resolveInstallCommand(repoPath: string, explicit?: string, pmOve
  * 受控提交：仅提交 package.json + 已存在的锁文件。
  * 无变更 → { committed: false }；有变更 → commit 并返回新 hash。
  */
-export async function commitVersionFiles(repoPath: string, message: string): Promise<{ committed: boolean; hash?: string }> {
+export async function commitVersionFiles(
+  repoPath: string,
+  message: string,
+): Promise<{ committed: boolean; hash?: string }> {
   const candidates = ['package.json', ...listLockFiles(repoPath)]
-  const existing = candidates.filter(f => fs.existsSync(path.join(repoPath, f)))
+  const existing = candidates.filter((f) => fs.existsSync(path.join(repoPath, f)))
   if (existing.length === 0) return { committed: false }
 
   // 仅 add 白名单文件

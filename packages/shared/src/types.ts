@@ -78,9 +78,16 @@ export interface RepoDef {
   updatePackageVersion?: boolean
   /** 扩展：R19 产物备份目录（相对仓库根；未配置则发布时跳过产物备份并提示） */
   artifactDir?: string
-  // 扩展：R26 仓库级构建流水线与 package.json 版本源
-  /** 扩展：R26 版本来源：derived=派生版本（默认，保持现行为）；packageJson=以仓库根 package.json 为权威 */
-  versionSource?: 'derived' | 'packageJson'
+  // 扩展：R26 仓库级构建流水线与多栈版本源（B 方向扩 gradle/cargo/goModule）
+  /**
+   * 扩展：版本来源（B 方向多栈）
+   * - derived：派生版本（默认；bxverse 推算，不维护业务仓版本文件）
+   * - packageJson：仓库根 package.json 顶层 `version`
+   * - gradle：build.gradle(.kts) 的 `version = "X.Y.Z"`（Groovy/Kotlin DSL）
+   * - cargo：Cargo.toml [package] section 的 `version = "X.Y.Z"`
+   * - goModule：tag-only（go.mod 不存版本；版本由 git tag + CI ldflags 注入，bxverse 不写文件）
+   */
+  versionSource?: 'derived' | 'packageJson' | 'gradle' | 'cargo' | 'goModule'
   /** 扩展：R26 包管理器（用于推导默认安装命令）；缺省按锁文件自动探测 */
   packageManager?: 'pnpm' | 'npm' | 'yarn' | 'bun'
   /** 扩展：R26 构建前依赖安装命令；缺省按包管理器推导 frozen install，设为 'skip' 可跳过 */

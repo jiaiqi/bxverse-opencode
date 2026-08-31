@@ -132,8 +132,64 @@ T8 e2e fixture 向导回归 (S)
 
 ---
 
+## 10. B 方向多栈 versionSource（gradle / cargo / goModule）
+
+### 10.1 背景与目标
+
+R26 已落地 `RepoDef.versionSource: 'derived' | 'packageJson'` 两栈，bump→写 `package.json` 顶层 `version` 走 `commitVersionFiles` 受控提交链路。但仅覆盖 Node.js 仓；JVM/Android（Gradle）/ Rust（Cargo）/ Go（goModule）项目同样存在版本管理需求。
+
+B 方向在 core 层补齐 3 栈 `detect + read + write` 能力，引擎主路径暂不消费（R26 已落地的 packageJson 路径不变），由后续 server/web 端点与引擎扩展复用。
+
+### 10.2 版本源枚举
+
+| 取值 | 适用栈 | 读取位置 | 写入 | 说明 |
+|---|---|---|---|---|
+| `derived` | 任意（默认） | 不读 | 不写 | bxverse 推算版本，不维护业务仓版本文件（保持现行为） |
+| `packageJson` | Node.js | `package.json#version` | ✅ | R26 既有，受控提交 |
+| `gradle` | JVM/Android | `build.gradle` 或 `build.gradle.kts` 的 `version = "X.Y.Z"` | ✅ | 新增 |
+| `cargo` | Rust | `Cargo.toml [package] version = "X.Y.Z"` | ✅ | 新增；[workspace.package] 不动 |
+| `goModule` | Go | — | ❌ | 新增；go.mod 不存版本（Go 社区规范），版本由 git tag + CI ldflags 注入 |
+
+```ts
+// packages/shared/src/types.ts (R26 + B 方向)
+versionSource?: 'derived' | 'packageJson' | 'gradle' | 'cargo' | 'goModule'
+```
+
+### 10.3 core 能力函数
+
+`packages/core/src/repo-policy.ts` 新增 3 主函数 + 4 辅助函数（gradle Groovy/Kotlin DSL、Cargo.toml [package] 解析）：
+
+| 函数 | 签名 | 行为 |
+|---|---|---|
+| `detectVersionSource` | `(repoPath) => VersionSource` | 按文件存在优先级：`build.gradle(.kts)` > `Cargo.toml` > `go.mod` > `package.json` > `derived` |
+| `readVersionBySource` | `(repoPath, source) => string \| null` | 按 source 调对应 read 函数；goModule/derived 永远 null |
+| `writeVersionBySource` | `(repoPath, source, version) => { previous, next }` | 按 source 调对应 write 函数；goModule/derived 抛清晰错 |
+
+辅助函数 `readGradleVersion` / `writeGradleVersion` 支持 `build.gradle`（Groovy DSL）和 `build.gradle.kts`（Kotlin DSL），匹配 `version = "X.Y-Z"` 形式（单/双引号），跳过 `//` 注释行；`readCargoVersion` / `writeCargoVersion` 仅改 `[package]` section 的 `version` 字段，`[workspace.package]` / `[dependencies]` 不动。
+
+### 10.4 引擎集成（暂未消费）
+
+当前 `engine.ts:278` 仍只判 `versionSource === 'packageJson'` 走 `updatePackageVersion`；B 方向仅在 core 层落地 read/write/detect 能力。
+
+**后续扩展点**（不在本节 scope，留待 R32.x）：
+- `engine.ts:278` 改为 `switch (effectiveSource)`，case `gradle`/`cargo` 调 `writeVersionBySource`；case `goModule` 跳过 version-sync（依赖外部 CI ldflags 写入）
+- `commitVersionFiles` 白名单扩 `build.gradle` / `build.gradle.kts` / `Cargo.toml`（保持受控提交纪律）
+- `getDefaultInstallCommand` 增 cargo（`cargo build --frozen`）与 goModule（`go mod download`）映射
+
+### 10.5 server / web 接入
+
+- **server**：`GET /api/repos/:id` 已返回 `versionSource` 字段（`RepoDef` 序列化透传）；后续可在 `GET /api/repos/:id/version` 单独暴露 `readVersionBySource` 探测值
+- **web**：`RepoSettings.vue` 增加 `versionSource` 下拉（5 选 1，默认 derived）；选中后即时显示当前探测值（`detectVersionSource + readVersionBySource`）
+
+### 10.6 借鉴 l-pc-front
+
+l-pc-front 的 `scripts/generate-version.js` 仅处理 Node.js（`package.json` + `public/version.json`），无多栈概念。本节能力超出 l-pc-front，是 bxverse 通用化的独立扩展。
+
+---
+
 ## 9. 变更记录
 
 | 日期 | 变更 |
 |---|---|
 | 2026-08-24 | R26 方案定稿：双格式 `X.Y.Z` / `VYYMMDDHHmm`，package.json 核心同步，受控提交 |
+| 2026-08-31 | B 方向多栈 versionSource：扩 gradle/cargo/goModule，core 层 detect+read+write 能力，引擎主路径暂不消费 |

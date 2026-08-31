@@ -195,7 +195,7 @@ const settingsForm = reactive({
   outputDir: 'public',
   writeVersionFile: true,
   artifactDir: '',
-  versionSource: 'derived' as 'derived' | 'packageJson',
+  versionSource: 'derived' as 'derived' | 'packageJson' | 'gradle' | 'cargo' | 'goModule',
   packageManager: '' as '' | 'pnpm' | 'npm' | 'yarn' | 'bun',
   installCommand: '',
   preBuildCommand: '',
@@ -532,13 +532,16 @@ watch(tab, (t) => {
               <NSelect
                 v-model:value="settingsForm.versionSource"
                 :options="[
-                  { label: '派生版本（默认）', value: 'derived' },
-                  { label: 'package.json 权威', value: 'packageJson' },
+                  { label: '派生版本（默认；bxverse 推算，不维护业务仓文件）', value: 'derived' },
+                  { label: 'package.json 权威（Node.js）', value: 'packageJson' },
+                  { label: 'build.gradle(.kts) 权威（JVM/Android）', value: 'gradle' },
+                  { label: 'Cargo.toml 权威（Rust）', value: 'cargo' },
+                  { label: 'tag-only（Go；go.mod 不存版本）', value: 'goModule' },
                 ]"
                 class="flex-1"
               />
               <span class="ml-2 text-[11px] text-text-3 shrink-0"
-                >package.json 写入 X.Y.Z 核心</span
+                >多栈 versionSource（B 方向）；goModule 不写文件，靠 git tag + CI ldflags</span
               >
             </NFormItem>
             <NFormItem label="包管理器">
