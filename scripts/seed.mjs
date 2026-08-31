@@ -25,7 +25,7 @@ function makeDemoRepo(name, commits) {
   run(['init', '-b', 'master'])
   run(['config', 'user.name', 'demo'])
   run(['config', 'user.email', 'demo@bxverse.local'])
-  for (const [i, c] of commits.entries()) {
+  for (const [, c] of commits.entries()) {
     for (const [f, content] of Object.entries(c.files)) {
       const p = path.join(dir, f)
       mkdirSync(path.dirname(p), { recursive: true })
@@ -55,29 +55,50 @@ async function main() {
   }
 
   // 2. 项目 + 三个演示仓库
-  const project = await post('/api/projects', { name: projectName, description: '演示项目（seed 脚本生成）' })
+  const project = await post('/api/projects', {
+    name: projectName,
+    description: '演示项目（seed 脚本生成）',
+  })
   console.log(`项目已创建: ${project.name} (${project.id})`)
 
   const demos = [
     {
-      name: 'web-front', displayName: 'Web 前端',
+      name: 'web-front',
+      displayName: 'Web 前端',
       commits: [
-        { message: 'feat(ui): 新增仪表盘页面', files: { 'src/views/Dashboard.vue': '<template><div>dashboard</div></template>\n' } },
-        { message: 'fix: 修复暗色主题对比度', files: { 'src/styles/theme.css': ':root { --bg: #f5f6f8; }\n' } },
+        {
+          message: 'feat(ui): 新增仪表盘页面',
+          files: { 'src/views/Dashboard.vue': '<template><div>dashboard</div></template>\n' },
+        },
+        {
+          message: 'fix: 修复暗色主题对比度',
+          files: { 'src/styles/theme.css': ':root { --bg: #f5f6f8; }\n' },
+        },
         { message: 'docs: 更新 README', files: { 'README.md': '# web-front\n' } },
       ],
     },
     {
-      name: 'api-service', displayName: 'API 服务',
+      name: 'api-service',
+      displayName: 'API 服务',
       commits: [
-        { message: 'feat(auth): 新增令牌刷新接口', files: { 'src/auth.ts': 'export const refresh = () => {}\n' } },
-        { message: 'perf: 缓存查询结果', files: { 'src/cache.ts': 'export const cache = new Map()\n' } },
+        {
+          message: 'feat(auth): 新增令牌刷新接口',
+          files: { 'src/auth.ts': 'export const refresh = () => {}\n' },
+        },
+        {
+          message: 'perf: 缓存查询结果',
+          files: { 'src/cache.ts': 'export const cache = new Map()\n' },
+        },
       ],
     },
     {
-      name: 'mp-weixin', displayName: '微信小程序',
+      name: 'mp-weixin',
+      displayName: '微信小程序',
       commits: [
-        { message: 'feat: 首页改版', files: { 'pages/index/index.vue': '<template><view>home</view></template>\n' } },
+        {
+          message: 'feat: 首页改版',
+          files: { 'pages/index/index.vue': '<template><view>home</view></template>\n' },
+        },
         { message: 'fix: 修复支付回调', files: { 'api/pay.ts': 'export const pay = () => {}\n' } },
       ],
     },
