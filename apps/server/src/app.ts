@@ -29,6 +29,7 @@ import { register as registerAi } from './api/ai'
 import { register as registerGit } from './api/git'
 import { register as registerDoctor } from './api/doctor'
 import { register as registerOps } from './api/ops'
+import { register as registerMatrix } from './api/matrix'
 
 export type WithCfg = <T>(mutator: (cfg: AppConfig) => T | Promise<T>) => Promise<T>
 
@@ -91,7 +92,10 @@ export function createApp(opts: { token?: string } = {}): App {
       await saveCfg(cfg)
     }
     const next = cfgChain.then(task, task)
-    cfgChain = next.then(() => {}, () => {})
+    cfgChain = next.then(
+      () => {},
+      () => {},
+    )
     await next
     return result
   }
@@ -106,7 +110,11 @@ export function createApp(opts: { token?: string } = {}): App {
   }
 
   // 服务引用（dataStore 懒初始化后回填）
-  const registerHistoryServices = { loadCfg, lockedProjectId: () => queue.lockedProjectId, dataStore: null as unknown as store.DataStore }
+  const registerHistoryServices = {
+    loadCfg,
+    lockedProjectId: () => queue.lockedProjectId,
+    dataStore: null as unknown as store.DataStore,
+  }
   const registerSyncServices = { dataStore: null as unknown as store.DataStore }
   const registerOverviewServices = { loadCfg, poll, dataStore: null as unknown as store.DataStore }
 
@@ -117,7 +125,9 @@ export function createApp(opts: { token?: string } = {}): App {
     const { resolve } = await import('node:path')
     let version = '0.0.0'
     try {
-      const pkg = JSON.parse(readFileSync(resolve(process.cwd(), 'package.json'), 'utf8')) as { version?: string }
+      const pkg = JSON.parse(readFileSync(resolve(process.cwd(), 'package.json'), 'utf8')) as {
+        version?: string
+      }
       version = pkg.version ?? '0.0.0'
     } catch {
       // ignore
@@ -144,6 +154,7 @@ export function createApp(opts: { token?: string } = {}): App {
   registerGit(router, { loadCfg })
   registerDoctor(router, { loadCfg })
   registerOps(router)
+  registerMatrix(router, registerOverviewServices)
 
   const server = http.createServer(async (req, res) => {
     const url = new URL(req.url ?? '/', 'http://127.0.0.1')
@@ -160,7 +171,8 @@ export function createApp(opts: { token?: string } = {}): App {
       if (pathname.startsWith('/api/')) {
         const method = req.method ?? 'GET'
         const skipToken =
-          (pathname === '/api/health' && method === 'GET') || (pathname === '/api/openapi.json' && method === 'GET')
+          (pathname === '/api/health' && method === 'GET') ||
+          (pathname === '/api/openapi.json' && method === 'GET')
         // Config bootstrap is intentionally available before the browser has a token.
         // The server warns when bound beyond loopback; protected mutations still require the token.
         const allowBootstrap = pathname === '/api/config' && method === 'GET'

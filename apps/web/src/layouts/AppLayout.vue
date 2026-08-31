@@ -55,6 +55,13 @@ const navItems = computed(() => [
     shortLabel: '审计比',
   },
   {
+    id: 'matrix',
+    to: '/matrix',
+    icon: 'i-carbon-grid',
+    label: '版本矩阵',
+    shortLabel: '矩阵',
+  },
+  {
     id: 'settings',
     to: '/settings',
     icon: 'i-carbon-settings',

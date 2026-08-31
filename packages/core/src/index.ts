@@ -12,12 +12,21 @@ export * as compare from './compare'
 export * as logger from './logger'
 export * as doctor from './doctor'
 export * as release from './release'
+export * as matrix from './matrix'
 export { CoreError, CORE_ERROR_CODES } from './errors'
 export { resolveHome, ensureDirs, atomicWrite } from './home'
 export type { CoreErrorCode } from './errors'
 export { diffLines } from './diff'
 export type { DiffLine } from './diff'
-export { polishLog, testConnection, chatCompletion, generateCommitMessage, explainDiff, fetchModels, normalizeBaseUrl } from './ai'
+export {
+  polishLog,
+  testConnection,
+  chatCompletion,
+  generateCommitMessage,
+  explainDiff,
+  fetchModels,
+  normalizeBaseUrl,
+} from './ai'
 export type { Journal, JournalStep } from './journal'
 export { JournalStore } from './journal'
 export { runWithPool } from './pool'

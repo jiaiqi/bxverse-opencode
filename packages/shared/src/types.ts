@@ -7,8 +7,18 @@ export type BumpType = 'major' | 'minor' | 'patch'
 
 // ==================== 提交与日志 ====================
 export type CommitType =
-  | 'feat' | 'fix' | 'perf' | 'refactor' | 'style'
-  | 'chore' | 'docs' | 'test' | 'build' | 'ci' | 'revert' | 'other'
+  | 'feat'
+  | 'fix'
+  | 'perf'
+  | 'refactor'
+  | 'style'
+  | 'chore'
+  | 'docs'
+  | 'test'
+  | 'build'
+  | 'ci'
+  | 'revert'
+  | 'other'
 
 export type LogState = 'auto' | 'edited' | 'confirmed'
 
@@ -148,7 +158,9 @@ export interface AppConfig {
   /** 扩展：发布并发（默认 1 串行；设 2-3 可仓库级并行，需保证 saveProject 竞态安全） */
   publish?: { concurrency?: number }
   // 扩展：R29 发布 webhook 通知（适配钉钉/企微/飞书 Incoming webhook POST）
-  notifications?: { webhooks: { id: string; url: string; events: ('done' | 'error')[]; enabled: boolean }[] }
+  notifications?: {
+    webhooks: { id: string; url: string; events: ('done' | 'error')[]; enabled: boolean }[]
+  }
   projects: ProjectDef[]
 }
 
@@ -448,8 +460,11 @@ export interface OverviewData {
     changedRepoCount: number
     /** 扩展：M8 看板——脏仓库计数（status.dirty > 0） */
     dirtyRepoCount: number
-    lastRelease: { version: string; date: string; /** 扩展：M8 看板——距今天数（0=今天，>0=过去）；前端据此渲染 "今天/3 天前" */
-    daysAgo: number } | null
+    lastRelease: {
+      version: string
+      date: string /** 扩展：M8 看板——距今天数（0=今天，>0=过去）；前端据此渲染 "今天/3 天前" */
+      daysAgo: number
+    } | null
   }[]
   changedRepos: {
     projectId: string
@@ -621,4 +636,76 @@ export interface ReleasePublishNoteResult {
   tag: string
   action: 'created' | 'updated'
   url?: string
+}
+
+// 扩展：R31 多项目跨工程版本矩阵（0 入侵纯聚合）
+/** 矩阵列（仓库） */
+export interface MatrixColumn {
+  /** 仓库英文名（RepoDef.name） */
+  app: string
+  /** 仓库中文名（RepoDef.displayName ?? app） */
+  name: string
+  /** 该仓库被多少个项目接入（按 RepoDef.id 聚合，跨项目同一 path 视为同一仓） */
+  occurrences: number
+  /** 列头显示名（"app" + " · N 项目"；occurrences<=1 时仅 app） */
+  displayName: string
+}
+
+/** 矩阵单元格（项目 × 仓库） */
+export interface MatrixCell {
+  /** 该项目是否未接入该仓库；true 时其他字段为占位 */
+  absent: boolean
+  /** 当前版本号（来自 status.versionFile?.version 或 fallback 项目 version）；空时 '-' */
+  version: string
+  /** 该仓库 lastRelease 摘要（按 full:false 索引快速路径，data: {version,date}） */
+  lastRelease: { version: string; date: string; daysAgo: number } | null
+  /** 相对上次发布是否有变动（status.changed） */
+  changed: boolean
+  /** 累计待发布提交数（status.commits.length，截断后仅作提示） */
+  commits: number
+  /** 工程化类型（status.repoKind）；UI 据此做流水线降级提示 */
+  repoKind?: 'nodejs' | 'static'
+  /** 单仓 poll 失败的容错标记：true 时表示本次聚合该仓失败，其他字段保留已知值（version='-'） */
+  pollFailed?: boolean
+  /** 扩展：R31 跨项目列对齐 key（= 仓库名 RepoDef.name；前端用此与 MatrixColumn.app 匹配做列定位） */
+  app?: string
+  /** 扩展：R31 仓库中文名（displayName ?? app；前端列头展示用） */
+  name?: string
+  /** 扩展：R31 该项目下此仓的 repoId（前端跳 RepoDetail 用） */
+  repoId?: string
+}
+
+/** 矩阵行（项目） */
+export interface MatrixProjectRow {
+  id: string
+  name: string
+  /** 项目统一版本（ProjectDef.version） */
+  version: string
+  /** 项目 lastRelease 摘要 */
+  lastRelease: { version: string; date: string; daysAgo: number } | null
+  /** 该项目下 changed 仓库数（cells 中 changed=true 的计数） */
+  changedCount: number
+  /** 该项目下脏仓库数（cells 中 dirty>0 的计数；容错：仅当仓 poll 成功时计入） */
+  dirtyCount: number
+  /** repoId → 单元格 */
+  cells: Record<string, MatrixCell>
+}
+
+/** 完整矩阵响应（R31 GET /api/matrix） */
+export interface VersionMatrix {
+  /** 矩阵生成时间 ISO 8601 */
+  generatedAt: string
+  /** 列（仓库）按 occurrences desc, app asc 排序 */
+  columns: MatrixColumn[]
+  /** 行（项目）按配置顺序输出 */
+  projects: MatrixProjectRow[]
+  /** 「跨项目版本不齐」的列（app）；前端据此给该列加视觉强调 */
+  driftColumns: string[]
+  /** 聚合统计（前端 StatCard 用） */
+  totals: {
+    projects: number
+    repos: number
+    changed: number
+    driftColumns: number
+  }
 }
