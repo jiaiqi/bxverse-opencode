@@ -67,10 +67,11 @@ async function waitServer() {
 
 let token = ''
 async function api(path, method = 'GET', body) {
+  const hasBody = body !== undefined && method !== 'GET' && method !== 'HEAD'
   const res = await fetch(`${BASE}${path}`, {
     method,
     headers: { 'X-BX-Token': token, 'Content-Type': 'application/json' },
-    body: body ? JSON.stringify(body) : undefined,
+    ...(hasBody ? { body: JSON.stringify(body) } : {}),
   })
   if (res.status >= 400) {
     const e = await res.json().catch(() => ({}))
