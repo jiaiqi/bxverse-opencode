@@ -164,6 +164,7 @@ apps/@bxverse/cli ──────┘
 | `docs/r26-build-pipeline.md` | R26 仓库级构建流水线与双格式权威方案 | R26 相关任务必读 |
 | `docs/next-development-plan.md` | **下一阶段开发总纲**：现状快照、原型差距清单、Phase 1–3 排期与出口标准、文档治理 | 领取任何新任务前；决定「接下来做什么」时 |
 | `docs/optimization-plan.md` | 优化任务卡库（F/T/S/A/C/N/DOC 系列，单卡自包含） | 执行具体优化任务时（先按代码现状核对任务是否已落地） |
+| `docs/r32-rollback-guide.md` | R32 升级后回退到历史版本 + l-pc-front 接入 bxverse 后的代码删除清单与回退 SOP | R32 实施时 + l-pc-front 类业务仓迁移到 bxverse 时 |
 
 > 注：除 requirements.md、architecture.md、roadmap.md 外，其余文档由并行任务撰写，可能暂缺——缺失时以 requirements + shared/types.ts + architecture.md 为准，并在实现注释中标注「依赖待补：docs/xxx.md」。
 

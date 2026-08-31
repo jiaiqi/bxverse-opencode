@@ -134,6 +134,9 @@
 | GET | `/api/openapi.json` | OpenAPI 3.0 契约（免 token） | — | `apps/server/src/api/openapi.ts` |
 | GET | `/api/metrics` | 进程指标（免 token） | — | `apps/server/src/api/metrics.ts` |
 | GET | `/api/matrix` | 多项目跨工程版本矩阵（R31，0 入侵纯聚合） | `VersionMatrix` | `apps/server/src/api/matrix.ts` |
+| GET | `/api/projects/:id/rollback/preview?targetReleaseId=` | 预览回退到某 release 的影响面（R32） | `RollbackPreview` | `apps/server/src/api/rollback.ts` |
+| POST | `/api/projects/:id/rollback` | 执行回退到某 release（R32，body `RollbackRequest`，需 `confirmed=true`） | `RollbackResult` | `apps/server/src/api/rollback.ts` |
+| GET | `/api/projects/:id/rollback/diff?fromReleaseId=&toReleaseId=` | 源码级 diff（current → target 之间，R32） | `CompareResult` | `apps/server/src/api/rollback.ts` |
 
 ---
 
@@ -1175,6 +1178,134 @@ data: {"type":"done","message":"发布完成","data":{"releaseId":"rel_p_3f1_v1.
 
 实现：`apps/server/src/api/matrix.ts`（新增路由）；底层 `packages/core/src/matrix.ts` `buildMatrix()` 纯函数（输入 `(cfg, pollCache, dataStore, runWithPool)`，输出 `VersionMatrix`）。性能：所有 `dataStore.listRecords` 走 `{full:false}` 索引摘要快速路径（与 `overview.ts` A3 同源），单端点 P99 < 500ms（实测 ~80-150ms / 50 仓）。
 
+### 10.11 升级后回退到历史版本（R32）
+
+> 设计动机：升级上线后发现问题，希望「选择回退到某个历史版本」一键操作。**端到端 0 入侵**：仅打标签 + 写 bxverse 数据仓库 + 写 release record（沿用 R24 deprecate 语义），不 amend/commit/force-push 业务仓。
+
+#### GET /api/projects/:id/rollback/preview
+
+用途：预览回退到某 release 的影响面（drift / dirty / 兼容性 / 跳过的提交 / 风险等级）。
+
+请求：`?targetReleaseId=rel_p_xxx_v1.1.0`（必填，scopeId=projectId 范围内）
+
+响应 `200`（`RollbackPreview`）：
+
+```json
+{
+  "targetVersion": "1.1.0",
+  "targetRelease": { "id": "rel_p_xxx_v1.1.0", "version": "1.1.0", "...": "..." },
+  "currentRelease": { "id": "rel_p_xxx_v1.2.0", "version": "1.2.0", "...": "..." },
+  "tagsToDeprecate": { "build": "build/v1.2.0.26083115", "milestone": "v1.2.0" },
+  "repos": [
+    {
+      "repoId": "r_pc_front", "repoName": "l-pc-front", "path": "E:/r1",
+      "branch": "master",
+      "targetCommit": "abc1234", "currentCommit": "def5678", "isAhead": true, "dirty": 0,
+      "compatibility": "ok", "compatibilityHints": []
+    }
+  ],
+  "driftColumnsAffected": ["l-data-v"],
+  "nextVersionSuggestion": "1.1.1",
+  "externalDraft": "## Changes\\n...",
+  "internalDraft": "## 内部说明\\n...",
+  "riskLevel": "warn",
+  "riskReasons": ["l-pc-front 当前 commit 领先目标 4 个提交，回退会丢失"]
+}
+```
+
+字段语义：
+
+| 字段 | 说明 |
+|---|---|
+| `targetRelease` | 选定目标 release（来自 `dataStore.listRecords(projectId, {full:true, limit:20})`） |
+| `currentRelease` | 当前最新非 deprecated release（`status !== 'deprecated'`）；无则 null |
+| `tagsToDeprecate` | 旧 release 的 build/milestone 标签名（用于执行时校验删除） |
+| `repos[].isAhead` | true 表示 current HEAD 领先 target commit → 回退会"丢弃"新提交（warn） |
+| `repos[].compatibility` | ok / mismatch / unknown —— 当前 RepoDef.versionSource / packageManager / buildCommand 与 targetRelease 仓级 record 比对 |
+| `driftColumnsAffected` | 复用 R31 `matrix.buildMatrix` 拿 `driftColumns`，过滤命中本仓的 app（共享 pure function） |
+| `riskLevel` | `block`（dirty>0）/ `warn`（isAhead / drift 命中 / compatibility='mismatch'）/ `ok`（都通过） |
+| `nextVersionSuggestion` | `bumpSemver(targetRelease.version, 'patch')`（默认 patch，用户可改 bump） |
+
+错误：`404 NOT_FOUND`（projectId / targetReleaseId 不存在）。
+
+#### POST /api/projects/:id/rollback
+
+用途：执行回退。**必须 `confirmed=true` 才接受**（防误操作）。**`riskLevel='block'` 直接 409 拒绝**。
+
+请求体 `RollbackRequest`：
+
+```json
+{
+  "projectId": "p_main",
+  "targetReleaseId": "rel_p_xxx_v1.1.0",
+  "nextVersion": "1.1.1",
+  "bump": "patch",
+  "externalContent": "用户编辑后的对外日志（可选；缺省用 preview 草稿）",
+  "internalContent": "用户编辑后的对内日志（可选）",
+  "skipBuild": false,
+  "offline": false,
+  "confirmed": true,
+  "repoIds": ["r_pc_front", "r_data_v"]
+}
+```
+
+| 字段 | 必填 | 默认 | 说明 |
+|---|---|---|---|
+| `confirmed` | ✅ | `false` | 二次确认开关，**必须 `true`** |
+| `bump` | ❌ | `patch` | `patch` / `minor` / `major` |
+| `repoIds` | ❌ | `targetRelease.repos` 全量 | 用户可勾选部分仓回退 |
+| `nextVersion` | ✅ | — | 用户可覆盖 `nextVersionSuggestion` |
+
+响应 `200`（`RollbackResult`）：
+
+```json
+{
+  "ok": true,
+  "newReleaseId": "rel_p_xxx_v1.1.1",
+  "deprecatedReleaseIds": ["rel_p_xxx_v1.2.0", "rel_p_xxx_v1.1.0"],
+  "failedRepos": [],
+  "deletedTags": [
+    { "repoId": "r_pc_front", "tag": "build/v1.2.0.26083115", "kind": "build" }
+  ],
+  "warnings": []
+}
+```
+
+错误：
+
+| code | 状态 | 含义 |
+|---|---|---|
+| `VALIDATION` | 400 | 字段缺失 / `nextVersion` 不合法 / `bump` 非法 |
+| `CONFIRM_REQUIRED` | 400 | `confirmed !== true` |
+| `NOT_FOUND` | 404 | projectId / targetReleaseId 不存在 |
+| `RISK_BLOCKED` | 409 | preview 阶段 `riskLevel='block'`（dirty>0） |
+| `PUBLISH_RUNNING` | 409 | 项目正在发布中 |
+| `TASK_BUSY` | 409 | 全局发布队列忙 |
+
+执行流（core `executeRollback`）：
+
+1. 二次确认（`confirmed===true`）→ 否则 400 `CONFIRM_REQUIRED`
+2. 调 `buildRollbackPreview` → riskLevel='block' → 409 `RISK_BLOCKED`
+3. 走发布执行（复用 `engine.executePublish`）：以 `targetRelease.repos[repoId].to` 作为发布 commit → 走预检 → 构建（可 `skipBuild`）→ 打 `build/{newVersion}` + `v{newVersion}` 标签 → 写仓库 record + project record → push（`offline=false`）
+4. 旧 release 链 deprecate：从 currentRelease 链到 targetRelease（不含）之间的 release 全部 `deprecateRecord({reason: 'R32 rollback to {targetRelease.version}'})`；targetRelease 自身 deprecate
+5. 删除多余标签（按 `git tagTarget` 校验仅删指向"目标 commit"的，保护历史）
+6. 数据仓库 `commitRecords('revert: rollback {projectId} from {currentRelease.version} to {targetRelease.version}')`
+7. 返回 `RollbackResult`
+
+#### GET /api/projects/:id/rollback/diff
+
+用途：源码级 diff（current → target 之间），复用 `repos/diff` 端点（`/api/repos/:pid/:rid/diff?to=&from=`）。
+
+请求：`?fromReleaseId=rel_p_xxx_v1.2.0&toReleaseId=rel_p_xxx_v1.1.0`
+
+响应 `200`（`CompareResult`，与 R19 备份对比同结构）：聚合各仓 `git diff --name-status --numstat`，files 列表 + totals。
+
+错误：`404 NOT_FOUND`（releaseId 不存在 / 仓 path 不可达）。
+
+**核心不变性**：①回退全程仅打标签 + 写 release record + 写数据仓库（git 数据仓库），不动业务仓 git 历史；②旧 release 不删，仅 deprecate 审计；③断点续跑复用既有 `JournalStore`（不新加 R32 专属 step 类型）；④失败隔离与 R11 一致（单仓失败不阻断其他仓 + `FailureRecoveryCard` 兜底）；⑤回退中途 kill server → restart → 同 taskId 续跑（与 R11 续跑同机制）。
+
+实现：`apps/server/src/api/rollback.ts`（新增路由）；底层 `@bxverse/core/rollback`（`buildRollbackPreview` + `executeRollback`）；复用 `engine.executePublish` + `dataStore.deprecateRecord` + `git.tagTarget` + `git.deleteTag`。
+
 ---
 
 ## 11. 与 architecture.md §3.2 路由表的差异
@@ -1206,6 +1337,7 @@ data: {"type":"done","message":"发布完成","data":{"releaseId":"rel_p_3f1_v1.
 | §9 数据仓库同步 | R10、R15 | tag/release 远程联动与多机同步、自动降级 |
 | §10 辅助端点 | 非功能·可靠性 | 中断续跑恢复 UI、token 轮换 |
 | §10.10 Version Matrix | R31 | 多项目跨工程版本矩阵；0 入侵纯聚合 |
+| §10.11 Rollback | R32 | 升级后回退到历史版本；confirmed 必填 + riskLevel='block' 拒绝 + 业务仓 0 入侵 |
 
 ---
 
@@ -1227,3 +1359,5 @@ data: {"type":"done","message":"发布完成","data":{"releaseId":"rel_p_3f1_v1.
 | 2026-08-26 | §10.x 新增 GET /api/publish/:taskId/failure（结构化失败诊断：failedRepos[] + reports[] FailedRepoReport）；POST /api/publish/:taskId/rollback body {repoIds?}（仅删自产 build 标签 + 标 deprecate + 写 R24 审计） |
 | 2026-08-26 | 新增 GET /api/ops/process（自举版本/内存 RSS/uptime/BX_HOME/nodeVersion/platform/startedAt）+ GET /api/ops/logs?level=all|info|warn|error（30 天滚动 JSON 日志流，最多 500 行倒序） |
 | 2026-08-26 | 新增 GET /api/overview/weekly（近 8 周发布次数 + 跨项目数，按 ISO 周分组，0 周也展示空柱） |
+| 2026-08-31 | R31 Version Matrix 落地：§2 路由表增 `GET /api/matrix`、§10.10 详细设计、§12 对应关系 |
+| 2026-08-31 | R32 升级后回退立项：§2 路由表增 3 端点（preview/execute/diff）、§10.11 详细设计（字段语义 + 执行流 + 核心不变性 + 错误码 CONFIRM_REQUIRED / RISK_BLOCKED）、§12 对应关系 |

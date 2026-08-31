@@ -452,11 +452,73 @@ NConfigProvider(theme + themeOverrides)
 
 **文件**：`apps/web/src/views/VersionMatrix.vue`（新增）；`apps/web/src/api/index.ts` 增 `api.matrix()`（`GET /api/matrix`）；`apps/web/src/router/index.ts` 增路由 `{ path: '/matrix', name: 'matrix', component: () => import('../views/VersionMatrix.vue'), meta: { title: '版本矩阵' } }`；AppLayout 侧栏增入口「版本矩阵」`i-carbon-grid`（位置在「运维中心」下方）。
 
-### 3.8 404 `/：pathMatch(.*)*`
+### 3.8 升级后回退向导 `/project/:id/rollback`（RollbackWizard.vue，R32）
+
+**数据来源**：`GET /api/projects/:id/rollback/preview?targetReleaseId=...` → `RollbackPreview`；执行 `POST /api/projects/:id/rollback` → `RollbackResult`（同步等待）；`GET /api/projects/:id/releases?n=20` 列历史 release（默认 20 条，上限 100）。
+
+**设计动机**：升级上线后发现问题，希望「选择回退到某个历史版本」一键操作。**端到端 0 入侵**：仅打标签 + 写 bxverse 数据仓库 + 写 release record，不动业务仓 git 历史。
+
+**入口 3 条**（与 §3.7 多入口设计同模式）：
+1. ProjectDetail 顶栏 actions 新增「回退到某版本」按钮（`i-carbon-undo`）→ 跳 `/project/:id/rollback?targetReleaseId=...`
+2. RepoDetail 头部「release 链」下拉新增「回退到此 release」+ 「回退到比此更早的 release」两个动作（带 `?targetReleaseId=` 参数）
+3. CommandPalette 命令 `rollback-to-version`（`i-carbon-undo` 调命令面板）→ 弹项目选择器
+
+**路由**：`{ path: '/project/:id/rollback', name: 'rollback', component: () => import('../views/RollbackWizard.vue'), meta: { title: '回退' } }`（与 ReleaseWizard 同 pattern）
+
+**4 步向导**（`?step=` URL 同步，与 ReleaseWizard 一致）：
+
+**Step 1 选目标 release**
+- PageHeader「回退到某版本」+ 「选目标 release」提示
+- 时间线列表（默认展开最近 20 条 `projectReleases`，倒序）：
+  - 每行 release：版本号（mono）+ commitTime + status chip（deprecated 时灰底「已废弃」/ partial 时黄底「部分失败」/ completed 时绿底「已发布」）
+  - 风险预览色阶：点选后实时算 riskLevel（客户端无 preview 时显示「待评估」灰底，选定后跳 Step 2 拿服务端 riskLevel 渲染）
+- 搜索框（按 version 模糊匹配） + 「仅看非 deprecated」开关
+- 选中 → 跳 Step 2 + URL `?targetReleaseId=...&step=2`
+
+**Step 2 影响面预览**（直接渲染 `RollbackPreview`）
+- 顶部 banner：`从 {currentVersion} 回退到 {targetVersion}` + 风险等级 chip（ok=绿/warn=黄/block=红） + 「返回 Step 1 重选」按钮
+- 中间表格（受影响仓 × 6 列）：仓名 + 路径（截断 + 复制） + 当前/目标 commit 短 hash（hover 显示完整 hash） + branch + dirty 数（>0 时红底） + compatibility chip（ok=绿/mismatch=黄/unknown=灰） + compatibilityHints（折叠展开） + RouterLink 跳 RepoDetail
+- 底部 drift 风险提示：`driftColumnsAffected` 列名 + 提示「回退后此列将不再 drift」（NPopover hover 详情）
+- riskReasons 列表（每条一个 NAlert，可关闭）
+- 「下一步版本」+ bump 选择器（patch/minor/major，NPopover 说明三种语义）
+- 「继续」按钮：跳 Step 3
+
+**Step 3 版本与日志确认**
+- 自动建议 `nextVersionSuggestion`（来自 preview，NInput 可改）
+- bump 选择器（patch 默认；改后实时更新 `nextVersionSuggestion`）
+- 双轨日志编辑器（`LogEditor` 复用）：
+  - 外部日志预填 `externalDraft`（来自 targetRelease.logs.external.content + 当前 commit 列表重新生成）
+  - 内部日志预填 `internalDraft`（同上）
+- 二次确认开关（必勾选）：`NCheckbox`「我已确认将回退并发布新版本」（**与 `RollbackRequest.confirmed===true` 必填绑定**）
+- 「执行回退」按钮：disabled 状态绑定「确认开关未勾选 || nextVersion 为空」
+- 点击 → POST `/api/projects/:id/rollback` body `RollbackRequest` → 跳 Step 4
+
+**Step 4 执行 + 结果**
+- Loading 态：NAlert「回退中…」（`@click="router.replace(...)"` 阻止返回）
+- 错误展示：NAlert error + 「重试」按钮
+- 成功展示：RollbackResult 卡片（与 `FailureRecoveryCard` 同款风格）
+  - 顶部：风险等级 chip + 「回退完成 v1.1.1 已发布，v1.2.0 已标废弃」+ 跳新 release 的 RouterLink
+  - 中部：deprecatedReleaseIds 列表（每条 deprecated release + deprecateReason 摘要 + 跳 history）
+  - 底部：deletedTags 列表 + warnings（每条 NAlert warn）
+
+**键盘流 + a11y**：
+- 4 步 PageHeader back 按钮支持 a11y 标签
+- 时间线列表 `role="listbox"` + 行 `role="option"` + `aria-selected`
+- 风险 chip `aria-label` 描述等级与 reason
+- 二次确认 checkbox 必须聚焦且 tabindex=0
+- prefers-reduced-motion：4 步过渡关闭
+
+**性能**：单端点 P99 < 500ms（与 matrix 同源复用 `runWithPool` + listRecords 索引快速路径）
+
+**0 入侵说明横幅**（页脚常驻）：纯聚合 + 仅打标签 + 写数据仓库，不改任何业务仓库。
+
+**文件**：`apps/web/src/views/RollbackWizard.vue`（新增）；`apps/web/src/api/index.ts` 增 `api.rollbackPreview(projectId, targetReleaseId)` + `api.rollbackExecute(projectId, body)` + `api.rollbackDiff(projectId, fromReleaseId, toReleaseId)`；`apps/web/src/router/index.ts` 增 `/project/:id/rollback` 路由；`apps/web/src/views/ProjectDetail.vue` actions 增「回退到某版本」按钮（`i-carbon-undo`，跳 `?targetReleaseId=` 路由或命令面板让用户选）；`apps/web/src/views/RepoDetail.vue` release 链下拉增 2 个回退动作；`apps/web/src/components/CommandPalette.vue` 增 `rollback-to-version` 命令。
+
+### 3.9 404 `/：pathMatch(.*)*`
 
 `NResult status="404"` + 「返回总览」按钮，2s 后自动重定向 `/`（可取消）。
 
-### 3.9 徽标规则汇总（StatusBadge 统一实现，禁止散落自绘）
+### 3.10 徽标规则汇总（StatusBadge 统一实现，禁止散落自绘）
 
 | 场景 | 判定条件 | 文案/图标 | 色 |
 |---|---|---|---|
@@ -1094,6 +1156,7 @@ const routes = [
 | R18 | 版本清单导出（下载/写仓库/本地目录/预览） | §4.17 VersionExportDropdown、§4.18 DirPicker、§5.5 useFsAccess |
 | R19 | 版本一致性对比与发布备份 | §3.6 备份管理、§8.6 备份开关（dry-run 清单）、§4.18 DirPicker（artifactDir 选择） |
 | R31 | Version Matrix 多项目跨工程聚合（0 入侵） | §3.7 VersionMatrix.vue（矩阵表 + drift 高亮 + 搜索 + URL 同步 + 30s 轮询 + 命令面板入口） |
+| R32 | 升级后回退到历史版本 | §3.8 RollbackWizard.vue（4 步向导 + 3 入口 + confirmed 门禁 + riskLevel 渲染 + 与 R31 drift 共享） |
 
 ---
 
@@ -1112,3 +1175,4 @@ const routes = [
 | 2026-08-26 | M11 落地：FailureRecoveryCard.vue（失败头卡：危险色边框 + 错误码 chip + 失败仓计数；结构化诊断：head/target/tag/tagSource 4 列事实 + 恢复建议 + 三出路按钮 + 诊断包 Blob 导出）；StepResult.vue 失败时优先渲染 FailureRecoveryCard 替代旧 NAlert |
 | 2026-08-26 | M14 命令面板增强：fuzzy 匹配（连续命中加权 + 短查询优先）+ aria-label 描述总项数 + listbox role + 空态 role=status + 计数条；onboarding e2e 用 placeholder 选择器兼容动态 aria-label |
 | 2026-08-31 | 新增 R31 Version Matrix 矩阵视图：§3.7 VersionMatrix.vue（多项目跨工程聚合 + 0 入侵纯展示 + drift 列高亮 + URL `?q=` 同步 + 30s 轮询 + 命令面板入口）；§3.8/3.9 章节编号顺延 |
+| 2026-08-31 | 新增 R32 升级后回退到历史版本：§3.8 RollbackWizard.vue（4 步：选 release → 影响面预览 → 版本与日志确认 → 执行；3 入口 ProjectDetail/RepoDetail/CommandPalette；confirmed 必填 + riskLevel='block' 409 拒绝 + 业务仓 0 入侵 + 与 R31 drift 共享）；§3.9/3.10 章节编号顺延 |
