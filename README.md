@@ -59,6 +59,26 @@ pnpm icons            # 生成 PWA 图标
 - 生产形态：`pnpm build` 后 `pnpm start`，浏览器访问 http://127.0.0.1:8899
 - 数据目录：`~/.bxverse/`（可用环境变量 `BX_HOME` 覆盖）
 
+## 当前状态
+
+- **版本**：v1.0.1（2026-08-29 锁版，1.x 维护期）—— R1–R30 全实现 / M1–M8 全收口 / 235 单元测试 + 3 e2e 场景 + 65 原型回归全绿
+- **变更日志**：[CHANGELOG.md](CHANGELOG.md)（v1.0.0 / v1.0.1 已发布）
+- **下一阶段规划**：[docs/next-development-plan.md](docs/next-development-plan.md)（v1.x 维护 + 后续候选）
+
+## 测试
+
+```bash
+pnpm typecheck                       # 5 包 tsc --noEmit / vue-tsc --noEmit
+pnpm test                            # core 157 + server 78 单测（vitest）
+pnpm build                           # 5 包链构建（shared → core → server → cli → web，web ~40s）
+pnpm test:e2e                        # 三场景端到端：wizard-flow / resume / onboarding
+python design/.diag-tmp/_regress5.py # 原型 v2.0 68 断言回归（wenxi/indigo 主题切换 + 命令面板 + 4 类语义色）
+```
+
+## 原型资产（设计/参考）
+
+`design/bxverse-ultimate-cockpit.html` 是单文件 Vue 3 + Tailwind CDN 原型，作为「终极形态」的设计/交互基线；git 跟踪 doc，但 `.html` 与 `.diag-tmp/` 在 `.gitignore` 中（设计资产不污染仓库）。当前迭代到 v2.0 第六轮（A1 count-up / A2 noise+glass / A3 主题切换 / B 命令面板 / D 主题化 / E 4 类语义色 / F 紫色 R30）。
+
 ## bx-manager（CLI 薄壳）
 
 `apps/cli` 是 bxverse 的命令行入口，已发布到 npm 时安装即用：
