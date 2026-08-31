@@ -11,6 +11,8 @@ import type {
   CloneRequest,
   CommitType,
   CompareResult,
+  CrossSearchResponse,
+  CrossSearchType,
   FileContent,
   FailedRepoReport,
   GitFileDiff,
@@ -419,4 +421,10 @@ export const api = {
     onEvent: (e: PublishEventLike) => void,
     onError: (e: Error) => void,
   ) => streamSse(`/events?task=${taskId}`, onEvent, onError),
+
+  // C 方向：跨项目搜索（commit / version / name）
+  crossSearch: (q: string, type: CrossSearchType, limit = 50) => {
+    const params = new URLSearchParams({ q, type, limit: String(limit) })
+    return http.get<CrossSearchResponse>(`/cross/search?${params.toString()}`)
+  },
 }

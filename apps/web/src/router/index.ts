@@ -61,6 +61,12 @@ const router = createRouter({
       meta: { title: '版本矩阵' },
     },
     {
+      path: '/cross',
+      name: 'cross-search',
+      component: () => import('../views/CrossProjectSearch.vue'),
+      meta: { title: '跨项目搜索' },
+    },
+    {
       path: '/:pathMatch(.*)*',
       name: 'not-found',
       component: () => import('../views/NotFound.vue'),

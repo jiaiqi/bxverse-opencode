@@ -38,6 +38,13 @@ const commands = computed<Command[]>(() => {
       keywords: 'settings',
       run: () => router.push('/settings'),
     },
+    {
+      group: '页面',
+      title: '跨项目搜索',
+      icon: 'i-carbon-search',
+      keywords: 'cross search global query commit version name',
+      run: () => router.push('/cross'),
+    },
   ]
   for (const p of projectsStore.items) {
     list.push({

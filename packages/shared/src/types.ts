@@ -815,3 +815,42 @@ export interface RollbackResult {
   /** 警告（drift / ahead / compatibility） */
   warnings: string[]
 }
+
+// ==================== C 方向 跨项目搜索 ====================
+
+/** 扩展：C 方向跨项目搜索类型 */
+export type CrossSearchType = 'commit' | 'version' | 'name'
+
+/** 扩展：C 方向跨项目搜索单条结果（不同 type 字段含义不同） */
+export interface CrossSearchResult {
+  /** 命中类型（与请求 type 一致） */
+  type: CrossSearchType
+  /** 命中项目 id */
+  projectId: string
+  /** 命中项目名 */
+  projectName: string
+  /** 命中仓库 id（commit/version 命中具体到仓；name 命中可能为 undefined） */
+  repoId?: string
+  /** 命中仓库名 */
+  repoName?: string
+  /** commit 命中：完整 commit hash（40 位） */
+  commit?: string
+  /** commit 命中：短 hash（前 7 位） */
+  shortCommit?: string
+  /** commit/version 命中：所在 release 版本号 */
+  version?: string
+  /** version/name 命中：上下文摘要（e.g. release date、displayName） */
+  hint?: string
+  /** 简单相关度分（0-1，仅 name 命中用；commit/version 命中为 1） */
+  score: number
+}
+
+/** 扩展：C 方向跨项目搜索响应 */
+export interface CrossSearchResponse {
+  query: string
+  type: CrossSearchType
+  total: number
+  results: CrossSearchResult[]
+  /** 搜索耗时毫秒 */
+  tookMs: number
+}

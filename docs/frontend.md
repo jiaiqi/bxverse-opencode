@@ -514,11 +514,49 @@ NConfigProvider(theme + themeOverrides)
 
 **文件**：`apps/web/src/views/RollbackWizard.vue`（新增）；`apps/web/src/api/index.ts` 增 `api.rollbackPreview(projectId, targetReleaseId)` + `api.rollbackExecute(projectId, body)` + `api.rollbackDiff(projectId, fromReleaseId, toReleaseId)`；`apps/web/src/router/index.ts` 增 `/project/:id/rollback` 路由；`apps/web/src/views/ProjectDetail.vue` actions 增「回退到某版本」按钮（`i-carbon-undo`，跳 `?targetReleaseId=` 路由或命令面板让用户选）；`apps/web/src/views/RepoDetail.vue` release 链下拉增 2 个回退动作；`apps/web/src/components/CommandPalette.vue` 增 `rollback-to-version` 命令。
 
-### 3.9 404 `/：pathMatch(.*)*`
+### 3.9 跨项目搜索 `/cross`（CrossProjectSearch.vue，C 方向）
+
+跨项目搜索入口。聚合所有项目，**零依赖、纯查询**（不调用 git、不影响发布队列）。
+
+**顶部 PageHeader**：标题「跨项目搜索」+ 副标题「按 commit hash / 版本号 / 名称 在所有项目里查找」。
+
+**搜索框**（`type="search"`，`autocomplete="off"` + `spellcheck="false"`，WIG 合规）：
+- 左 icon `i-carbon-search` 装饰
+- 中 input（`flex-1`，`aria-label="跨项目搜索关键字"`，`@input` 防抖 400ms 触发搜索 + 300ms URL 同步）
+- placeholder「输入 commit / version / 项目或仓库名…」
+
+**类型 chip 行**（3 选 1，`aria-pressed` 标记）：
+- 「按名称」（name；项目名/仓库名/displayName 子串匹配）
+- 「按 commit」（commit；hash 前缀 ≥7 位）
+- 「按版本」（version；精确匹配 X.Y.Z / vX.Y.Z / VYYMMDDHHmm）
+- 每个 chip `title` 属性附详细 hint（hover tooltip 提示匹配规则）
+- 右侧：搜索耗时（`result.tookMs`） + 总数（`result.total`）副文本
+
+**结果区**（按 type 渲染）：
+- 加载：`LoadingState` 「搜索中…」
+- 错误：`ErrorState title="搜索失败" reason={error}` + retry
+- 空查询：「输入关键字开始搜索」（EmptyState + `i-carbon-search` icon）
+- 空命中：「无匹配结果」+ 当前 query + type 提示
+- 有结果：`<CrossProjectCard>` 列表，每条按 type 展示不同字段（commit 短 hash + repo；version 版本号 + 废弃标识；name 项目/仓库名 + 描述）
+
+**CrossProjectCard 卡片**（C 方向复用单元）：
+- 三色 type chip（commit 蓝 / version 青 / name 橙）
+- 主内容按 type 分支
+- 右侧 `→ {projectName}` RouterLink 跳项目详情
+
+**URL 状态同步**：`/cross?q=&type=`（与 ReleaseWizard 同模式，初始化读 query，变化 `router.replace` 写回）。
+
+**嵌入入口**（2 条）：
+1. **AppLayout 顶栏右侧**：新增「跨项目搜」按钮（RouterLink to="/cross"，`i-carbon-search` icon，`title="跨项目搜索"`）
+2. **CommandPalette**：页面组新增「跨项目搜索」命令（icon `i-carbon-search`，keywords 含 `cross search global query commit version name`）
+
+**文件**：`apps/web/src/views/CrossProjectSearch.vue`（新增）；`apps/web/src/components/CrossProjectCard.vue`（新增，C 方向复用单元）；`apps/web/src/api/index.ts` 增 `api.crossSearch(q, type, limit)`；`apps/web/src/router/index.ts` 增 `/cross` 路由；`apps/web/src/layouts/AppLayout.vue` 顶栏加「跨项目搜」RouterLink；`apps/web/src/components/CommandPalette.vue` 加 `cross-search` 命令。
+
+### 3.10 404 `/：pathMatch(.*)*`
 
 `NResult status="404"` + 「返回总览」按钮，2s 后自动重定向 `/`（可取消）。
 
-### 3.10 徽标规则汇总（StatusBadge 统一实现，禁止散落自绘）
+### 3.11 徽标规则汇总（StatusBadge 统一实现，禁止散落自绘）
 
 | 场景 | 判定条件 | 文案/图标 | 色 |
 |---|---|---|---|
@@ -1176,3 +1214,5 @@ const routes = [
 | 2026-08-26 | M14 命令面板增强：fuzzy 匹配（连续命中加权 + 短查询优先）+ aria-label 描述总项数 + listbox role + 空态 role=status + 计数条；onboarding e2e 用 placeholder 选择器兼容动态 aria-label |
 | 2026-08-31 | 新增 R31 Version Matrix 矩阵视图：§3.7 VersionMatrix.vue（多项目跨工程聚合 + 0 入侵纯展示 + drift 列高亮 + URL `?q=` 同步 + 30s 轮询 + 命令面板入口）；§3.8/3.9 章节编号顺延 |
 | 2026-08-31 | 新增 R32 升级后回退到历史版本：§3.8 RollbackWizard.vue（4 步：选 release → 影响面预览 → 版本与日志确认 → 执行；3 入口 ProjectDetail/RepoDetail/CommandPalette；confirmed 必填 + riskLevel='block' 409 拒绝 + 业务仓 0 入侵 + 与 R31 drift 共享）；§3.9/3.10 章节编号顺延 |
+| 2026-08-31 | B 方向多栈 versionSource：RepoSettings NSelect 扩 5 选 1（derived/packageJson/gradle/cargo/goModule，gradle/cargo 描述含构建系统识别；goModule 标"tag-only，go.mod 不存版本"）；与 R26 commitVersionFiles 链路解耦，引擎主路径不变 |
+| 2026-08-31 | C 方向跨项目搜索：§3.9 CrossProjectSearch.vue（搜索框 + 3 类型 chip + 结果列表 + 空/加载/错误态 + URL `?q=&type=` 同步）+ CrossProjectCard.vue 复用单元（3 色 type chip + commit/version/name 分支展示）；2 入口 AppLayout 顶栏 + CommandPalette；§3.10/3.11 章节编号顺延 |

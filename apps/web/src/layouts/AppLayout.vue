@@ -331,6 +331,15 @@ function triggerFastRelease() {
 
       <!-- 右：快捷操作、AI 状态、数据仓库同步、一键发版 -->
       <div class="flex items-center gap-2.5">
+        <!-- 跨项目搜索快捷入口 -->
+        <RouterLink
+          to="/cross"
+          class="flex items-center gap-1.5 px-2 py-1 rounded-md text-[11px] text-text-3 hover:text-brand-500 hover:bg-surface-hover border border-border transition-[color,background-color,border-color] cursor-pointer focus-ring"
+          title="跨项目搜索（commit / version / name）"
+        >
+          <i aria-hidden="true" class="i-carbon-search text-12px" />
+          <span>跨项目搜</span>
+        </RouterLink>
         <!-- 接入仓库快捷按钮 -->
         <button
           v-if="currentProject"

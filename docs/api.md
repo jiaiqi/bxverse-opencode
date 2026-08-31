@@ -1308,6 +1308,62 @@ data: {"type":"done","message":"发布完成","data":{"releaseId":"rel_p_3f1_v1.
 
 ---
 
+### 10.12 跨项目搜索（C 方向）
+
+**目标**：跨项目查找 commit / version / name，统一入口 `GET /api/cross/search`，所有项目聚合。
+
+#### 10.12.1 端点
+
+| 方法 | 路径 | 用途 | 关键 shared 类型 |
+|---|---|---|---|
+| GET | `/api/cross/search?q=&type=&limit=` | 跨项目搜 | `CrossSearchResponse` |
+
+**Query 参数**：
+
+| 字段 | 必填 | 校验 | 默认 |
+|---|---|---|---|
+| `q` | 是 | 1-100 字符 | — |
+| `type` | 是 | `commit` \| `version` \| `name` | — |
+| `limit` | 否 | 1-200 整数 | 50 |
+
+**响应** `200 CrossSearchResponse`：
+
+```ts
+{
+  query: string              // 原始查询
+  type: CrossSearchType      // 与请求一致
+  total: number              // 命中条数
+  results: CrossSearchResult[]  // 按相关性 / 时间排序
+  tookMs: number             // 搜索耗时
+}
+```
+
+`CrossSearchResult` 字段语义：
+- `type`：与请求 type 一致
+- `projectId` / `projectName`：命中项目
+- `repoId` / `repoName`（可选）：commit 命中具体到仓；name 命中仓库时
+- `commit`（40 位）/ `shortCommit`（7 位）：仅 commit 命中
+- `version`：commit/version 命中所在 release
+- `hint`：上下文摘要（发布日期 / 描述 / displayName）
+- `score`：相关度（0-1；commit/version 命中为 1，name 项目 0.9 / 仓库 0.7）
+
+#### 10.12.2 三种 type 行为
+
+- **`commit`**：遍历所有项目 release record → `record.repos[].commits[].fullHash` 前缀匹配（不区分大小写；≥7 位）
+- **`version`**：精确匹配 `record.version`，容错 `vX.Y.Z` / `VYYMMDDHHmm` / `X.Y.Z` 三种格式；`deprecated=true` 的 release 命中时 hint 标"已废弃"
+- **`name`**：子串匹配（不区分大小写）项目名（score 0.9）+ 仓库名/displayName（score 0.7）
+
+#### 10.12.3 错误码
+
+- `400 VALIDATION`：q 缺失 / 长度超限 / type 非法 / limit 非法
+- `401 UNAUTHORIZED`：无 `X-BX-Token`
+
+**核心不变性**：①只读 `cfg.projects` + `dataStore.listRecords`，不调用 git、不写记录；②零依赖、纯查询，不影响发布队列；③非项目级独立端点（路径 `/api/cross/*`，不挂在 `/api/projects/:id` 下）；④`limit` 上限 200 保护内存。
+
+实现：`apps/server/src/api/cross.ts`（新增路由）；复用 `dataStore.listRecords` 既有契约；`CrossSearchResult` / `CrossSearchResponse` / `CrossSearchType` 在 `shared/types.ts` 定义。
+
+---
+
 ## 11. 与 architecture.md §3.2 路由表的差异
 
 | # | architecture.md 原设计 | 本设计 | 原因 |
@@ -1338,6 +1394,7 @@ data: {"type":"done","message":"发布完成","data":{"releaseId":"rel_p_3f1_v1.
 | §10 辅助端点 | 非功能·可靠性 | 中断续跑恢复 UI、token 轮换 |
 | §10.10 Version Matrix | R31 | 多项目跨工程版本矩阵；0 入侵纯聚合 |
 | §10.11 Rollback | R32 | 升级后回退到历史版本；confirmed 必填 + riskLevel='block' 拒绝 + 业务仓 0 入侵 |
+| §10.12 Cross-Project Search | C 方向 | 跨项目搜 commit/version/name；零依赖纯查询，不影响发布队列 |
 
 ---
 
@@ -1361,3 +1418,5 @@ data: {"type":"done","message":"发布完成","data":{"releaseId":"rel_p_3f1_v1.
 | 2026-08-26 | 新增 GET /api/overview/weekly（近 8 周发布次数 + 跨项目数，按 ISO 周分组，0 周也展示空柱） |
 | 2026-08-31 | R31 Version Matrix 落地：§2 路由表增 `GET /api/matrix`、§10.10 详细设计、§12 对应关系 |
 | 2026-08-31 | R32 升级后回退立项：§2 路由表增 3 端点（preview/execute/diff）、§10.11 详细设计（字段语义 + 执行流 + 核心不变性 + 错误码 CONFIRM_REQUIRED / RISK_BLOCKED）、§12 对应关系 |
+| 2026-08-31 | B 方向多栈 versionSource：core/repo-policy.ts 扩 detectVersionSource / readVersionBySource / writeVersionBySource（gradle/cargo/goModule）；shared RepoDef.versionSource 枚举扩 5 值 |
+| 2026-08-31 | C 方向跨项目搜索：§2 路由表增 `GET /api/cross/search`、§10.12 详细设计（3 type 行为 + CrossSearchResult/Response 契约）、§12 对应关系；web 增 `CrossProjectCard.vue` + `CrossProjectSearch.vue` 视图 + `/cross` 路由 + AppLayout 入口 + CommandPalette 命令 |
