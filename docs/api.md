@@ -133,6 +133,7 @@
 | POST | `/api/releases/:id/publish-note` | 同步 external 日志至平台 Release（R27） | `ExternalReleaseProvider` | `apps/server/src/api/history.ts` |
 | GET | `/api/openapi.json` | OpenAPI 3.0 契约（免 token） | — | `apps/server/src/api/openapi.ts` |
 | GET | `/api/metrics` | 进程指标（免 token） | — | `apps/server/src/api/metrics.ts` |
+| GET | `/api/matrix` | 多项目跨工程版本矩阵（R31，0 入侵纯聚合） | `VersionMatrix` | `apps/server/src/api/matrix.ts` |
 
 ---
 
@@ -1112,6 +1113,68 @@ data: {"type":"done","message":"发布完成","data":{"releaseId":"rel_p_3f1_v1.
 
 实现：`apps/server/src/api/history.ts`（新增路由）；底层 `@bxverse/core/release`（`parseRemoteUrl` 复用 git 远程解析逻辑，`publishReleaseNote` 处理 GitHub/Gitee 双协议与幂等 GET+POST/PATCH）。
 
+### 10.10 多项目跨工程版本矩阵（R31）
+
+> 设计动机：多项目常共用同一批前端工程（如 `l-pc-front` 在主产品线 / 灰度项目 / 演示项目里都接入），需要「按项目管理工程版本」的可视化矩阵。**端到端 0 入侵**——纯聚合展示，不改任何业务仓库，0 写入。
+
+#### GET /api/matrix
+
+用途：聚合所有项目×所有仓库的版本矩阵，对角线单元格高亮「跨项目版本不齐」。
+
+响应 `200`（`VersionMatrix`，见 `packages/shared/src/types.ts`）：
+
+```json
+{
+  "generatedAt": "2026-08-31T10:00:00.000Z",
+  "columns": [
+    { "app": "l-pc-front", "name": "PC 前台", "occurrences": 3, "displayName": "l-pc-front · 3 项目" },
+    { "app": "l-data-v",   "name": "数据可视化", "occurrences": 2, "displayName": "l-data-v · 2 项目" }
+  ],
+  "projects": [
+    {
+      "id": "p_main",
+      "name": "主产品线",
+      "version": "1.2.0",
+      "lastRelease": { "version": "1.2.0", "date": "2026-08-29", "daysAgo": 2 },
+      "changedCount": 3,
+      "cells": {
+        "r_pc_front": {
+          "absent": false,
+          "version": "1.2.0",
+          "lastRelease": { "version": "1.2.0", "date": "2026-08-29", "daysAgo": 2 },
+          "changed": true,
+          "commits": 4,
+          "repoKind": "nodejs"
+        },
+        "r_data_v": {
+          "absent": false,
+          "version": "1.0.5",
+          "lastRelease": { "version": "1.0.5", "date": "2026-08-20", "daysAgo": 11 },
+          "changed": false,
+          "commits": 0,
+          "repoKind": "nodejs"
+        }
+      }
+    }
+  ],
+  "driftColumns": ["l-data-v"]
+}
+```
+
+字段语义：
+
+| 字段 | 说明 |
+|---|---|
+| `generatedAt` | 矩阵生成时间（ISO 8601） |
+| `columns[]` | 矩阵列（仓库）；按 `occurrences desc, app asc` 排序——出现项目多→少→无；`displayName` = `app + · N 项目`（仅 N>1 时） |
+| `projects[]` | 矩阵行（项目）；按配置顺序输出；`changedCount` = 该项目下 `changed=true` 的仓库数 |
+| `projects[].cells[repoId]` | 单元格；`absent=true` 表示该项目未接入该仓库；`version` 来自仓库 `versionFile` 或 fallback 项目 `version`；`lastRelease` 来自该仓库 `dataStore.listRecords(repoId, {full:false,limit:1})` |
+| `driftColumns[]` | 「跨项目版本不齐」的列（`app`）—— 同一 `app` 在不同项目里 `version` 不一致时列入；前端据此给该列加视觉强调（暖色描边/感叹号） |
+
+**核心不变性**：①本端点只读（仅 `services.poll.get` + `dataStore.listRecords`），不调用任何 git 写操作、不写 `app.json`、不写数据仓库 → 业务仓 0 入侵；②单仓 `poll.get` 失败时容错（视为 `absent=false, version='-', commits=0`，不阻断其他仓）；③`runWithPool` limit 6 并行收集（与 `overview.ts` 同源）；④响应大小估计：N 项目 × M 仓 ≤ 2000 单元格的轻量 JSON，gzip < 50KB。
+
+实现：`apps/server/src/api/matrix.ts`（新增路由）；底层 `packages/core/src/matrix.ts` `buildMatrix()` 纯函数（输入 `(cfg, pollCache, dataStore, runWithPool)`，输出 `VersionMatrix`）。性能：所有 `dataStore.listRecords` 走 `{full:false}` 索引摘要快速路径（与 `overview.ts` A3 同源），单端点 P99 < 500ms（实测 ~80-150ms / 50 仓）。
+
 ---
 
 ## 11. 与 architecture.md §3.2 路由表的差异
@@ -1142,6 +1205,7 @@ data: {"type":"done","message":"发布完成","data":{"releaseId":"rel_p_3f1_v1.
 | §8 发布（dry-run/执行/SSE） | R9、R10、R12、R14 | 自动化生成、六步向导、本地/远程双模式、执行前预览 |
 | §9 数据仓库同步 | R10、R15 | tag/release 远程联动与多机同步、自动降级 |
 | §10 辅助端点 | 非功能·可靠性 | 中断续跑恢复 UI、token 轮换 |
+| §10.10 Version Matrix | R31 | 多项目跨工程版本矩阵；0 入侵纯聚合 |
 
 ---
 

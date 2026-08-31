@@ -414,11 +414,49 @@ NConfigProvider(theme + themeOverrides)
 
 **状态处理**：loading → NSpin；`project.repos.length===0` → EmptyState「暂无仓库」；项目不存在 → NResult 404 + 返回总览。
 
-### 3.7 404 `/：pathMatch(.*)*`
+### 3.7 多项目跨工程版本矩阵 `/matrix`（VersionMatrix.vue，R31）
+
+**数据来源**：`GET /api/matrix` → `VersionMatrix`（进入页面与切换项目/工程过滤时刷新；30s 自动刷新，期间切换 tab 暂停轮询）。
+
+**设计动机**：多项目常共用同一批前端工程（如 `l-pc-front` 在主产品线 / 灰度项目 / 演示项目里都接入），需要「按项目管理工程版本」的可视化矩阵。**端到端 0 入侵**——纯聚合展示，不改任何业务仓库。
+
+**区块**：
+
+| 区块 | 内容 |
+|---|---|
+| PageHeader | 标题「版本矩阵」+ 副标题「跨项目 × 跨工程版本对齐视图」+ `generatedAt` 相对时间（useNow）；actions：刷新按钮（`i-carbon-refresh`，loading 态）、命令面板入口、说明 tooltip（hover 显示 0 入侵说明） |
+| 搜索栏 | `NInput` placeholder「搜索项目或工程…」`clearable`，实时过滤 projects 与 columns（命中项目全部工程或命中工程全部项目）；query 与 URL `?q=` 双向同步（router.replace） |
+| 矩阵表 | `<table>` 矩阵（`role="grid"`）；sticky `<thead>`（工程表头列：app + ` · N 项目` chip，N>1 时 brand 软底）；sticky 首列（项目行表头：项目名 + 版本徽标 + `changedCount` 计数 chip）；单元格 `role="gridcell"` + tabindex 0（roving tabindex，`useGridRovingTabindex`） |
+| 单元格 | 显示 `version`（mono 字体，缺省时 `—`）；右上角 `i-carbon-warning-alt`（drift 列）+ `i-carbon-checkmark-filled`（已对齐）；hover 弹窗（NPopover）显示 `lastRelease`（version + date + daysAgo）+ `commits` + `repoKind` + RouterLink「查看仓库」（`/repo/:pid/:rid`）；`absent=true` 时灰底 + `i-carbon-minus` |
+| drift 列高亮 | `versionMatrix.driftColumns` 包含的 app 整列加 `border-x-2 border-warn-500/30`（暖色竖条）+ 列头 `tag-warn` chip「跨项目不齐」 |
+| 项目行小计 | 末尾行 `commits 总和` chip（项目所有 changed 仓库的 commits 之和，hover 显示明细） |
+| EmptyState | `versionMatrix.projects.length===0` → 「还没有项目」+ 新建项目 CTA（与 Dashboard 一致） |
+| 底部 | 「0 入侵说明」横幅：纯聚合展示，不改任何业务仓库 |
+
+**交互**：
+
+- 单元格 click → 跳 `/repo/:pid/:rid`（RouterLink 包装，`stopPropagation` 避免冒泡到行）
+- 搜索 query 同步 URL `?q=`（router.replace，不入 history）
+- 「30s 自动刷新」期间 `document.hidden=true` 暂停（visibilitychange 事件）
+- 命令面板「跳到版本矩阵」命令（`@bxverse/web` CommandPalette 既有机制）
+
+**a11y**：
+
+- 矩阵 `role="grid"` + `aria-label="项目 × 工程版本矩阵"`
+- 单元格 `aria-label` 完整描述：「主产品线 l-pc-front 版本 1.2.0 最近发布 2 天前」
+- drift 列 `aria-describedby` 指向「跨项目不齐」chip
+- 键盘：`useGridRovingTabindex` 方向键按列宽跨行，Home/End 本行首尾，Ctrl+Home/End 网格首尾
+- prefers-reduced-motion：过滤动画关闭，矩阵无进入 stagger（保持静态显示即可）
+
+**性能**：单端点 P99 < 500ms（实测 ~80-150ms / 50 仓），前端零额外 IO。
+
+**文件**：`apps/web/src/views/VersionMatrix.vue`（新增）；`apps/web/src/api/index.ts` 增 `api.matrix()`（`GET /api/matrix`）；`apps/web/src/router/index.ts` 增路由 `{ path: '/matrix', name: 'matrix', component: () => import('../views/VersionMatrix.vue'), meta: { title: '版本矩阵' } }`；AppLayout 侧栏增入口「版本矩阵」`i-carbon-grid`（位置在「运维中心」下方）。
+
+### 3.8 404 `/：pathMatch(.*)*`
 
 `NResult status="404"` + 「返回总览」按钮，2s 后自动重定向 `/`（可取消）。
 
-### 3.8 徽标规则汇总（StatusBadge 统一实现，禁止散落自绘）
+### 3.9 徽标规则汇总（StatusBadge 统一实现，禁止散落自绘）
 
 | 场景 | 判定条件 | 文案/图标 | 色 |
 |---|---|---|---|
@@ -1055,6 +1093,7 @@ const routes = [
 | R17 | UI/UX 美观优雅精致大方 | §1 设计系统（色板/字体/间距/圆角/阴影/动效）、§3.8 徽标统一 |
 | R18 | 版本清单导出（下载/写仓库/本地目录/预览） | §4.17 VersionExportDropdown、§4.18 DirPicker、§5.5 useFsAccess |
 | R19 | 版本一致性对比与发布备份 | §3.6 备份管理、§8.6 备份开关（dry-run 清单）、§4.18 DirPicker（artifactDir 选择） |
+| R31 | Version Matrix 多项目跨工程聚合（0 入侵） | §3.7 VersionMatrix.vue（矩阵表 + drift 高亮 + 搜索 + URL 同步 + 30s 轮询 + 命令面板入口） |
 
 ---
 
@@ -1072,3 +1111,4 @@ const routes = [
 | 2026-08-26 | M8 收口：ProjectCard 脏仓徽标（i-carbon-document-unknown + 计数）+ 末次发布相对时间（今天/昨天/N 天前/N 周前/N 月前/N 年前）；RepoCard 设置菜单（NDropdown：刷新/打开 Git/编辑/移除）—— 整卡 RouterLink + 全部 .stop 防误导航；StatCard color 扩展 'orange'；Dashboard 4 卡变 5 卡（新增「工作区脏」） |
 | 2026-08-26 | M11 落地：FailureRecoveryCard.vue（失败头卡：危险色边框 + 错误码 chip + 失败仓计数；结构化诊断：head/target/tag/tagSource 4 列事实 + 恢复建议 + 三出路按钮 + 诊断包 Blob 导出）；StepResult.vue 失败时优先渲染 FailureRecoveryCard 替代旧 NAlert |
 | 2026-08-26 | M14 命令面板增强：fuzzy 匹配（连续命中加权 + 短查询优先）+ aria-label 描述总项数 + listbox role + 空态 role=status + 计数条；onboarding e2e 用 placeholder 选择器兼容动态 aria-label |
+| 2026-08-31 | 新增 R31 Version Matrix 矩阵视图：§3.7 VersionMatrix.vue（多项目跨工程聚合 + 0 入侵纯展示 + drift 列高亮 + URL `?q=` 同步 + 30s 轮询 + 命令面板入口）；§3.8/3.9 章节编号顺延 |
