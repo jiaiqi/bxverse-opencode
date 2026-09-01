@@ -38,21 +38,21 @@ const navItems = computed(() => [
     to: currentProject.value ? `/project/${currentProject.value.id}` : '/',
     icon: 'i-carbon-catalog',
     label: '项目与仓库',
-    shortLabel: '项目台',
+    shortLabel: '项目',
   },
   {
     id: 'release',
     to: currentProject.value ? `/project/${currentProject.value.id}/release` : '/',
     icon: 'i-carbon-rocket',
     label: '统一发版向导',
-    shortLabel: '发版向导',
+    shortLabel: '向导',
   },
   {
     id: 'backups',
     to: currentProject.value ? `/project/${currentProject.value.id}/backups` : '/',
     icon: 'i-carbon-security',
     label: '备份审计对比',
-    shortLabel: '审计比',
+    shortLabel: '审计',
   },
   {
     id: 'matrix',
@@ -348,15 +348,6 @@ function triggerFastRelease() {
         >
           <i aria-hidden="true" class="i-carbon-time text-12px" />
           <span>升级日志</span>
-        </RouterLink>
-        <!-- ULTIMATE 驾驶舱入口（v1.2.0 design v2.0） -->
-        <RouterLink
-          to="/ultimate"
-          class="flex items-center gap-1.5 px-2 py-1 rounded-md text-[11px] text-text-3 hover:text-brand-500 hover:bg-surface-hover border border-border transition-[color,background-color,border-color] cursor-pointer focus-ring"
-          title="ULTIMATE 驾驶舱（design v2.0 原型 · v1.2.0 阶段 1 骨架）"
-        >
-          <i aria-hidden="true" class="i-carbon-dashboard text-12px" />
-          <span>ULTIMATE</span>
         </RouterLink>
         <!-- 接入仓库快捷按钮 -->
         <button
