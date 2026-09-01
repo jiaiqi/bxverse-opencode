@@ -1,6 +1,6 @@
 {
   "name": "bxverse",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "private": true,
   "description": "BX 版本管理台：项目/仓库两级版本与更新日志统一管理（本地 Web + 可选 PWA）",
   "type": "module",

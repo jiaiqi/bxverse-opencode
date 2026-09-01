@@ -44,3 +44,12 @@
 - D 方向 · 升级日志聚合页：`GET /api/aggregate/{feed,timeline,export}` 3 端点（feed 倒序 / 时间线 day/week/month 分桶 / md+json 导出附件流）；web `UpgradeFeed.vue` 视图（粒度/范围/项目 3 组过滤 + Timeline mini + 导出 .md）+ `/feed` 路由 + 顶栏 + CommandPalette 入口
 - R31 · 多项目跨工程版本矩阵视图：`GET /api/matrix` + `/matrix` 路由 + `VersionMatrix.vue`，drift 列高亮、跨项目版本不齐可视化、0 入侵纯聚合
 - R32 · 升级后回退到历史版本（端到端 0 入侵）：4 步 RollbackWizard（选 release → 影响面预览 → 版本与日志确认 → 执行）+ 3 入口（ProjectDetail/RepoDetail/CommandPalette）；3 门禁（confirmed 必填 + riskLevel='block' 409 拒绝 + 业务仓 0 入侵）；附 `docs/r32-rollback-guide.md` l-pc-front 迁移指南
+
+## v1.2.0（2026-09-01）
+
+### 新增（minor）
+- UltimateHealthGrid：design v2.0 ULTIMATE 原型 7 区——系统健康速览 4 卡（数据仓库 clean · journal 无残留 · 备份目录覆盖率 · 服务进程 v/uptime/mem），数据走 `api.opsProcess()` + overview 聚合
+- UltimateNotificationFeed：design v2.0 ULTIMATE 原型 8 区——实时通知流（绿/红 dot + 文本 + 时间戳），数据走 `api.opsLogs('all')` 最近 5 条，warn/error 级标红
+- UltimateRecentReleases：design v2.0 ULTIMATE 原型 6 区——最近 4 条 release（状态 icon check/ban + 版本 + 项目 + 日期 + 仓数 + 提交数），数据走 `api.aggregateFeed({ limit: 4 })`，跳 UpgradeFeed
+- UltimateSparkline：design v2.0 ULTIMATE 原型 5 区——近 8 周发布节奏 SVG 折线（260×70 渐变填充 + 描边 + W29/W36 端点 + 合计/峰值统计），数据走 `api.overviewWeekly()`
+- UltimateView 完整驾驶舱：把 design v2.0 ULTIMATE 原型 9 大区（左侧 nav + 顶栏 + 4 张 KPI + 待发布变动 + sparkline + 最近发布 + 系统健康 4 卡 + 通知流）整体搬进产品 `/ultimate` 路由；新增 wenxi/indigo 双主题 `--wx-*` tokens + `.stat-card-wx` / `.wx-surface` / `.health-card-wx` / `.wx-row` / `.wx-dot` / `.commit-chip` 等基础 class；修复 vite dev 默认只 listen IPv6 `::1` 导致浏览器 IPv4 访问 `ERR_CONNECTION_REFUSED` 的隐性 bug（`apps/web/vite.config.ts` 加 `host: '127.0.0.1'`）。UI 风格与 design v2.0 原型一致
