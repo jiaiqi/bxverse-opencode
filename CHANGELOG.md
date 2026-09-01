@@ -35,3 +35,12 @@
 - 性能：highlight.js 按需注册 18 个语言（4 处替换 utils/highlight）+ vite manualChunks 拆 4 个 vendor + PWA precache 22% 缩身（2.2MB→66KB） + utils/highlight ts 类型标注修复
 - a11y：原生 button 补 focus-ring 全站 + useRovingTabindex / useGridRovingTabindex 双 composable + ReleaseWizard 步骤条 role=tablist + RepoDetail 子 Tab + ProjectDetail 仓库网格 role=grid + skip-to-main-content (WCAG 2.4.1) + ErrorState 移除 !important
 - 维护：闭合 c17be3b 遗留内联多语句死循环（prettier 与 vue parser 冲突根治）+ packages/core/src/store.ts 修复 unicorn 警告
+
+## v1.1.0（2026-09-01）
+
+### 新增（minor）
+- B 方向 · 多栈 versionSource：core/repo-policy 加 `detectVersionSource` + `readVersionBySource` + `writeVersionBySource`（gradle/cargo/goModule）；shared RepoDef.versionSource 枚举扩 5 值；RepoSettings NSelect 5 选 1
+- C 方向 · 跨项目搜索：`GET /api/cross/search?q=&type=commit|version|name` 端点（commit 用 fullHash 前缀 / version 精确含 v/V 容错 / name 子串匹配）；web `CrossProjectSearch.vue` + `/cross` 路由 + 顶栏 + CommandPalette 入口
+- D 方向 · 升级日志聚合页：`GET /api/aggregate/{feed,timeline,export}` 3 端点（feed 倒序 / 时间线 day/week/month 分桶 / md+json 导出附件流）；web `UpgradeFeed.vue` 视图（粒度/范围/项目 3 组过滤 + Timeline mini + 导出 .md）+ `/feed` 路由 + 顶栏 + CommandPalette 入口
+- R31 · 多项目跨工程版本矩阵视图：`GET /api/matrix` + `/matrix` 路由 + `VersionMatrix.vue`，drift 列高亮、跨项目版本不齐可视化、0 入侵纯聚合
+- R32 · 升级后回退到历史版本（端到端 0 入侵）：4 步 RollbackWizard（选 release → 影响面预览 → 版本与日志确认 → 执行）+ 3 入口（ProjectDetail/RepoDetail/CommandPalette）；3 门禁（confirmed 必填 + riskLevel='block' 409 拒绝 + 业务仓 0 入侵）；附 `docs/r32-rollback-guide.md` l-pc-front 迁移指南
