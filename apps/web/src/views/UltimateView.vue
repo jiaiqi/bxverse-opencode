@@ -1,13 +1,20 @@
 <script setup lang="ts">
-// UltimateView.vue —— design v2.0 ULTIMATE 原型 dashboard 视图骨架
-// 阶段 1 仅落 4 张 KPI 主区（4 张 .stat-card-wx）+ 余下 5 个区"v1.2.0 即将到来"占位
-// 阶段 2-4 逐区替换占位为真实组件
+// UltimateView.vue —— design v2.0 ULTIMATE 原型完整驾驶舱视图（v1.2.0）
+// 布局与 design 原型行 282-363 对应：
+//   [KPI × 4] [KPI × 4] [KPI × 4] [KPI × 4]
+//   [待发布变动 col-span-2] [近 8 周发布节奏 col-span-1] [最近发布 col-span-1]
+//   [系统健康速览 col-span-2] [通知流 col-span-1]
+// 主题：appStore.themeStyle 切 wenxi/indigo，tokens.css 派生 .wx-* 变量
 
 import { computed, onMounted } from 'vue'
 import { useProjectsStore } from '../stores/projects'
 import UltimateTopBar from '../components/UltimateTopBar.vue'
 import UltimateStatCard from '../components/UltimateStatCard.vue'
 import UltimateChangedList from '../components/UltimateChangedList.vue'
+import UltimateSparkline from '../components/UltimateSparkline.vue'
+import UltimateRecentReleases from '../components/UltimateRecentReleases.vue'
+import UltimateHealthGrid from '../components/UltimateHealthGrid.vue'
+import UltimateNotificationFeed from '../components/UltimateNotificationFeed.vue'
 import LoadingState from '../components/LoadingState.vue'
 
 const projectsStore = useProjectsStore()
@@ -24,34 +31,6 @@ async function refresh(): Promise<void> {
 onMounted(() => {
   void refresh()
 })
-
-const placeholders = [
-  {
-    id: 'changed-list',
-    label: '待发布变动',
-    icon: 'i-carbon-document-multiple',
-    sub: '5 仓 + 提交数 + 分支 + 版本 chip + 红字"未提交改动"',
-  },
-  {
-    id: 'sparkline',
-    label: '8 周发布节奏',
-    icon: 'i-carbon-chart-histogram',
-    sub: 'SVG 折线 sparkline + 8 周标签 + 计数',
-  },
-  {
-    id: 'recent',
-    label: '最近发布',
-    icon: 'i-carbon-checkmark-outline',
-    sub: '最近 4 条 release + 仓数 + 时间',
-  },
-  {
-    id: 'health',
-    label: '系统健康览',
-    icon: 'i-carbon-health-cross',
-    sub: '数据仓库 / journal / 备份目录 / 轮询检测 4 卡',
-  },
-  { id: 'notify', label: '通知流', icon: 'i-carbon-notification', sub: '钉钉 / 飞书 webhook 历史' },
-]
 
 // 备份覆盖率：已发布 release 的项目数 / 总项目数 × 100%
 const backupRate = computed(() => {
@@ -77,12 +56,12 @@ const backupHot = computed(() =>
       color: var(--wx-t1);
     "
   >
-    <!-- 顶栏（design v2.0 截图：面包屑 + 队列空闲 + wenxi/indigo 切换 + 同步/快速发布/新建项目） -->
+    <!-- 顶栏：面包屑 + 队列空闲 + wenxi/indigo 切换 + 同步/快速发布/新建项目 -->
     <UltimateTopBar />
 
     <!-- 主区 -->
-    <div class="flex-1 overflow-y-auto p-6 space-y-6">
-      <!-- 4 张 KPI 主指标（design v2.0 截图一致） -->
+    <div class="flex-1 overflow-y-auto p-6 space-y-6 max-w-[1280px] w-full mx-auto">
+      <!-- 4 张 KPI 主指标（design v2.0 行 291-298） -->
       <LoadingState v-if="projectsStore.overviewLoading && !overview" compact />
       <div v-else class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <UltimateStatCard
@@ -117,25 +96,22 @@ const backupHot = computed(() =>
         />
       </div>
 
-      <!-- 阶段 2 接 UltimateChangedList（替换 1 占位） + 余下 4 占位 -->
-      <section class="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <UltimateChangedList :changed-repos="overview?.changedRepos ?? []" />
-        <div
-          v-for="(p, i) in placeholders"
-          :key="p.id"
-          class="wx-surface p-5 space-y-2 stagger-item"
-          :style="{ '--stagger-delay': (i + 1) * 40 + 'ms' }"
-        >
-          <div class="flex items-center gap-2">
-            <i :class="p.icon" class="text-[var(--wx-accent)] text-16px" />
-            <h3 class="text-sm font-bold">{{ p.label }}</h3>
-            <span class="text-[10px] text-[var(--wx-t3)] font-mono ml-auto"
-              >v1.2.0 阶段 {{ 2 + Math.floor(i / 2) }}</span
-            >
-          </div>
-          <p class="text-[11px] text-[var(--wx-t2)] font-mono">{{ p.sub }}</p>
+      <!-- 行 2：待发布变动 2/3 + sparkline 1/3 + 最近发布 1/3（design v2.0 行 300-342） -->
+      <section class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <div class="lg:col-span-2">
+          <UltimateChangedList :changed-repos="overview?.changedRepos ?? []" />
         </div>
+        <UltimateSparkline />
       </section>
+      <section class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <div class="lg:col-span-2">
+          <UltimateHealthGrid />
+        </div>
+        <UltimateNotificationFeed />
+      </section>
+
+      <!-- 行 3：最近发布（独立完整 list，4 条，design v2.0 行 333-340 风格） -->
+      <UltimateRecentReleases />
     </div>
   </div>
 </template>
