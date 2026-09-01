@@ -5,13 +5,12 @@
 
 import { computed, onMounted } from 'vue'
 import { useProjectsStore } from '../stores/projects'
-import { useAppStore } from '../stores/app'
-import PageHeader from '../components/PageHeader.vue'
+import UltimateTopBar from '../components/UltimateTopBar.vue'
 import UltimateStatCard from '../components/UltimateStatCard.vue'
+import UltimateChangedList from '../components/UltimateChangedList.vue'
 import LoadingState from '../components/LoadingState.vue'
 
 const projectsStore = useProjectsStore()
-const appStore = useAppStore()
 const overview = computed(() => projectsStore.overview)
 
 async function refresh(): Promise<void> {
@@ -70,7 +69,7 @@ const backupHot = computed(() =>
 
 <template>
   <div
-    class="flex flex-1 overflow-hidden"
+    class="flex flex-1 overflow-hidden flex-col"
     style="
       background-color: var(--wx-bg);
       background-image: radial-gradient(circle at 1px 1px, var(--wx-grid-dot) 1px, transparent 0);
@@ -78,20 +77,11 @@ const backupHot = computed(() =>
       color: var(--wx-t1);
     "
   >
-    <!-- 左侧 nav 已在 AppLayout 挂载；本页只负责主区 -->
-    <div class="flex-1 overflow-y-auto p-6 space-y-6">
-      <PageHeader
-        title="总览驾驶舱"
-        :description="`全局态势·变动、健康、备份、通知一目了然 · 轮询中 ${appStore.pollInterval ? Math.round(appStore.pollInterval / 1000) + 's' : '30s'} · 页面隐藏自动暂停`"
-      >
-        <template #actions>
-          <NButton size="small" quaternary @click="refresh">
-            <template #icon><i aria-hidden="true" class="i-carbon-renew" /></template>
-            同步数据
-          </NButton>
-        </template>
-      </PageHeader>
+    <!-- 顶栏（design v2.0 截图：面包屑 + 队列空闲 + wenxi/indigo 切换 + 同步/快速发布/新建项目） -->
+    <UltimateTopBar />
 
+    <!-- 主区 -->
+    <div class="flex-1 overflow-y-auto p-6 space-y-6">
       <!-- 4 张 KPI 主指标（design v2.0 截图一致） -->
       <LoadingState v-if="projectsStore.overviewLoading && !overview" compact />
       <div v-else class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -127,13 +117,14 @@ const backupHot = computed(() =>
         />
       </div>
 
-      <!-- 5 个区 v1.2.0 即将到来占位（阶段 2-4 逐区替换） -->
+      <!-- 阶段 2 接 UltimateChangedList（替换 1 占位） + 余下 4 占位 -->
       <section class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <UltimateChangedList :changed-repos="overview?.changedRepos ?? []" />
         <div
           v-for="(p, i) in placeholders"
           :key="p.id"
           class="wx-surface p-5 space-y-2 stagger-item"
-          :style="{ '--stagger-delay': i * 40 + 'ms' }"
+          :style="{ '--stagger-delay': (i + 1) * 40 + 'ms' }"
         >
           <div class="flex items-center gap-2">
             <i :class="p.icon" class="text-[var(--wx-accent)] text-16px" />
