@@ -349,6 +349,15 @@ function triggerFastRelease() {
           <i aria-hidden="true" class="i-carbon-time text-12px" />
           <span>升级日志</span>
         </RouterLink>
+        <!-- ULTIMATE 驾驶舱入口（v1.2.0 design v2.0） -->
+        <RouterLink
+          to="/ultimate"
+          class="flex items-center gap-1.5 px-2 py-1 rounded-md text-[11px] text-text-3 hover:text-brand-500 hover:bg-surface-hover border border-border transition-[color,background-color,border-color] cursor-pointer focus-ring"
+          title="ULTIMATE 驾驶舱（design v2.0 原型 · v1.2.0 阶段 1 骨架）"
+        >
+          <i aria-hidden="true" class="i-carbon-dashboard text-12px" />
+          <span>ULTIMATE</span>
+        </RouterLink>
         <!-- 接入仓库快捷按钮 -->
         <button
           v-if="currentProject"

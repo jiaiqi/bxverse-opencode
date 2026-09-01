@@ -73,6 +73,12 @@ const router = createRouter({
       meta: { title: '升级日志' },
     },
     {
+      path: '/ultimate',
+      name: 'ultimate',
+      component: () => import('../views/UltimateView.vue'),
+      meta: { title: 'ULTIMATE 驾驶舱', layout: 'ultimate' },
+    },
+    {
       path: '/:pathMatch(.*)*',
       name: 'not-found',
       component: () => import('../views/NotFound.vue'),
