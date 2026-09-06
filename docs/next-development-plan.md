@@ -92,7 +92,7 @@
 |---|---|---|---|---|
 | 1 | R34 stone 主题：themeStyle 扩 'stone'；tokens.css 石灰金玻璃亮/暗两套 + 环境光晕/颗粒/玻璃材质；Settings 三选一 | shared 仅扩枚举（// 扩展：R34） | theme.ts stone 亮/暗 overrides（金主色）+ App.vue/app.ts 接线 | stone 亮/暗走查；indigo/wenxi 零回归 |
 | 2 | R33 阶段 1（0 契约）：/projects 项目管理卡片网格 + /registry 仓库注册表聚合（按 path 归并、membership chips）；挂载增删复用 addRepoByPath/deleteRepo | 无 | ProjectsManage.vue + RepoRegistry.vue + 路由 + 侧栏入口 | 多对多可视可操作；typecheck/build 全绿 |
-| 3 | R33 阶段 2（契约）：AppConfig.repoRegistry + ProjectDef.repoRefs（可选字段）+ core store 迁移 + server registry/attach/detach 端点，注册表升级权威源 | // 扩展：R33 | 注册表接真数据源 | 同仓跨项目配置一致；测试与 e2e 全绿 |
+| 3 | R33 阶段 2（契约）✅ 已完成（2026-09-06）：AppConfig.repoRegistry + ProjectDef.repoRefs（可选字段）+ core loadAppConfig 按 refs 展开物化（+4 测试）+ server GET/PUT registry 与 attach\|detach（首挂自动迁移内嵌仓库，+6 测试）+ web 管理对话框切 attach/detach 与注册表模式标识 | // 扩展：R33 | 注册表接真数据源 | 双项目共享同一注册表条目（浏览器实测 ✅）；core 188/server 122 全过 |
 | 4 | 发布向导六步合一形态 + Bento 总览改版（对齐 v5 签发流） | 无 | ReleaseWizard 重组 / Dashboard 改版 | 与既有向导 e2e 功能等价 |
 
 ## 4. 执行纪律（每任务适用）
