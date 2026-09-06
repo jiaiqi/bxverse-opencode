@@ -995,3 +995,72 @@ html.theme-stone.dark .n-card {
     animation: none;
   }
 }
+
+/* ==================== R34 Bento hero：暗色玻璃锚点瓦（全主题通用） ==================== */
+.bx-hero-tile {
+  position: relative;
+  overflow: hidden;
+  color: #f5f5f4;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background:
+    radial-gradient(340px 220px at 88% -10%, rgba(202, 138, 4, 0.32), transparent 70%),
+    linear-gradient(150deg, #2e2a26, #181614);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.12),
+    0 24px 56px -16px rgba(28, 25, 23, 0.45);
+}
+html.dark .bx-hero-tile {
+  background:
+    radial-gradient(340px 220px at 88% -10%, rgba(202, 138, 4, 0.24), transparent 70%),
+    linear-gradient(150deg, #2a2723, #141210);
+}
+.bx-hero-tile::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(
+    115deg,
+    transparent 32%,
+    rgba(255, 255, 255, 0.08) 46%,
+    transparent 60%
+  );
+  transform: translateX(-130%);
+  transition: transform 1.15s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.bx-hero-tile:hover::after {
+  transform: translateX(130%);
+}
+
+/* ---- stone：悬浮玻璃侧栏 / 顶栏 / 透明主视口（让环境光场透出） ---- */
+html.theme-stone .app-rail,
+html.theme-stone .app-topbar {
+  background: linear-gradient(168deg, var(--bx-surface-glass), rgba(255, 255, 255, 0.28));
+  backdrop-filter: blur(26px) saturate(170%);
+  -webkit-backdrop-filter: blur(26px) saturate(170%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.5),
+    0 14px 36px -14px rgba(51, 46, 40, 0.22);
+}
+html.theme-stone.dark .app-rail,
+html.theme-stone.dark .app-topbar {
+  background: linear-gradient(168deg, var(--bx-surface-glass), rgba(0, 0, 0, 0.25));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.07),
+    0 14px 36px -14px rgba(0, 0, 0, 0.5);
+}
+html.theme-stone #main-content {
+  background: transparent;
+}
+@media (prefers-reduced-transparency: reduce) {
+  html.theme-stone .app-rail,
+  html.theme-stone .app-topbar {
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    background: #fafaf9;
+  }
+  html.theme-stone.dark .app-rail,
+  html.theme-stone.dark .app-topbar {
+    background: #1e1c1a;
+  }
+}

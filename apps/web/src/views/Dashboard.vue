@@ -52,6 +52,14 @@ function groupByProject(
   return [...map.values()]
 }
 
+// R34 Bento：hero 瓦聚合（按项目分组的待发布变更）与首发版入口
+const heroGroups = computed(() =>
+  overview.value ? groupByProject(overview.value.changedRepos) : [],
+)
+const firstReleaseUrl = computed(() =>
+  heroGroups.value[0] ? `/project/${heroGroups.value[0].projectId}/release` : '/',
+)
+
 const today = computed(() => formatDateTime(now.value))
 
 async function refresh() {
@@ -129,14 +137,57 @@ usePolling(refresh, () => appStore.pollInterval || 30_000)
       </NButton>
     </PageHeader>
 
-    <!-- 4 维现代精密仪表指标带 -->
+    <!-- R34 Bento 总览：暗色玻璃 hero（待发布锚点）+ 4 指标瓦 + 节奏/巡检宽瓦 -->
     <div
       v-if="projectsStore.overviewLoading && !overview"
-      class="grid grid-cols-2 md:grid-cols-4 gap-4"
+      class="grid grid-cols-2 lg:grid-cols-4 gap-4"
     >
-      <div v-for="i in 4" :key="i" class="skeleton h-24" />
+      <div class="skeleton h-44 lg:col-span-2 lg:row-span-2 rounded-2xl" />
+      <div v-for="i in 2" :key="i" class="skeleton h-28 rounded-2xl" />
+      <div class="skeleton h-28 lg:col-span-2 rounded-2xl" />
     </div>
-    <div v-else class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+    <div v-else class="grid grid-cols-2 lg:grid-cols-4 auto-rows-min gap-4 stagger-item">
+      <!-- hero：待发布（暗色玻璃 + 金色环境光，hover 光泽扫过） -->
+      <div class="bx-hero-tile rounded-2xl p-5 lg:col-span-2 lg:row-span-2 flex flex-col">
+        <div
+          class="text-[11px] font-bold tracking-[0.18em] uppercase opacity-70 flex items-center gap-1.5"
+        >
+          <i aria-hidden="true" class="i-carbon-rocket text-13px" /> 待发布
+        </div>
+        <h2 class="text-lg font-bold mt-2.5 leading-snug">
+          今天有 {{ overview?.changedRepoCount ?? 0 }} 个仓库可以发布
+        </h2>
+        <div class="mt-3 space-y-2.5 overflow-y-auto max-h-52 pr-1">
+          <div v-for="g in heroGroups" :key="g.projectId" class="border-t border-white/10 pt-2.5">
+            <div class="font-mono text-xs font-semibold truncate">
+              {{ g.repos.map((r) => r.repoName).join(' · ') }}
+            </div>
+            <div class="text-[11px] opacity-70 mt-0.5">
+              {{ g.projectName }} · +{{ g.repos.reduce((s, r) => s + r.commits, 0) }} 提交
+            </div>
+          </div>
+          <div v-if="!heroGroups.length" class="text-xs opacity-70 py-2">
+            全部同步 · 暂无可发布变更
+          </div>
+        </div>
+        <div class="mt-auto pt-3.5 border-t border-white/10 flex items-center gap-2">
+          <button
+            class="btn-primary h-8 px-3.5 text-xs font-bold focus-ring disabled:opacity-40"
+            :disabled="!heroGroups.length"
+            @click="router.push(firstReleaseUrl)"
+          >
+            <i aria-hidden="true" class="i-carbon-rocket text-13px mr-1" />发版向导
+          </button>
+          <button
+            class="h-8 px-3 text-xs rounded-lg text-white/80 hover:text-white border border-white/20 hover:border-white/40 transition-colors duration-fast cursor-pointer focus-ring bg-transparent"
+            @click="refresh"
+          >
+            刷新
+          </button>
+          <span class="ml-auto text-[10px] font-mono opacity-60">{{ today.slice(0, 10) }}</span>
+        </div>
+      </div>
+
       <StatCard
         label="管理业务项目"
         :value="overview?.projectCount ?? 0"
@@ -165,7 +216,6 @@ usePolling(refresh, () => appStore.pollInterval || 30_000)
         :count-up="true"
         :stagger-delay-ms="120"
       />
-      <!-- 扩展：M8 看板——脏仓库计数（status.dirty > 0） -->
       <StatCard
         label="工作区脏"
         :value="overview?.dirtyRepoCount ?? 0"
@@ -176,19 +226,8 @@ usePolling(refresh, () => appStore.pollInterval || 30_000)
         :count-up="true"
         :stagger-delay-ms="180"
       />
-      <StatCard
-        label="版本与备份审计"
-        :value="projectsStore.items.length > 0 ? `${projectsStore.items.length} 活跃` : '就绪'"
-        sub-label="Git 审计"
-        icon="i-carbon-security"
-        color="purple"
-        :stagger-delay-ms="240"
-      />
-    </div>
 
-    <!-- 业务项目看板网格（M8）上方：M9 驾驶舱增强——近 8 周发布节奏 + misaligned 一键对齐 -->
-    <section v-if="overview" class="grid grid-cols-1 lg:grid-cols-3 gap-4">
-      <!-- sparkline -->
+      <!-- 近 8 周发布节奏（宽瓦） -->
       <div class="glass-panel p-5 rounded-2xl lg:col-span-2">
         <div class="flex items-center justify-between mb-3 flex-wrap gap-2">
           <div class="flex items-center gap-2">
@@ -242,8 +281,9 @@ usePolling(refresh, () => appStore.pollInterval || 30_000)
           </div>
         </div>
       </div>
-      <!-- misaligned 一键对齐 -->
-      <div class="glass-panel p-5 rounded-2xl flex flex-col">
+
+      <!-- 分支巡检与一键对齐（宽瓦） -->
+      <div class="glass-panel p-5 rounded-2xl lg:col-span-2 flex flex-col">
         <div class="flex items-center gap-2 mb-2">
           <i aria-hidden="true" class="i-carbon-branch text-warn" />
           <h3 class="text-sm font-semibold text-text-1">分支巡检与一键对齐</h3>
@@ -268,7 +308,7 @@ usePolling(refresh, () => appStore.pollInterval || 30_000)
           <NButton size="small" quaternary @click="$router.push('/ops')">查看健康页</NButton>
         </div>
       </div>
-    </section>
+    </div>
 
     <!-- 业务项目看板网格（M8） -->
     <section class="space-y-3">
