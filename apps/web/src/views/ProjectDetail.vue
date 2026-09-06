@@ -28,6 +28,20 @@ const message = useMessage()
 
 const projectId = computed(() => String(route.params.id))
 const project = computed(() => projectsStore.byId(projectId.value))
+
+// R33 多对多：本项目中被 ≥2 个项目挂载（同 path 归并）的共享仓库数
+const sharedRepoCount = computed(() => {
+  if (!project.value) return 0
+  const counts = new Map<string, number>()
+  for (const p of projectsStore.items)
+    for (const r of p.repos) {
+      const k = (r.path || '').replaceAll('\\', '/')
+      counts.set(k, (counts.get(k) ?? 0) + 1)
+    }
+  return project.value.repos.filter(
+    (r) => (counts.get((r.path || '').replaceAll('\\', '/')) ?? 0) > 1,
+  ).length
+})
 const showAddRepo = ref(false)
 
 // 仓库网格：响应式列数（与 CSS 媒体查询同步：md=768 → 2 列，lg=1024 → 3 列）
@@ -277,17 +291,19 @@ usePolling(
             <div class="min-w-0">
               <div class="flex items-center gap-2.5 flex-wrap">
                 <h1 class="text-lg font-bold text-text-1 truncate m-0">{{ project.name }}</h1>
-                <span
-                  class="font-mono text-xs font-bold px-2 py-0.5 rounded bg-surface-alt border border-border text-info"
-                >
-                  {{ project.version }}
-                </span>
                 <span class="text-xs font-mono text-text-3"
                   >方案:
                   {{ project.repoVersionFormat ?? project.repoVersionScheme ?? 'hybrid' }}</span
                 >
                 <span class="text-xs font-mono text-text-3"
                   >推演: {{ project.bump || 'auto' }}</span
+                >
+                <!-- R33 多对多：共享仓库统计 -->
+                <span
+                  v-if="sharedRepoCount > 0"
+                  class="inline-flex items-center gap-1 text-xs font-semibold text-brand-600"
+                  ><i aria-hidden="true" class="i-carbon-share-knowledge text-13px" />共享仓库
+                  {{ sharedRepoCount }}</span
                 >
               </div>
               <p class="text-xs text-text-3 mt-1 m-0 leading-relaxed">
@@ -296,48 +312,56 @@ usePolling(
             </div>
           </div>
 
-          <!-- 核心操作栏 -->
-          <div class="flex items-center gap-2 flex-wrap shrink-0">
-            <NButton type="primary" @click="router.push(`/project/${project.id}/release`)">
-              <template #icon><i aria-hidden="true" class="i-carbon-rocket" /></template>
-              统一发版
-            </NButton>
-            <!-- R32 升级后回退到历史版本 -->
-            <NButton quaternary @click="router.push(`/project/${project.id}/rollback`)">
-              <template #icon><i aria-hidden="true" class="i-carbon-undo" /></template>
-              回退
-            </NButton>
-            <!-- R28 快速发布：预填上次配置，≤5 步完成 patch；无记录时禁用并提示 -->
-            <NTooltip :disabled="!!project.lastQuickPublish">
-              <template #trigger>
-                <NButton
-                  type="primary"
-                  secondary
-                  :disabled="!project.lastQuickPublish"
-                  @click="router.push(`/project/${project.id}/release?mode=quick`)"
-                >
-                  <template #icon><i aria-hidden="true" class="i-carbon-flash" /></template>
-                  快速发布
-                </NButton>
-              </template>
-              首次发布请使用详细模式，完成一次发布后可一键复用配置快速发 patch
-            </NTooltip>
-            <NButton type="info" secondary @click="showAddRepo = true">
-              <template #icon><i aria-hidden="true" class="i-carbon-branch" /></template>
-              接入新仓库
-            </NButton>
-            <VersionExportDropdown
-              :project-id="projectId"
-              :filename="`${project.name}-versions.json`"
-              :load-items="() => api.projectVersions(projectId)"
-            />
-            <NButton quaternary @click="showEdit = true" title="编辑项目配置">
-              <template #icon><i aria-hidden="true" class="i-carbon-settings" /></template>
-            </NButton>
-            <NButton quaternary type="error" @click="confirmDelete" title="删除项目">
-              <template #icon><i aria-hidden="true" class="i-carbon-trash-can" /></template>
-            </NButton>
+          <!-- 项目版本（v5 masthead：大号等宽读数） -->
+          <div class="text-right shrink-0">
+            <div class="font-mono text-3xl font-semibold text-brand-600 leading-none">
+              {{ project.version }}
+            </div>
+            <div class="text-[10px] text-text-3 mt-1.5">项目版本</div>
           </div>
+        </div>
+
+        <!-- 核心操作栏 -->
+        <div class="flex items-center justify-end gap-2 flex-wrap">
+          <NButton type="primary" @click="router.push(`/project/${project.id}/release`)">
+            <template #icon><i aria-hidden="true" class="i-carbon-rocket" /></template>
+            统一发版
+          </NButton>
+          <!-- R32 升级后回退到历史版本 -->
+          <NButton quaternary @click="router.push(`/project/${project.id}/rollback`)">
+            <template #icon><i aria-hidden="true" class="i-carbon-undo" /></template>
+            回退
+          </NButton>
+          <!-- R28 快速发布：预填上次配置，≤5 步完成 patch；无记录时禁用并提示 -->
+          <NTooltip :disabled="!!project.lastQuickPublish">
+            <template #trigger>
+              <NButton
+                type="primary"
+                secondary
+                :disabled="!project.lastQuickPublish"
+                @click="router.push(`/project/${project.id}/release?mode=quick`)"
+              >
+                <template #icon><i aria-hidden="true" class="i-carbon-flash" /></template>
+                快速发布
+              </NButton>
+            </template>
+            首次发布请使用详细模式，完成一次发布后可一键复用配置快速发 patch
+          </NTooltip>
+          <NButton type="info" secondary @click="showAddRepo = true">
+            <template #icon><i aria-hidden="true" class="i-carbon-branch" /></template>
+            接入新仓库
+          </NButton>
+          <VersionExportDropdown
+            :project-id="projectId"
+            :filename="`${project.name}-versions.json`"
+            :load-items="() => api.projectVersions(projectId)"
+          />
+          <NButton quaternary @click="showEdit = true" title="编辑项目配置">
+            <template #icon><i aria-hidden="true" class="i-carbon-settings" /></template>
+          </NButton>
+          <NButton quaternary type="error" @click="confirmDelete" title="删除项目">
+            <template #icon><i aria-hidden="true" class="i-carbon-trash-can" /></template>
+          </NButton>
         </div>
       </div>
 

@@ -25,6 +25,16 @@ const pid = computed(() => String(route.params.pid))
 const rid = computed(() => String(route.params.rid))
 const repo = computed(() => projectsStore.repoById(pid.value, rid.value)?.repo ?? null)
 
+// R33 多对多：该仓库（按 path 归并）所属的全部项目
+const memberships = computed(() => {
+  const r = repo.value
+  if (!r) return []
+  const key = (r.path || '').replaceAll('\\', '/')
+  return projectsStore.items
+    .filter((p) => p.repos.some((x) => (x.path || '').replaceAll('\\', '/') === key))
+    .map((p) => ({ id: p.id, name: p.name, version: p.version }))
+})
+
 const VALID_TABS = ['git', 'files', 'logs', 'settings'] as const
 const tab = ref<'git' | 'files' | 'logs' | 'settings'>(
   VALID_TABS.includes(route.query.tab as (typeof VALID_TABS)[number])
@@ -314,6 +324,17 @@ watch(tab, (t) => {
             </div>
             <div class="text-[11px] font-mono text-text-3 truncate mt-0.5" :title="repo.path">
               {{ repo.path }}
+            </div>
+            <!-- R33 多对多：所属项目 chips（跨项目共享时展示） -->
+            <div v-if="memberships.length > 1" class="flex items-center gap-1.5 mt-1 flex-wrap">
+              <span class="text-[10px] text-text-3 font-semibold">同时在</span>
+              <RouterLink
+                v-for="m in memberships"
+                :key="m.id"
+                :to="`/project/${m.id}`"
+                class="px-1.5 py-0.5 rounded bg-brand-soft text-brand-600 text-[10px] font-semibold no-underline hover:underline"
+                >{{ m.name }} · {{ m.version }}</RouterLink
+              >
             </div>
           </div>
         </div>
