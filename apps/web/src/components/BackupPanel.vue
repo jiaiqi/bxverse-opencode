@@ -308,8 +308,9 @@ function openRestore(ref: RepoBackupRef) {
     ''
   // 默认恢复到 BX_HOME/restores/{version}-{repoName}（服务端白名单要求位于 BX_HOME 内）
   const safe = (s: string) => s.replace(/[\\/:*?"<>|]/g, '-')
+  // 用正斜杠拼接：Windows 的 Node fs 同样接受 `/`，而 `\\` 在 macOS/Linux 是普通字符会脱离 BX_HOME 白名单
   restoreState.targetDir = bxHome.value
-    ? `${bxHome.value}\\restores\\${safe(ref.version)}-${safe(ref.repoName)}`
+    ? `${bxHome.value}/restores/${safe(ref.version)}-${safe(ref.repoName)}`
     : ''
   restoreState.overwrite = false
   restoreState.confirm = ''

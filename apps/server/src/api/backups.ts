@@ -28,7 +28,12 @@ function resolveBackupRoot(cfg: AppConfig): string {
 }
 
 function backupDirOf(cfg: AppConfig, meta: RepoBackupRef): string {
-  return path.join(resolveBackupRoot(cfg), meta.projectId, meta.repoId, store.versionSafe(meta.version))
+  return path.join(
+    resolveBackupRoot(cfg),
+    meta.projectId,
+    meta.repoId,
+    store.versionSafe(meta.version),
+  )
 }
 
 export function register(
@@ -38,14 +43,14 @@ export function register(
   // ---------- 列表 ----------
   router.get('/api/repos/:pid/:rid/backups', async (ctx: Ctx) => {
     const cfg = await services.loadCfg()
-    const project = cfg.projects.find(p => p.id === ctx.params.pid)
+    const project = cfg.projects.find((p) => p.id === ctx.params.pid)
     if (!project) throw apiError(404, 'NOT_FOUND', `项目不存在: ${ctx.params.pid}`)
-    if (!project.repos.some(r => r.id === ctx.params.rid)) {
+    if (!project.repos.some((r) => r.id === ctx.params.rid)) {
       throw apiError(404, 'NOT_FOUND', `仓库不存在或不属于该项目: ${ctx.params.rid}`)
     }
     const n = Math.min(Math.max(Number(ctx.query.get('n') ?? 20), 1), 100)
     const metas = (await services.getDataStore().listBackupMeta())
-      .filter(m => m.repoId === ctx.params.rid)
+      .filter((m) => m.repoId === ctx.params.rid)
       .slice(0, n)
     sendJson(ctx.res, 200, { items: metas })
   })
@@ -53,7 +58,9 @@ export function register(
   // ---------- 元数据 ----------
   router.get('/api/backups/:releaseId/:repoId', async (ctx: Ctx) => {
     await services.loadCfg()
-    const meta = await services.getDataStore().readBackupMeta(ctx.params.releaseId, ctx.params.repoId)
+    const meta = await services
+      .getDataStore()
+      .readBackupMeta(ctx.params.releaseId, ctx.params.repoId)
     if (!meta) throw apiError(404, 'NOT_FOUND', '备份元数据不存在')
     sendJson(ctx.res, 200, meta)
   })
@@ -61,17 +68,21 @@ export function register(
   // ---------- 下载 ----------
   router.get('/api/backups/download/:releaseId/:repoId/:kind', async (ctx: Ctx) => {
     const cfg = await services.loadCfg()
-    const meta = await services.getDataStore().readBackupMeta(ctx.params.releaseId, ctx.params.repoId)
+    const meta = await services
+      .getDataStore()
+      .readBackupMeta(ctx.params.releaseId, ctx.params.repoId)
     if (!meta) throw apiError(404, 'NOT_FOUND', '备份元数据不存在')
     const fileName = KIND_FILE[ctx.params.kind]
-    if (!fileName) throw apiError(400, 'VALIDATION', `kind 非法（支持 ${Object.keys(KIND_FILE).join('/')}）`)
+    if (!fileName)
+      throw apiError(400, 'VALIDATION', `kind 非法（支持 ${Object.keys(KIND_FILE).join('/')}）`)
     let itemFile: string
     if (ctx.params.kind === 'artifact-manifest') {
       // 清单不是元数据 item（由产物备份派生），仅要求存在产物归档
-      if (!meta.items.some(i => i.kind === 'artifact')) throw apiError(404, 'NOT_FOUND', '该备份不含产物')
+      if (!meta.items.some((i) => i.kind === 'artifact'))
+        throw apiError(404, 'NOT_FOUND', '该备份不含产物')
       itemFile = fileName
     } else {
-      const item = meta.items.find(i => KIND_FILE[i.kind] === fileName)
+      const item = meta.items.find((i) => KIND_FILE[i.kind] === fileName)
       if (!item) throw apiError(404, 'NOT_FOUND', '该备份不含此文件')
       itemFile = item.file
     }
@@ -87,7 +98,10 @@ export function register(
     const stream = fs.createReadStream(file)
     stream.on('error', () => {
       if (!ctx.res.headersSent) {
-        sendError(ctx.res, Object.assign(new Error('文件读取失败'), { status: 500, code: 'READ_FAILED' }))
+        sendError(
+          ctx.res,
+          Object.assign(new Error('文件读取失败'), { status: 500, code: 'READ_FAILED' }),
+        )
       } else {
         try {
           ctx.res.destroy()
@@ -157,40 +171,48 @@ export function register(
     if (!meta) throw apiError(404, 'NOT_FOUND', '备份元数据不存在')
 
     const dir = backupDirOf(cfg, meta)
-    const files = await Promise.all(meta.items.map(async (i) => {
-      const abs = path.join(dir, i.file)
-      if (!fs.existsSync(abs)) {
-        return {
-          path: i.file,
-          status: 'removed' as const,
-          left: { sha256: i.sha256, size: i.size },
+    const files = await Promise.all(
+      meta.items.map(async (i) => {
+        const abs = path.join(dir, i.file)
+        if (!fs.existsSync(abs)) {
+          return {
+            path: i.file,
+            status: 'removed' as const,
+            left: { sha256: i.sha256, size: i.size },
+          }
         }
-      }
-      try {
-        const stat = fs.statSync(abs)
-        const sha256 = await backup.hashFile(abs)
-        const same = stat.size === i.size && sha256 === i.sha256
-        return {
-          path: i.file,
-          status: same ? 'same' as const : 'modified' as const,
-          left: { sha256: i.sha256, size: i.size },
-          right: { sha256, size: stat.size },
+        try {
+          const stat = fs.statSync(abs)
+          const sha256 = await backup.hashFile(abs)
+          const same = stat.size === i.size && sha256 === i.sha256
+          return {
+            path: i.file,
+            status: same ? ('same' as const) : ('modified' as const),
+            left: { sha256: i.sha256, size: i.size },
+            right: { sha256, size: stat.size },
+          }
+        } catch {
+          return {
+            path: i.file,
+            status: 'removed' as const,
+            left: { sha256: i.sha256, size: i.size },
+          }
         }
-      } catch {
-        return {
-          path: i.file,
-          status: 'removed' as const,
-          left: { sha256: i.sha256, size: i.size },
-        }
-      }
-    }))
+      }),
+    )
     const totals = {
       added: 0,
-      removed: files.filter(f => f.status === 'removed').length,
-      modified: files.filter(f => f.status === 'modified').length,
-      same: files.filter(f => f.status === 'same').length,
+      removed: files.filter((f) => f.status === 'removed').length,
+      modified: files.filter((f) => f.status === 'modified').length,
+      same: files.filter((f) => f.status === 'same').length,
     }
-    const result: CompareResult = { kind: 'verify', left: `${meta.version} 元数据`, right: dir, files, totals }
+    const result: CompareResult = {
+      kind: 'verify',
+      left: `${meta.version} 元数据`,
+      right: dir,
+      files,
+      totals,
+    }
     sendJson(ctx.res, 200, result)
   })
 
@@ -200,7 +222,9 @@ export function register(
     const metas = await ds.listBackupMeta()
     const projectId = ctx.query.get('projectId')?.trim() || undefined
     const repoId = ctx.query.get('repoId')?.trim() || undefined
-    const filtered = metas.filter(m => (!projectId || m.projectId === projectId) && (!repoId || m.repoId === repoId))
+    const filtered = metas.filter(
+      (m) => (!projectId || m.projectId === projectId) && (!repoId || m.repoId === repoId),
+    )
     const usage = backup.getBackupUsage(filtered)
     sendJson(ctx.res, 200, usage)
   })
@@ -211,8 +235,13 @@ export function register(
     const ds = services.getDataStore()
     const body = (await readJsonBody(ctx.req)) as Record<string, unknown>
     assertBackupCleanupBody(body)
-    const retention = (body.retention as import('@bxverse/shared').BackupRetention | undefined) ?? cfg.backup?.retention
-    if (!retention || (retention.keepLast == null && retention.maxBytes == null && retention.keepDays == null)) {
+    const retention =
+      (body.retention as import('@bxverse/shared').BackupRetention | undefined) ??
+      cfg.backup?.retention
+    if (
+      !retention ||
+      (retention.keepLast == null && retention.maxBytes == null && retention.keepDays == null)
+    ) {
       throw apiError(400, 'VALIDATION', '未配置保留策略（keepLast / maxBytes / keepDays 至少一项）')
     }
     const projectId = body.projectId ? String(body.projectId) : undefined
@@ -236,7 +265,10 @@ export function register(
     const releaseId = String(body.releaseId ?? '').trim()
     const repoId = String(body.repoId ?? '').trim()
     const kind = String(body.kind ?? '').trim() as 'source-bundle' | 'source-archive' | 'artifact'
-    const targetDir = String(body.targetDir ?? '').trim()
+    // 路径归一（Windows 反斜杠 → 正斜杠，POSIX 的 fs/白名单才能正确解析；Windows 端接受 `/`）
+    const targetDir = String(body.targetDir ?? '')
+      .trim()
+      .replaceAll('\\', '/')
     const overwrite = body.overwrite === true && kind !== 'source-bundle'
     const cfg = await services.loadCfg()
     const meta = await services.getDataStore().readBackupMeta(releaseId, repoId)
@@ -244,14 +276,19 @@ export function register(
     const fileName = KIND_FILE[kind]
     if (!fileName) throw apiError(400, 'VALIDATION', `不支持的 kind: ${kind}`)
     // artifact-manifest 不可恢复，仅 artifact
-    if (kind === 'artifact' && !meta.items.some(i => i.kind === 'artifact')) throw apiError(404, 'NOT_FOUND', '该备份不含产物')
+    if (kind === 'artifact' && !meta.items.some((i) => i.kind === 'artifact'))
+      throw apiError(404, 'NOT_FOUND', '该备份不含产物')
     const srcFile = path.join(backupDirOf(cfg, meta), fileName)
     if (!fs.existsSync(srcFile)) throw apiError(404, 'NOT_FOUND', `备份文件缺失: ${fileName}`)
     // S6 收紧：白名单 + 空目录校验（400 明确失败，不落入 500）
     const resolvedTarget = path.resolve(targetDir)
     const homeRoot = path.resolve(store.resolveHome().root)
     if (resolvedTarget !== homeRoot && !resolvedTarget.startsWith(homeRoot + path.sep)) {
-      throw apiError(400, 'VALIDATION', `targetDir 必须位于 BX_HOME 目录下（仅允许 ${homeRoot} 及其子目录）`)
+      throw apiError(
+        400,
+        'VALIDATION',
+        `targetDir 必须位于 BX_HOME 目录下（仅允许 ${homeRoot} 及其子目录）`,
+      )
     }
     if (fs.existsSync(resolvedTarget)) {
       let stat: fs.Stats
@@ -264,7 +301,12 @@ export function register(
       // M7 冲突策略：overwrite 仅对快照/产物生效；bundle 恢复（git clone）仍要求空目录
       if (!overwrite) {
         const entries = fs.readdirSync(resolvedTarget)
-        if (entries.length > 0) throw apiError(400, 'VALIDATION', `targetDir 必须为空目录: ${targetDir}（请先清空、另选路径，或对快照/产物使用 overwrite）`)
+        if (entries.length > 0)
+          throw apiError(
+            400,
+            'VALIDATION',
+            `targetDir 必须为空目录: ${targetDir}（请先清空、另选路径，或对快照/产物使用 overwrite）`,
+          )
       }
     } else {
       try {
@@ -290,7 +332,10 @@ export function register(
     }
     // M7 恢复审计：追加 restores 记录并入数据仓库（历史即审计）
     const ds = services.getDataStore()
-    meta.restores = [...(meta.restores ?? []), { at: new Date().toISOString(), kind, targetDir: resolvedTarget, overwrite }]
+    meta.restores = [
+      ...(meta.restores ?? []),
+      { at: new Date().toISOString(), kind, targetDir: resolvedTarget, overwrite },
+    ]
     await ds.writeBackupMeta(meta)
     await ds.commitRecords(`chore: backup restore (${meta.repoName} ${meta.version} ${kind})`)
     sendJson(ctx.res, 200, { ok: true, targetDir, restores: meta.restores.length })
@@ -299,14 +344,15 @@ export function register(
   // ---------- 源码级对比 ----------
   router.get('/api/repos/:pid/:rid/diff', async (ctx: Ctx) => {
     const cfg = await services.loadCfg()
-    const project = cfg.projects.find(p => p.id === ctx.params.pid)
+    const project = cfg.projects.find((p) => p.id === ctx.params.pid)
     if (!project) throw apiError(404, 'NOT_FOUND', `项目不存在: ${ctx.params.pid}`)
-    const repo = project.repos.find(r => r.id === ctx.params.rid)
+    const repo = project.repos.find((r) => r.id === ctx.params.rid)
     if (!repo) throw apiError(404, 'NOT_FOUND', `仓库不存在或不属于该项目: ${ctx.params.rid}`)
     const to = ctx.query.get('to')?.trim()
     if (!to) throw apiError(400, 'VALIDATION', 'to 必填（tag/commit）')
     const from = ctx.query.get('from')?.trim() || null
-    if (!fs.existsSync(repo.path)) throw apiError(400, 'REPO_INVALID', `仓库路径不存在: ${repo.path}`)
+    if (!fs.existsSync(repo.path))
+      throw apiError(400, 'REPO_INVALID', `仓库路径不存在: ${repo.path}`)
     const result = await compare.compareSource(repo.path, from, to)
     sendJson(ctx.res, 200, result)
   })
