@@ -53,3 +53,9 @@
 - UltimateRecentReleases：design v2.0 ULTIMATE 原型 6 区——最近 4 条 release（状态 icon check/ban + 版本 + 项目 + 日期 + 仓数 + 提交数），数据走 `api.aggregateFeed({ limit: 4 })`，跳 UpgradeFeed
 - UltimateSparkline：design v2.0 ULTIMATE 原型 5 区——近 8 周发布节奏 SVG 折线（260×70 渐变填充 + 描边 + W29/W36 端点 + 合计/峰值统计），数据走 `api.overviewWeekly()`
 - UltimateView 完整驾驶舱：把 design v2.0 ULTIMATE 原型 9 大区（左侧 nav + 顶栏 + 4 张 KPI + 待发布变动 + sparkline + 最近发布 + 系统健康 4 卡 + 通知流）整体搬进产品 `/ultimate` 路由；新增 wenxi/indigo 双主题 `--wx-*` tokens + `.stat-card-wx` / `.wx-surface` / `.health-card-wx` / `.wx-row` / `.wx-dot` / `.commit-chip` 等基础 class；修复 vite dev 默认只 listen IPv6 `::1` 导致浏览器 IPv4 访问 `ERR_CONNECTION_REFUSED` 的隐性 bug（`apps/web/vite.config.ts` 加 `host: '127.0.0.1'`）。UI 风格与 design v2.0 原型一致
+
+## v1.2.1（2026-09-06）
+
+### 修复与维护（patch）
+- 修正 v1.2.0 design 错位：删除错加的 /ultimate 独立路由与 Ultimate* 9 组件（v1.1.0 Dashboard 已是 ultimate-cockpit 落地形态），清理无人引用的 --wx-* tokens 段，修短左侧 nav shortLabel（项目台→项目 / 发版向导→向导 / 审计比→审计）；保留 vite dev host 127.0.0.1 IPv4 监听修复。详见 docs/v1.2.1-rollback-design-misalignment.md。
+- 修复恢复向导平台兼容 bug（e2e wizard 步骤 7 在 macOS 复现）：默认恢复路径从 Windows 反斜杠 `\\restores\\` 改为正斜杠拼接——`\\` 在 macOS/Linux 不构成路径分隔符，整串目录名被 server 白名单误判为脱离 BX_HOME，「开始恢复」必报 400；server 端 targetDir 同步归一 `\`→`/`（Windows 端 fs 同样接受 `/`）。

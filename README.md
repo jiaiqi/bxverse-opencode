@@ -61,15 +61,15 @@ pnpm icons            # 生成 PWA 图标
 
 ## 当前状态
 
-- **版本**：v1.0.1（2026-08-29 锁版，1.x 维护期）—— R1–R30 全实现 / M1–M8 全收口 / 235 单元测试 + 3 e2e 场景 + 65 原型回归全绿
-- **变更日志**：[CHANGELOG.md](CHANGELOG.md)（v1.0.0 / v1.0.1 已发布）
+- **版本**：v1.2.1（2026-09-06，1.x 维护期）—— R1–R32 全实现 / M1–M8 全收口 / 300 单元测试（core 184 + server 116）+ 3 e2e 场景 + 68 原型回归全绿
+- **变更日志**：[CHANGELOG.md](CHANGELOG.md)（v1.0.0 → v1.2.1 已发布）
 - **下一阶段规划**：[docs/next-development-plan.md](docs/next-development-plan.md)（v1.x 维护 + 后续候选）
 
 ## 测试
 
 ```bash
 pnpm typecheck                       # 5 包 tsc --noEmit / vue-tsc --noEmit
-pnpm test                            # core 157 + server 78 单测（vitest）
+pnpm test                            # core 184 + server 116 单测（vitest）
 pnpm build                           # 5 包链构建（shared → core → server → cli → web，web ~40s）
 pnpm test:e2e                        # 三场景端到端：wizard-flow / resume / onboarding
 python design/.diag-tmp/_regress5.py # 原型 v2.0 68 断言回归（wenxi/indigo 主题切换 + 命令面板 + 4 类语义色）
