@@ -1264,5 +1264,6 @@ const routes = [
 
 - `/projects` **ProjectsManage.vue**：项目卡片网格——项目版本、挂载仓库数、待发布数（overview.changedRepoCount）、共享仓库数（path 归并后同仓被 ≥2 项目挂载）、最近发布；「新建项目」对话框（name/description → api.createProject）；「管理仓库」对话框（注册表全量仓库勾选挂载：新增走 `addRepoByPath(path)`、移除走 `deleteRepo`；同仓跨项目按 path 归并并展示「同时在 N 个项目」）。
 - `/registry` **RepoRegistry.vue**：全局仓库聚合表——遍历 `projects[].repos` 按 `path` 归并（同 path 视为同一仓库），列：仓库（displayName/name/path/remote）、所属项目 chips、接入位计数；操作：进入首个挂载项目的仓库详情；空态/加载态复用 EmptyState/LoadingState。
-- 阶段 1 语义为「客户端聚合 + 路径挂载」，阶段 2（data-model.md §16 注册表契约）落地后切换权威数据源，视图不重写。
+- 阶段 1 语义为「客户端聚合 + 路径挂载」；阶段 2（data-model.md §16）已落地：ProjectsManage 管理对话框统一走 `attachRepo/detachRepo`（按 path，服务端自动迁移内嵌仓库进注册表；勾选用原生 checkbox，NCheckbox 受控联动在 label 内不稳定）；RepoRegistry 头部显示「注册表模式」chip（`api.repoRegistry()` 条目数）；视图无需重写。
+| 2026-09-06 | §16 升级到 R33 阶段 2：管理对话框切 attach/detach（原生 checkbox）、RepoRegistry 注册表模式 chip |
 | 2026-09-06 | 新增 R34 §15 玻璃光影视觉体系（stone 主题：石灰金 tokens + 玻璃配方 + 环境光/颗粒 + stone naive overrides）与 R33 阶段 1 §16 项目管理/仓库注册表（客户端聚合 0 契约，挂载走既有 API）；§14 变更记录同步 |
