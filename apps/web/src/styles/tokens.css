@@ -1064,3 +1064,71 @@ html.theme-stone #main-content {
     background: #1e1c1a;
   }
 }
+
+/* ---- stone 玻璃深化（R34）：naive 弹层 / 下拉 / 自绘浮层 ---- */
+html.theme-stone .n-card.n-card--content-segregated,
+html.theme-stone .n-modal.n-card,
+html.theme-stone .n-card > .n-card-header,
+html.theme-stone .n-drawer,
+html.theme-stone .n-popover:not(.n-popover--raw),
+html.theme-stone .n-base-select-menu,
+html.theme-stone .n-dropdown-menu {
+  backdrop-filter: blur(28px) saturate(170%);
+  -webkit-backdrop-filter: blur(28px) saturate(170%);
+}
+html.theme-stone .n-modal.n-card,
+html.theme-stone .n-card.n-card--content-segregated {
+  background: linear-gradient(168deg, rgba(255, 255, 255, 0.86), rgba(255, 255, 255, 0.7));
+  border: 1px solid rgba(255, 255, 255, 0.65);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.7),
+    0 40px 90px -20px rgba(28, 25, 23, 0.4);
+}
+html.theme-stone.dark .n-modal.n-card,
+html.theme-stone.dark .n-card.n-card--content-segregated {
+  background: linear-gradient(168deg, rgba(44, 40, 36, 0.85), rgba(28, 26, 23, 0.75));
+  border-color: rgba(255, 255, 255, 0.12);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    0 40px 90px -20px rgba(0, 0, 0, 0.7);
+}
+html.theme-stone .n-popover:not(.n-popover--raw),
+html.theme-stone .n-base-select-menu,
+html.theme-stone .n-dropdown-menu {
+  background: rgba(255, 255, 255, 0.78);
+  border: 1px solid rgba(255, 255, 255, 0.6);
+}
+html.theme-stone.dark .n-popover:not(.n-popover--raw),
+html.theme-stone.dark .n-base-select-menu,
+html.theme-stone.dark .n-dropdown-menu {
+  background: rgba(40, 37, 33, 0.85);
+  border-color: rgba(255, 255, 255, 0.12);
+}
+/* 自绘浮层（AppLayout 项目切换菜单 bx-popover-in / CommandPalette 容器） */
+html.theme-stone .bx-popover-in {
+  background: linear-gradient(
+    168deg,
+    rgba(255, 255, 255, 0.82),
+    rgba(255, 255, 255, 0.62)
+  ) !important;
+  backdrop-filter: blur(24px) saturate(170%);
+  -webkit-backdrop-filter: blur(24px) saturate(170%);
+  border-color: rgba(255, 255, 255, 0.6) !important;
+}
+html.theme-stone.dark .bx-popover-in {
+  background: linear-gradient(168deg, rgba(44, 40, 36, 0.88), rgba(28, 26, 23, 0.78)) !important;
+  border-color: rgba(255, 255, 255, 0.12) !important;
+}
+@media (prefers-reduced-transparency: reduce) {
+  html.theme-stone .n-modal.n-card,
+  html.theme-stone .n-popover:not(.n-popover--raw),
+  html.theme-stone .n-base-select-menu,
+  html.theme-stone .n-dropdown-menu,
+  html.theme-stone .bx-popover-in {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+  html.theme-stone .bx-popover-in {
+    background: var(--bx-surface) !important;
+  }
+}
