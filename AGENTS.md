@@ -70,7 +70,7 @@ apps/web/src/{main.ts, App.vue, api/*, stores/*, router/, views/（含 BackupMan
 apps/cli/src/index.ts
 scripts/{seed.mjs, doctor.mjs, gen-pwa-icons.cjs}
 e2e/{prepare-fixture.mjs, wizard-flow.py, resume.mjs, README.md}
-docs/{requirements.md, architecture.md, data-model.md, core-engine.md, api.md, frontend.md, development.md, roadmap.md, next-development-plan.md, optimization-plan.md, r26-build-pipeline.md, theme-spec-wenxi.md}  设计文档（_archive/ 为过期归档，勿引用）
+docs/{requirements.md, architecture.md, data-model.md, core-engine.md, api.md, frontend.md, development.md, roadmap.md, next-development-plan.md, optimization-plan.md, r26-build-pipeline.md, theme-spec-wenxi.md, handoff-2026-09-06.md}  设计文档（_archive/ 为过期归档，勿引用）
 design/bxverse-ultimate-cockpit.html  终极形态交互原型（下一阶段前端形态依据；_archive/ 为旧稿归档）
 verse/      参考原型，不在 workspace，不参与构建
 ```
@@ -166,6 +166,7 @@ apps/@bxverse/cli ──────┘
 | `docs/next-development-plan.md` | **下一阶段开发总纲**：现状快照、原型差距清单、Phase 1–3 排期与出口标准、文档治理 | 领取任何新任务前；决定「接下来做什么」时 |
 | `docs/optimization-plan.md` | 优化任务卡库（F/T/S/A/C/N/DOC 系列，单卡自包含） | 执行具体优化任务时（先按代码现状核对任务是否已落地） |
 | `docs/r32-rollback-guide.md` | R32 升级后回退到历史版本 + l-pc-front 接入 bxverse 后的代码删除清单与回退 SOP | R32 实施时 + l-pc-front 类业务仓迁移到 bxverse 时 |
+| `docs/handoff-2026-09-06.md` | **会话交接快照**：版本/分支状态、R33 多对多与 R34 stone 玻璃主题落地细节、真实项目 p_38zk5w 接入、验证基线、坑清单与下一步候选 | 接续 bxverse 开发时最先读（尤其首次接触 R33/R34 改动） |
 
 > 注：除 requirements.md、architecture.md、roadmap.md 外，其余文档由并行任务撰写，可能暂缺——缺失时以 requirements + shared/types.ts + architecture.md 为准，并在实现注释中标注「依赖待补：docs/xxx.md」。
 
