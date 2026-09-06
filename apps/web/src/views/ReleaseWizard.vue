@@ -287,42 +287,54 @@ function goNext() {
         </div>
         <div
           ref="stepBarRef"
-          class="flex items-stretch gap-2 pt-2 overflow-x-auto"
+          class="flex items-start pt-2 overflow-x-auto"
           role="tablist"
           aria-label="发布向导步骤"
           @keydown="onStepBarKeydown"
         >
-          <div
-            v-for="(st, idx) in stepDefs"
-            :key="idx"
-            :data-step-index="idx"
-            class="flex flex-col items-center text-center cursor-pointer min-w-[80px] flex-1 focus-ring rounded-md"
-            role="tab"
-            :tabindex="idx + 1 === store.step ? 0 : -1"
-            :aria-selected="store.step === idx + 1 ? 'true' : 'false'"
-            :aria-disabled="idx + 1 > store.step ? 'true' : undefined"
-            :aria-label="`${st.title} ${st.desc} 第 ${idx + 1} 步${store.step === idx + 1 ? ' 当前步骤' : idx + 1 < store.step ? ' 可返回' : ' 未完成'}`"
-            @click="idx + 1 < store.step && store.goTo(idx + 1)"
-          >
+          <template v-for="(st, idx) in stepDefs" :key="idx">
             <div
-              class="w-7 h-7 rounded-full flex items-center justify-center text-xs font-mono font-bold mb-1.5 transition-[background-color,border-color,color,box-shadow,transform,opacity]"
-              :class="[
-                store.step > idx + 1
-                  ? 'bg-brand-500 text-black shadow-glow-emerald'
-                  : store.step === idx + 1
-                    ? 'bg-info text-black animate-pulse font-extrabold shadow-glow-cyan'
-                    : 'bg-surface-alt text-text-3 border border-border',
-              ]"
+              :data-step-index="idx"
+              class="flex flex-col items-center text-center cursor-pointer min-w-[72px] focus-ring rounded-md"
+              role="tab"
+              :tabindex="idx + 1 === store.step ? 0 : -1"
+              :aria-selected="store.step === idx + 1 ? 'true' : 'false'"
+              :aria-disabled="idx + 1 > store.step ? 'true' : undefined"
+              :aria-label="`${st.title} ${st.desc} 第 ${idx + 1} 步${store.step === idx + 1 ? ' 当前步骤' : idx + 1 < store.step ? ' 可返回' : ' 未完成'}`"
+              @click="idx + 1 < store.step && store.goTo(idx + 1)"
             >
-              {{ idx + 1 }}
+              <!-- R34：v5 步骤球——完成 ✓ / 当前品牌色光环 / 未到灰阶 -->
+              <span
+                class="w-7 h-7 rounded-full flex items-center justify-center text-xs font-mono font-bold mb-1.5 transition-[background-color,border-color,color,box-shadow,transform,opacity] duration-fast"
+                :class="[
+                  store.step > idx + 1
+                    ? 'bg-brand-soft text-brand-600'
+                    : store.step === idx + 1
+                      ? 'bg-brand-500 text-white font-extrabold shadow-[0_0_0_4px_var(--bx-brand-soft),0_0_14px_var(--bx-brand-ring)]'
+                      : 'bg-surface-alt text-text-3 border border-border',
+                ]"
+              >
+                {{ store.step > idx + 1 ? '✓' : idx + 1 }}
+              </span>
+              <span
+                class="text-xs font-medium whitespace-nowrap"
+                :class="store.step === idx + 1 ? 'text-text-1 font-bold' : 'text-text-2'"
+                >{{ st.title }}</span
+              >
+              <span class="text-[10px] text-text-3 font-mono whitespace-nowrap">{{ st.desc }}</span>
             </div>
-            <span
-              class="text-xs font-medium"
-              :class="store.step === idx + 1 ? 'text-text-1 font-bold' : 'text-text-2'"
-              >{{ st.title }}</span
+            <!-- 连接线：走过即填充（v5 sline） -->
+            <div
+              v-if="idx < stepDefs.length - 1"
+              class="flex-1 h-0.5 rounded-full mt-[13px] mx-1.5 min-w-[14px] relative overflow-hidden bg-surface-alt"
+              aria-hidden="true"
             >
-            <span class="text-[10px] text-text-3 font-mono">{{ st.desc }}</span>
-          </div>
+              <span
+                class="absolute inset-0 bg-brand-500 origin-left transition-transform duration-500 ease-out"
+                :style="{ transform: store.step > idx + 1 ? 'scaleX(1)' : 'scaleX(0)' }"
+              />
+            </div>
+          </template>
         </div>
       </div>
 
