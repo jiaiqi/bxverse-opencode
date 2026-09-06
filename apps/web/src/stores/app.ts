@@ -8,7 +8,8 @@ import { bootstrap, setToken } from '../api/http'
 import { disablePWA, enablePWA } from '../pwa/register'
 
 export type ThemeMode = 'light' | 'dark' | 'system'
-export type ThemeStyle = 'indigo' | 'wenxi'
+// 扩展：R34 增 stone（玻璃光影，浅色优先）
+export type ThemeStyle = 'indigo' | 'wenxi' | 'stone'
 
 const prefersDark = () => window.matchMedia('(prefers-color-scheme: dark)')
 
@@ -44,11 +45,16 @@ export const useAppStore = defineStore('app', {
     },
     applyTheme(): void {
       const mode = this.themeMode
-      // wenxi 风格为纯深色设计，强制深色；indigo 保持亮/暗/system 语义
-      this.isDark = this.themeStyle === 'wenxi' || mode === 'dark' || (mode === 'system' && prefersDark().matches)
+      // wenxi 风格为纯深色设计，强制深色；indigo/stone 保持亮/暗/system 语义（stone 浅色优先）
+      this.isDark =
+        this.themeStyle === 'wenxi' ||
+        mode === 'dark' ||
+        (mode === 'system' && prefersDark().matches)
       const el = document.documentElement
       el.classList.toggle('dark', this.isDark)
       el.classList.toggle('theme-wenxi', this.themeStyle === 'wenxi')
+      // 扩展：R34 stone 主题（玻璃光影材质由 tokens.css html.theme-stone 叠加）
+      el.classList.toggle('theme-stone', this.themeStyle === 'stone')
     },
     async setTheme(mode: ThemeMode): Promise<void> {
       if (!this.config) return

@@ -10,7 +10,13 @@ import {
   NNotificationProvider,
   useOsTheme,
 } from 'naive-ui'
-import { darkThemeOverrides, lightThemeOverrides, wenxiThemeOverrides } from './theme'
+import {
+  darkThemeOverrides,
+  lightThemeOverrides,
+  stoneDarkThemeOverrides,
+  stoneLightThemeOverrides,
+  wenxiThemeOverrides,
+} from './theme'
 import { useAppStore } from './stores/app'
 import { useUiStore, ONBOARDING_DONE_KEY } from './stores/ui'
 import { useProjectsStore } from './stores/projects'
@@ -25,16 +31,16 @@ const projectsStore = useProjectsStore()
 const osTheme = useOsTheme()
 
 // R20 主题风格：wenxi 为纯深色玻璃拟态套件（theme=dark + wenxiThemeOverrides）；indigo 走亮/暗双套件
+// 扩展：R34 stone 玻璃光影套件走亮/暗双套件（金主色）
 const naiveTheme = computed(() =>
   appStore.themeStyle === 'wenxi' ? darkTheme : appStore.isDark ? darkTheme : null,
 )
-const naiveOverrides = computed(() =>
-  appStore.themeStyle === 'wenxi'
-    ? wenxiThemeOverrides
-    : appStore.isDark
-      ? darkThemeOverrides
-      : lightThemeOverrides,
-)
+const naiveOverrides = computed(() => {
+  if (appStore.themeStyle === 'stone')
+    return appStore.isDark ? stoneDarkThemeOverrides : stoneLightThemeOverrides
+  if (appStore.themeStyle === 'wenxi') return wenxiThemeOverrides
+  return appStore.isDark ? darkThemeOverrides : lightThemeOverrides
+})
 
 const bootError = ref('')
 const booting = ref(true)

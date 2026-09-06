@@ -34,6 +34,20 @@ const currentProject = computed(
 const navItems = computed(() => [
   { id: 'dashboard', to: '/', icon: 'i-carbon-dashboard', label: '总览看板', shortLabel: '看板' },
   {
+    id: 'projects',
+    to: '/projects',
+    icon: 'i-carbon-list',
+    label: '项目管理（多对多挂载）',
+    shortLabel: '管理',
+  },
+  {
+    id: 'registry',
+    to: '/registry',
+    icon: 'i-carbon-data-table',
+    label: '仓库注册表（全局仓库池）',
+    shortLabel: '注册',
+  },
+  {
     id: 'project',
     to: currentProject.value ? `/project/${currentProject.value.id}` : '/',
     icon: 'i-carbon-catalog',

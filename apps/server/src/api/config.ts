@@ -70,8 +70,9 @@ export function register(router: import('../http/router').Router, services: AppS
         cfg.theme = body.theme as AppConfig['theme']
       }
       if (body.themeStyle !== undefined) {
-        if (!['indigo', 'wenxi'].includes(String(body.themeStyle))) {
-          throw apiError(400, 'VALIDATION', 'themeStyle 必须为 indigo/wenxi')
+        // 扩展：R34 增 stone（玻璃光影套件）
+        if (!['indigo', 'wenxi', 'stone'].includes(String(body.themeStyle))) {
+          throw apiError(400, 'VALIDATION', 'themeStyle 必须为 indigo/wenxi/stone')
         }
         cfg.themeStyle = body.themeStyle as AppConfig['themeStyle']
       }

@@ -1251,3 +1251,18 @@ const routes = [
 | 2026-08-31 | B 方向多栈 versionSource：RepoSettings NSelect 扩 5 选 1（derived/packageJson/gradle/cargo/goModule，gradle/cargo 描述含构建系统识别；goModule 标"tag-only，go.mod 不存版本"）；与 R26 commitVersionFiles 链路解耦，引擎主路径不变 |
 | 2026-08-31 | C 方向跨项目搜索：§3.9 CrossProjectSearch.vue（搜索框 + 3 类型 chip + 结果列表 + 空/加载/错误态 + URL `?q=&type=` 同步）+ CrossProjectCard.vue 复用单元（3 色 type chip + commit/version/name 分支展示）；2 入口 AppLayout 顶栏 + CommandPalette；§3.10/3.11 章节编号顺延 |
 | 2026-08-31 | D 方向升级日志聚合：§3.10 UpgradeFeed.vue（粒度/范围/项目 3 组过滤 + Timeline mini bar chart + ReleaseFeedCard 列表 + 导出 .md 按钮 + URL `?granularity=&days=&projectId=` 同步）+ ReleaseFeedCard.vue 复用单元（项目 avatar + 版本 + 涉及仓库 chip 行 + MarkdownView 渲染 external 日志 + 展开/收起）；2 入口 AppLayout 顶栏 + CommandPalette；§3.11/3.12 章节编号顺延 |
+
+## 15. 玻璃光影视觉体系（R34 · stone 主题）
+
+- 形态基准：`design/bxverse-final-vision-v5.html`。浅色优先、暖石灰中性 + 金色单强调色、玻璃拟态、环境光影、细颗粒；亮/暗双模式等价。
+- 接线：`AppConfig.themeStyle: 'stone'`（// 扩展：R34）→ appStore 切 `html.theme-stone`；stone 的亮/暗跟随 `theme`（light/dark/system），与 indigo 同语义（wenxi 仍强制深色）。
+- tokens（tokens.css 追加）：`html.theme-stone` 石灰金亮色全套 `--bx-*`；`html.theme-stone.dark` 暗色等价；玻璃配方 = `--bx-surface-glass` 渐变 + `backdrop-filter: blur(20px) saturate(160%)` + 1px 内高光 + 染色投影；环境光层 `body::before`（三团 radial 光晕 + 28s 漂移，`prefers-reduced-motion` 关闭）；颗粒层 `body::after`（SVG feTurbulence，multiply/overlay 随主题）。
+- naive：`theme.ts` 新增 stone 亮/暗 overrides（金主色：亮 #A16207 / 暗 #D9A521），圆角沿用 10/6。
+- 降级：`prefers-reduced-transparency` 回实底（去 backdrop-filter）；`prefers-reduced-motion` 停漂移。既有 indigo / wenxi 零改动零回归。
+
+## 16. 项目管理与仓库注册表（R33 阶段 1 · 0 契约）
+
+- `/projects` **ProjectsManage.vue**：项目卡片网格——项目版本、挂载仓库数、待发布数（overview.changedRepoCount）、共享仓库数（path 归并后同仓被 ≥2 项目挂载）、最近发布；「新建项目」对话框（name/description → api.createProject）；「管理仓库」对话框（注册表全量仓库勾选挂载：新增走 `addRepoByPath(path)`、移除走 `deleteRepo`；同仓跨项目按 path 归并并展示「同时在 N 个项目」）。
+- `/registry` **RepoRegistry.vue**：全局仓库聚合表——遍历 `projects[].repos` 按 `path` 归并（同 path 视为同一仓库），列：仓库（displayName/name/path/remote）、所属项目 chips、接入位计数；操作：进入首个挂载项目的仓库详情；空态/加载态复用 EmptyState/LoadingState。
+- 阶段 1 语义为「客户端聚合 + 路径挂载」，阶段 2（data-model.md §16 注册表契约）落地后切换权威数据源，视图不重写。
+| 2026-09-06 | 新增 R34 §15 玻璃光影视觉体系（stone 主题：石灰金 tokens + 玻璃配方 + 环境光/颗粒 + stone naive overrides）与 R33 阶段 1 §16 项目管理/仓库注册表（客户端聚合 0 契约，挂载走既有 API）；§14 变更记录同步 |

@@ -823,3 +823,175 @@ html.dark .hljs-regexp {
     animation-duration: 0.01ms !important;
   }
 }
+
+/* ==================== R34 玻璃光影（themeStyle=stone，浅色优先） ====================
+   暖石灰中性 + 金色单强调 + 玻璃拟态 + 环境光晕 + 细颗粒；
+   亮/暗双模式等价（.theme-stone.dark）；形态基准 design/bxverse-final-vision-v5.html */
+html.theme-stone {
+  --bx-brand-50: #fbf3e2;
+  --bx-brand-100: #f3e3bd;
+  --bx-brand-200: #e9cd8d;
+  --bx-brand-300: #e0b35e;
+  --bx-brand-400: #c98a0b;
+  --bx-brand-500: #a16207;
+  --bx-brand-600: #8a5406;
+  --bx-brand-700: #724505;
+  --bx-brand-800: #5c3804;
+  --bx-brand-900: #452a03;
+  --bx-brand-soft: rgba(161, 98, 7, 0.1);
+  --bx-brand-soft-hover: rgba(161, 98, 7, 0.17);
+  --bx-brand-ring: rgba(161, 98, 7, 0.3);
+
+  --bx-bg: #eceae5;
+  --bx-surface: rgba(255, 255, 255, 0.62);
+  --bx-surface-glass: rgba(255, 255, 255, 0.58);
+  --bx-surface-hover: rgba(28, 25, 23, 0.05);
+  --bx-surface-alt: rgba(28, 25, 23, 0.04);
+  --bx-border: rgba(28, 25, 23, 0.12);
+  --bx-border-strong: rgba(28, 25, 23, 0.24);
+  --bx-text-1: #1c1917;
+  --bx-text-2: #57534e;
+  --bx-text-3: #98938b;
+
+  --bx-success: #16a34a;
+  --bx-success-soft: rgba(22, 163, 74, 0.1);
+  --bx-warning: #d97706;
+  --bx-warning-soft: rgba(217, 119, 6, 0.1);
+  --bx-error: #dc2626;
+  --bx-error-soft: rgba(220, 38, 38, 0.08);
+  --bx-info: #2563eb;
+  --bx-info-soft: rgba(37, 99, 235, 0.08);
+
+  --bx-shadow-sm: 0 1px 2px rgba(51, 46, 40, 0.06), 0 4px 14px -6px rgba(51, 46, 40, 0.1);
+  --bx-shadow-md: 0 2px 4px rgba(51, 46, 40, 0.06), 0 12px 30px -10px rgba(51, 46, 40, 0.18);
+  --bx-shadow-lg: 0 6px 12px rgba(51, 46, 40, 0.08), 0 28px 60px -16px rgba(51, 46, 40, 0.28);
+  --bx-radius-card: 16px;
+}
+html.theme-stone.dark {
+  --bx-brand-50: #2b2415;
+  --bx-brand-100: #3a3018;
+  --bx-brand-200: #594620;
+  --bx-brand-300: #9d7c2a;
+  --bx-brand-400: #d9a521;
+  --bx-brand-500: #e3b341;
+  --bx-brand-600: #c9941a;
+  --bx-brand-700: #a87c15;
+  --bx-brand-800: #8a6411;
+  --bx-brand-900: #6b4e0d;
+  --bx-brand-soft: rgba(217, 165, 33, 0.12);
+  --bx-brand-soft-hover: rgba(217, 165, 33, 0.2);
+  --bx-brand-ring: rgba(217, 165, 33, 0.35);
+
+  --bx-bg: #121110;
+  --bx-surface: rgba(40, 37, 33, 0.55);
+  --bx-surface-glass: rgba(38, 35, 31, 0.55);
+  --bx-surface-hover: rgba(255, 255, 255, 0.06);
+  --bx-surface-alt: rgba(255, 255, 255, 0.04);
+  --bx-border: rgba(245, 245, 244, 0.1);
+  --bx-border-strong: rgba(245, 245, 244, 0.2);
+  --bx-text-1: #f5f5f4;
+  --bx-text-2: #a8a29e;
+  --bx-text-3: #78716c;
+
+  --bx-success: #4ade80;
+  --bx-success-soft: rgba(74, 222, 128, 0.1);
+  --bx-warning: #fbbf24;
+  --bx-warning-soft: rgba(251, 191, 36, 0.1);
+  --bx-error: #f87171;
+  --bx-error-soft: rgba(248, 113, 113, 0.1);
+  --bx-info: #5ac8fa;
+  --bx-info-soft: rgba(90, 200, 250, 0.1);
+
+  --bx-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.5);
+  --bx-shadow-md: 0 4px 16px rgba(0, 0, 0, 0.55);
+  --bx-shadow-lg: 0 12px 36px rgba(0, 0, 0, 0.65);
+}
+
+/* ---- stone 材质层：环境光晕（body::before，漂移） + 细颗粒（body::after） ----
+   布局根/主视口的 bg-bg 在 stone 下转透明，让固定光场透出 */
+html.theme-stone body {
+  background: var(--bx-bg);
+}
+html.theme-stone .bg-bg {
+  background: transparent;
+}
+html.theme-stone body::before {
+  content: '';
+  position: fixed;
+  inset: -60px;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(640px 420px at 14% -6%, rgba(202, 138, 4, 0.16), transparent 62%),
+    radial-gradient(780px 520px at 92% -10%, rgba(120, 113, 108, 0.14), transparent 62%),
+    radial-gradient(560px 460px at 74% 112%, rgba(161, 98, 7, 0.1), transparent 62%),
+    linear-gradient(160deg, rgba(255, 255, 255, 0.5), rgba(255, 255, 255, 0) 42%);
+  animation: bx-amb 28s ease-in-out infinite alternate;
+}
+html.theme-stone.dark body::before {
+  background:
+    radial-gradient(640px 420px at 14% -6%, rgba(227, 179, 65, 0.13), transparent 62%),
+    radial-gradient(780px 520px at 92% -10%, rgba(120, 113, 108, 0.1), transparent 62%),
+    radial-gradient(560px 460px at 74% 112%, rgba(227, 179, 65, 0.08), transparent 62%),
+    linear-gradient(160deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0) 42%);
+}
+@keyframes bx-amb {
+  from {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  to {
+    transform: translate3d(-32px, 24px, 0) scale(1.06);
+  }
+}
+html.theme-stone body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  pointer-events: none;
+  opacity: 0.3;
+  mix-blend-mode: multiply;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='2'/%3E%3CfeColorMatrix values='0 0 0 0 0.2 0 0 0 0 0.18 0 0 0 0 0.15 0 0 0 0.05 0'/%3E%3C/filter%3E%3Crect width='220' height='220' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+html.theme-stone.dark body::after {
+  mix-blend-mode: overlay;
+  opacity: 0.18;
+}
+/* 玻璃配方：半透面板 + blur + 内高光（作用于 glass-panel 与 naive 卡片容器） */
+html.theme-stone .glass-panel,
+html.theme-stone .n-card {
+  backdrop-filter: blur(20px) saturate(160%);
+  -webkit-backdrop-filter: blur(20px) saturate(160%);
+  border-color: var(--bx-border);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.45),
+    var(--bx-shadow-md);
+}
+html.theme-stone.dark .glass-panel,
+html.theme-stone.dark .n-card {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.07),
+    var(--bx-shadow-md);
+}
+/* 降级：偏好低透明度回实底；偏好减少动效停漂移 */
+@media (prefers-reduced-transparency: reduce) {
+  html.theme-stone .glass-panel,
+  html.theme-stone .n-card {
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+  html.theme-stone {
+    --bx-surface: #ffffff;
+  }
+  html.theme-stone.dark {
+    --bx-surface: #1e1c1a;
+  }
+  html.theme-stone body::after {
+    display: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  html.theme-stone body::before {
+    animation: none;
+  }
+}

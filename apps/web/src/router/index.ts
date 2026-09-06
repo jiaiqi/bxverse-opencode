@@ -13,6 +13,20 @@ const router = createRouter({
       meta: { title: '总览' },
     },
     {
+      // 扩展：R33 阶段 1 项目管理（项目卡片 + 仓库挂载，多对多客户端聚合）
+      path: '/projects',
+      name: 'projects-manage',
+      component: () => import('../views/ProjectsManage.vue'),
+      meta: { title: '项目管理' },
+    },
+    {
+      // 扩展：R33 阶段 1 仓库注册表（按 path 归并的全局仓库池）
+      path: '/registry',
+      name: 'repo-registry',
+      component: () => import('../views/RepoRegistry.vue'),
+      meta: { title: '仓库注册表' },
+    },
+    {
       path: '/project/:id',
       name: 'project',
       component: () => import('../views/ProjectDetail.vue'),

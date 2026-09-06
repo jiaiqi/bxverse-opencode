@@ -141,7 +141,8 @@ export interface AppConfig {
   host: string
   theme: 'light' | 'dark' | 'system'
   /** 扩展：R20 主题风格（indigo=默认靛蓝套件，含亮/暗/system；wenxi=深色玻璃拟态套件，仅深色） */
-  themeStyle?: 'indigo' | 'wenxi'
+  // 扩展：R34 增 stone=玻璃光影套件（浅色优先，暖石灰 + 金单强调，亮/暗/system 齐全）
+  themeStyle?: 'indigo' | 'wenxi' | 'stone'
   pwa: { enabled: boolean }
   dataDir: string
   pollInterval: number

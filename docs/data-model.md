@@ -779,3 +779,16 @@ export interface RepoBackupRef {
 | 2026-08-17 | §3.1 `AppConfig.ai` 扩展多供应商：新增可选 `providers[]`（`AiProvider{ id, name, kind, baseUrl, model, enabled }`，kind 当前仅 `openai-compatible` 预留扩展）与 `activeProviderId`；旧 `baseUrl/model/apiKey` 为兼容迁移载体（读取时自动迁移为默认 provider，key 迁入 `credentials.json.aiKeys` 后清空）；§4 凭据布局同步 `aiKeys`（write-only 不回显）；项目级发布记录 `repos` 全量快照语义（成功=发布版本 / 同步基版=项目版本 / 失败=仓库当前版本） |
 | 2026-08-21 | §3.1 补 `AppConfig.backup.retention`（`keepLast/maxBytes/keepDays`）与 `AppConfig.publish.concurrency`（默认1串行，上限5，批量 `saveProject` 竞态安全）；§4/§12 备份保留策略 `enforceRetention` 发布后自动清理；前端 `useBackup`/`usePublishPlan` 收敛与契约 `openapi.json` |
 | 2026-08-24 | 新增 R26 双格式与构建流水线：`ProjectDef` 补 `repoVersionFormat`（`X.Y.Z`/`VYYMMDDHHmm`）与 `manifestTarget`；`RepoDef` 补 `versionSource`/`packageManager`/`installCommand`/`preBuildCommand`/`buildTimeoutMs`/`versionSyncCommit`；`PlannedRepo` 补 `currentVersion`/`effectiveMode`；§6.1 新增主推双格式（含 legacy 兼容说明）；详见 `docs/r26-build-pipeline.md` |
+
+## 16. 项目与仓库多对多：渐进式契约演进（R33）
+
+现状：仓库内嵌于项目（`ProjectDef.repos: RepoDef[]`）；同一仓库出现在多个项目时各持一份配置（靠 path/remote 人工对齐，存在配置漂移可能）。R33 两阶段演进，契约只增不改：
+
+- **阶段 1（0 契约，已落地）**：前端聚合——项目管理/仓库注册表按 `path` 归并展示 membership；挂载调整复用既有 `POST /projects/:id/repos`（按 path）与 `DELETE /projects/:id/repos/:rid`。局限：跨项目副本的流水线配置可能漂移，registry 仅为视图。
+- **阶段 2（立项，契约扩展）**：
+  - `AppConfig` 增可选 `repoRegistry?: RepoDef[]`（全局仓库注册表，`// 扩展：R33`）；
+  - `ProjectDef` 增可选 `repoRefs?: string[]`（引用 registry 的仓库 id，`// 扩展：R33`）；既有 `repos[]` 保留兼容：读取时优先 `repoRefs → registry` 展开为 repos，缺省回退内嵌 repos；
+  - server 增 `GET/PUT /api/repos-registry` 与 `POST /projects/:id/repos/attach|detach`（按 registry id 挂载/摘除）；
+  - 迁移：不主动改写旧数据；首次经 UI 编辑挂载关系时写入 repoRefs。
+  - 不变量：引擎发布链路继续消费「展开后的 RepoDef 列表」，registry 只是配置来源，发布语义零变化。
+| 2026-09-06 | 新增 §16 项目与仓库多对多渐进契约（R33）：阶段 1 前端聚合 0 契约；阶段 2 AppConfig.repoRegistry + ProjectDef.repoRefs（// 扩展：R33，仅新增可选字段）+ registry/attach/detach 端点；引擎语义零变化 |

@@ -13,7 +13,7 @@ const message = useMessage()
 
 const form = reactive({
   theme: 'system' as 'light' | 'dark' | 'system',
-  themeStyle: 'indigo' as 'indigo' | 'wenxi',
+  themeStyle: 'indigo' as 'indigo' | 'wenxi' | 'stone',
   pwaEnabled: true,
   pollInterval: 30_000,
   aiEnabled: false,
@@ -41,7 +41,8 @@ watchEffect(() => {
 })
 
 /** 主题风格即时预览：点击即切换并保存，无需等「保存全部设置」 */
-async function pickStyle(style: 'indigo' | 'wenxi') {
+// 扩展：R34 pickStyle 扩 stone
+async function pickStyle(style: 'indigo' | 'wenxi' | 'stone') {
   form.themeStyle = style
   await appStore.setThemeStyle(style)
 }
@@ -117,9 +118,11 @@ function rotateToken() {
         <div>
           <div class="text-sm font-medium text-text-1">主题风格</div>
           <div class="text-xs text-text-3 mt-0.5">
-            indigo 为默认靛蓝套件（亮/暗/跟随系统）；WenXi 为深色玻璃拟态套件（翠绿强调，仅深色）
+            indigo 为默认靛蓝套件（亮/暗/跟随系统）；WenXi
+            为深色玻璃拟态套件（翠绿强调，仅深色）；Stone
+            为玻璃光影套件（石灰金，浅色优先，亮/暗/跟随系统）
           </div>
-          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
+          <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mt-3">
             <button
               class="flex items-center gap-3 p-3.5 rounded-lg border text-left transition-colors duration-fast focus-ring bg-surface"
               :class="
@@ -170,6 +173,39 @@ function rotateToken() {
               <i
                 aria-hidden="true"
                 v-if="form.themeStyle === 'wenxi'"
+                class="i-carbon-checkmark-filled ml-auto text-16px text-brand-500"
+              />
+            </button>
+            <!-- 扩展：R34 stone 玻璃光影套件（浅色优先，石灰金） -->
+            <button
+              class="flex items-center gap-3 p-3.5 rounded-lg border text-left transition-colors duration-fast focus-ring bg-surface"
+              :class="
+                form.themeStyle === 'stone'
+                  ? 'border-brand-500 bg-brand-soft'
+                  : 'border-border hover:border-border-strong'
+              "
+              :aria-pressed="form.themeStyle === 'stone'"
+              @click="pickStyle('stone')"
+            >
+              <span
+                class="w-9 h-9 rounded-md border border-border shrink-0 flex items-center justify-center overflow-hidden"
+                style="
+                  background:
+                    radial-gradient(120% 80% at 80% 0%, rgba(202, 138, 4, 0.35), transparent 60%),
+                    #eceae5;
+                "
+              >
+                <span class="w-4 h-4 rounded-sm shrink-0" style="background: #a16207" />
+              </span>
+              <span class="min-w-0">
+                <span class="block text-sm font-medium text-text-1">Stone 玻璃光影</span>
+                <span class="block text-xs text-text-3 mt-0.5"
+                  >暖石灰 + 金 · 浅色优先 · 亮/暗/跟随系统</span
+                >
+              </span>
+              <i
+                aria-hidden="true"
+                v-if="form.themeStyle === 'stone'"
                 class="i-carbon-checkmark-filled ml-auto text-16px text-brand-500"
               />
             </button>

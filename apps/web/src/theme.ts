@@ -133,3 +133,68 @@ export const darkThemeOverrides = base({
  * 由 tokens.css 的 html.theme-wenxi 规则叠加，形状在 tokens 内调整。
  */
 export const wenxiThemeOverrides: GlobalThemeOverrides = darkThemeOverrides
+
+/**
+ * R34 玻璃光影（themeStyle=stone，浅色优先）：暖石灰中性 + 金色单强调。
+ * 玻璃材质/环境光/颗粒由 tokens.css 的 html.theme-stone(.dark) 叠加；
+ * naive 侧仅切换主色与中性色值（金主色：亮 #A16207 / 暗 #D9A521）。
+ */
+const stoneLightBase = base({
+  primary: '#A16207',
+  primaryHover: '#B87208',
+  primaryPressed: '#8A5406',
+  text1: '#1C1917',
+  text2: '#57534E',
+  text3: '#98938B',
+  bg: '#ECEAE5',
+  surface: '#FFFFFF',
+  surfaceHover: '#F5F4F1',
+  surfaceAlt: '#EFEDE9',
+  border: '#E3E0D9',
+  borderStrong: '#CCC7BD',
+  info: '#2563EB',
+  success: '#16A34A',
+  warning: '#D97706',
+  error: '#DC2626',
+})
+
+export const stoneLightThemeOverrides: GlobalThemeOverrides = {
+  ...stoneLightBase,
+  Button: {
+    ...stoneLightBase.Button,
+    // 金底白字（AA 对比）；覆写 base() 中翠绿语义的深色字
+    textColorPrimary: '#FFFFFF',
+    textColorPrimaryHover: '#FFFFFF',
+    textColorPrimaryPressed: '#FFFFFF',
+  },
+}
+
+const stoneDarkBase = base({
+  primary: '#D9A521',
+  primaryHover: '#E5B33B',
+  primaryPressed: '#C9941A',
+  text1: '#F5F5F4',
+  text2: '#A8A29E',
+  text3: '#78716C',
+  bg: '#121110',
+  surface: '#1E1C1A',
+  surfaceHover: '#282523',
+  surfaceAlt: '#171514',
+  border: '#33302B',
+  borderStrong: '#453F38',
+  info: '#5AC8FA',
+  success: '#4ADE80',
+  warning: '#FBBF24',
+  error: '#F87171',
+})
+
+export const stoneDarkThemeOverrides: GlobalThemeOverrides = {
+  ...stoneDarkBase,
+  Button: {
+    ...stoneDarkBase.Button,
+    // 暗色金底配深暖字
+    textColorPrimary: '#231A05',
+    textColorPrimaryHover: '#231A05',
+    textColorPrimaryPressed: '#231A05',
+  },
+}
