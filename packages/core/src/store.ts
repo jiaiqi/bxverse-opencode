@@ -5,7 +5,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto'
 import { APP_DEFAULT_PORT } from '@bxverse/shared'
-import type { AppConfig, ProjectDef, ReleaseRecord, RepoBackupRef } from '@bxverse/shared'
+import type { AppConfig, ProjectDef, ReleaseRecord, RepoBackupRef, RepoDef } from '@bxverse/shared'
 import { atomicWrite, ensureDirs, resolveHome } from './home'
 import { ensureOk, git } from './git'
 import { CoreError, CORE_ERROR_CODES } from './errors'
@@ -134,7 +134,27 @@ export async function loadAppConfig(): Promise<AppConfig> {
       cfg.schemaVersion = 2
     }
   }
+  // 扩展：R33 多对多——repoRefs 引用全局注册表时展开为 repos（优先），未启用/未引用回退内嵌 repos
+  expandProjectRepos(cfg)
   return cfg
+}
+
+/**
+ * 扩展：R33 项目仓库展开。
+ * repoRefs 命中 repoRegistry 的条目优先；未命中的 repoRef 丢弃；resolved 为空时保持内嵌 repos。
+ * 不修改 repoRegistry / repoRefs 本身，仅物化视图，发布链路语义零变化。
+ */
+function expandProjectRepos(cfg: AppConfig): void {
+  const reg = cfg.repoRegistry
+  if (!reg?.length) return
+  for (let i = 0; i < cfg.projects.length; i++) {
+    const p = cfg.projects[i]
+    if (!p.repoRefs?.length) continue
+    const resolved = p.repoRefs
+      .map((id) => reg.find((r) => r.id === id))
+      .filter((r): r is RepoDef => !!r)
+    if (resolved.length) cfg.projects[i] = { ...p, repos: resolved }
+  }
 }
 
 export async function saveAppConfig(cfg: AppConfig): Promise<void> {

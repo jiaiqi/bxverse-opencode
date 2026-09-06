@@ -14,6 +14,7 @@ import { PollCache } from './poll'
 import { register as registerConfig } from './api/config'
 import { register as registerAuthApi, rotateToken } from './api/auth'
 import { register as registerProjects } from './api/projects'
+import { register as registerRegistry } from './api/registry'
 import { register as registerRepos } from './api/repos'
 import { register as registerFiles } from './api/files'
 import { register as registerHistory } from './api/history'
@@ -142,6 +143,8 @@ export function createApp(opts: { token?: string } = {}): App {
   registerConfig(router, { loadCfg, withCfg, getToken: () => token })
   registerAuthApi(router, { rotateToken: rotate })
   registerProjects(router, { loadCfg, withCfg, lockedProjectId: () => queue.lockedProjectId })
+  // 扩展：R33 阶段 2 全局仓库注册表 + 项目挂载 attach/detach
+  registerRegistry(router, { loadCfg, withCfg, lockedProjectId: () => queue.lockedProjectId })
   registerRepos(router, { loadCfg, withCfg, lockedProjectId: () => queue.lockedProjectId, poll })
   registerFiles(router, { loadCfg })
   registerHistory(router, registerHistoryServices)

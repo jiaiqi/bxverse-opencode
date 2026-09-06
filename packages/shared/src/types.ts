@@ -121,6 +121,8 @@ export interface ProjectDef {
   /** 对外日志排除的提交类型 */
   externalExclude: CommitType[]
   repos: RepoDef[]
+  // 扩展：R33 项目与仓库多对多——挂载的全局注册表仓库 id；存在时 repos 由 repoRegistry 按 refs 展开优先
+  repoRefs?: string[]
   createdAt?: string
   updatedAt?: string
   // 扩展：R28 快速发布通道——上次发布配置快照，用于一键预填（不含日志内容与排除明细）
@@ -169,6 +171,8 @@ export interface AppConfig {
   notifications?: {
     webhooks: { id: string; url: string; events: ('done' | 'error')[]; enabled: boolean }[]
   }
+  // 扩展：R33 全局仓库注册表（仓库唯一权威配置，项目经 repoRefs 引用挂载；缺省表示未启用注册表模式）
+  repoRegistry?: RepoDef[]
   projects: ProjectDef[]
 }
 

@@ -3,18 +3,25 @@
 // 遍历 projects[].repos 按 path 归并（同 path 视为同一仓库），展示所属项目 membership；
 // 阶段 2（注册表契约）落地后切换权威数据源，视图不重写
 
-import { computed, onMounted } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useProjectsStore } from '../stores/projects'
+import { api } from '../api'
 import LoadingState from '../components/LoadingState.vue'
 import EmptyState from '../components/EmptyState.vue'
 
 const store = useProjectsStore()
 const router = useRouter()
+/** R33 阶段 2：注册表条目数（>0 表示注册表模式已启用，仓库配置以注册表为权威源） */
+const regCount = ref<number | null>(null)
 
 onMounted(() => {
   void store.load()
   void store.loadOverview()
+  void api
+    .repoRegistry()
+    .then((r) => (regCount.value = r.registry.length))
+    .catch(() => (regCount.value = null))
 })
 
 interface RegistryRepo {
@@ -67,6 +74,14 @@ function openRepo(key: string): void {
         >
         查看。
       </p>
+      <div v-if="regCount" class="mt-2">
+        <span
+          class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-brand-soft text-brand-600"
+        >
+          <i aria-hidden="true" class="i-carbon-database text-11px" />注册表模式 · {{ regCount }}
+          个仓库 · 挂载经 attach/detach 保持跨项目配置一致
+        </span>
+      </div>
     </div>
 
     <div v-if="store.loading"><LoadingState /></div>

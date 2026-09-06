@@ -1,12 +1,11 @@
 <script setup lang="ts">
 // ProjectsManage.vue —— R33 阶段 1（0 契约）：项目管理卡片网格 + 仓库挂载管理
-// 多对多语义为客户端聚合（按 path 归并），挂载调整复用既有 addRepoByPath / deleteRepo
+// 多对多语义：客户端按 path 归并展示；挂载调整走 R33 阶段 2 attach/detach（服务端迁移内嵌仓库进注册表）
 
 import { computed, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useMessage } from 'naive-ui'
-import { NCheckbox, NInput, NModal } from 'naive-ui'
-import type { RepoDef } from '@bxverse/shared'
+import { NInput, NModal } from 'naive-ui'
 import { api } from '../api'
 import { useProjectsStore } from '../stores/projects'
 import LoadingState from '../components/LoadingState.vue'
@@ -105,29 +104,22 @@ function togglePending(key: string, on: boolean): void {
   else next.delete(key)
   pending.value = next
 }
-function findRepoDef(pid: string, rid: string): RepoDef | undefined {
-  return store.byId(pid)?.repos.find((r) => r.id === rid)
-}
 async function saveManage(): Promise<void> {
   const p = manageProject.value
   if (!p) return
   mBusy.value = true
   try {
     let changed = 0
+    // R33 阶段 2：统一走 attach/detach（按 path 归并，服务端自动迁移内嵌仓库进注册表）
     for (const rr of registry.value) {
       const want = pending.value.has(rr.key)
       const have = rr.members.some((m) => m.pid === p.id)
       if (want && !have) {
-        const src = findRepoDef(rr.members[0].pid, rr.members[0].rid)
-        if (!src) continue
-        await api.addRepoByPath(p.id, src.path, src.displayName || undefined)
+        await api.attachRepo(p.id, { path: rr.path, name: rr.name })
         changed++
       } else if (!want && have) {
-        const m = rr.members.find((x) => x.pid === p.id)
-        if (m) {
-          await api.deleteRepo(p.id, m.rid, false)
-          changed++
-        }
+        await api.detachRepo(p.id, { path: rr.path })
+        changed++
       }
     }
     await store.load()
@@ -308,11 +300,15 @@ function openProject(pid: string): void {
           v-for="rr in registry"
           :key="rr.key"
           class="flex items-center gap-3 px-3 py-2.5 rounded-xl border cursor-pointer transition-colors duration-fast"
-          :class="isMember(rr) ? 'border-brand-500/40 bg-brand-soft/60' : 'border-border'"
+          :class="pending.has(rr.key) ? 'border-brand-500/40 bg-brand-soft/60' : 'border-border'"
         >
-          <NCheckbox
+          <!-- 原生 checkbox：label 联动可靠（NCheckbox 受控联动在 label 内不稳定） -->
+          <input
+            type="checkbox"
+            class="w-4 h-4 shrink-0 cursor-pointer"
+            style="accent-color: var(--bx-brand-500)"
             :checked="pending.has(rr.key)"
-            @update:checked="(v: boolean) => togglePending(rr.key, v)"
+            @change="(e: Event) => togglePending(rr.key, (e.target as HTMLInputElement).checked)"
           />
           <span class="mono text-xs font-semibold text-text-1">{{ rr.name }}</span>
           <span class="text-[11px] text-text-3 truncate flex-1">{{

@@ -155,6 +155,15 @@ export const api = {
   ) => http.patch<RepoDef>(`/projects/${pid}/repos/${rid}`, body),
   deleteRepo: (pid: string, rid: string, purge = false) =>
     http.del<{ ok: boolean; purged: boolean }>(`/projects/${pid}/repos/${rid}?purge=${purge}`),
+
+  // 扩展：R33 阶段 2 全局仓库注册表 + 项目挂载 attach/detach
+  repoRegistry: () => http.get<{ registry: RepoDef[] }>('/repos-registry'),
+  saveRepoRegistry: (registry: RepoDef[]) =>
+    http.put<{ registry: RepoDef[] }>('/repos-registry', { registry }),
+  attachRepo: (projectId: string, body: { repoId?: string; path?: string; name?: string }) =>
+    http.post<ProjectDef>(`/projects/${projectId}/repos/attach`, body),
+  detachRepo: (projectId: string, body: { repoId?: string; path?: string }) =>
+    http.post<ProjectDef>(`/projects/${projectId}/repos/detach`, body),
   repoStatus: (pid: string, rid: string, fresh = false) =>
     http.get<RepoStatus>(`/repos/${pid}/${rid}/status${fresh ? '?fresh=true' : ''}`),
 
