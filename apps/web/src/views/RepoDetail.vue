@@ -201,6 +201,7 @@ async function loadAll() {
 const settingsForm = reactive({
   name: '',
   displayName: '',
+  initialVersion: '',
   buildCommand: '',
   outputDir: 'public',
   writeVersionFile: true,
@@ -218,6 +219,8 @@ function openSettings() {
   if (!repo.value) return
   settingsForm.name = repo.value.name
   settingsForm.displayName = repo.value.displayName ?? ''
+  // 扩展 R35：仓库初始版本号
+  settingsForm.initialVersion = repo.value.initialVersion ?? ''
   settingsForm.buildCommand = repo.value.buildCommand ?? ''
   settingsForm.outputDir = repo.value.outputDir ?? 'public'
   settingsForm.writeVersionFile = repo.value.writeVersionFile ?? true
@@ -238,6 +241,8 @@ async function saveSettings() {
     await projectsStore.updateRepo(pid.value, rid.value, {
       name: settingsForm.name.trim() || undefined,
       displayName: settingsForm.displayName.trim() || undefined,
+      // 扩展 R35：初始版本号（空串 = 清除，恢复项目派生）
+      initialVersion: settingsForm.initialVersion.trim() || undefined,
       buildCommand: settingsForm.buildCommand || undefined,
       outputDir: settingsForm.outputDir,
       writeVersionFile: settingsForm.writeVersionFile,
@@ -527,6 +532,22 @@ watch(tab, (t) => {
                   <template #icon><i aria-hidden="true" class="i-carbon-folder-open" /></template>
                   选择
                 </NButton>
+              </div>
+            </NFormItem>
+            <NFormItem label="初始版本号">
+              <div class="w-full">
+                <NInput
+                  v-model:value="settingsForm.initialVersion"
+                  placeholder="如：1.2.3（仅首次发布生效，可留空）…"
+                  clearable
+                />
+                <div class="mt-1 text-xs text-text-3">
+                  {{
+                    status?.lastPublishCommit
+                      ? '该仓库已发布过，此设置不生效（版本跟随项目统一版本）'
+                      : '仅对该仓库首次发布生效（覆盖项目派生版本）；格式跟随项目仓库版本格式，发布一次后自动失效'
+                  }}
+                </div>
               </div>
             </NFormItem>
             <NFormItem label="写入版本文件">

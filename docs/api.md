@@ -461,7 +461,7 @@
 }
 ```
 
-- 允许字段：`name / displayName / buildCommand / outputDir / writeVersionFile / path / artifactDir / versionSource / packageManager / installCommand / preBuildCommand / buildTimeoutMs / versionSyncCommit`（R26 新增后 6 字段）。`path` 变更时重新校验 `.git`；`id/remote/lastPublishCommit` 不可改。
+- 允许字段：`name / displayName / buildCommand / outputDir / writeVersionFile / path / artifactDir / versionSource / packageManager / installCommand / preBuildCommand / buildTimeoutMs / versionSyncCommit`（R26 新增后 6 字段）+ `initialVersion`（扩展 R35：仓库初始版本号，按项目 `repoVersionFormat` 校验规范化，空串清除）。`path` 变更时重新校验 `.git`；`id/remote/lastPublishCommit` 不可改。
 
 响应 `200`：更新后的 `RepoDef`。
 

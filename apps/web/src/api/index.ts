@@ -150,6 +150,8 @@ export const api = {
         | 'preBuildCommand'
         | 'buildTimeoutMs'
         | 'versionSyncCommit'
+        // 扩展 R35：仓库初始版本号（仅首次发布生效）
+        | 'initialVersion'
       >
     >,
   ) => http.patch<RepoDef>(`/projects/${pid}/repos/${rid}`, body),

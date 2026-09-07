@@ -125,6 +125,7 @@ AppConfig ─── 1:N ─── ProjectDef ─── 1:N ─── RepoDef
 | `preBuildCommand` | `string`（可选） | 扩展 R26：构建前自定义步骤（如更新依赖、codegen），在 install 之后、build 之前 | 缺省不执行 |
 | `buildTimeoutMs` | `number`（可选） | 扩展 R26：构建链路总超时毫秒 | `600000` |
 | `versionSyncCommit` | `'package' \| 'none'`（可选） | 扩展 R26：版本写回提交策略；`package`=自动提交仅 `package.json`+锁文件（默认）；`none`=只写不提交 | `package` |
+| `initialVersion` | `string`（可选） | 扩展 R35：仓库初始版本号——仅首次发布（`lastPublishCommit` 为空）时该仓库版本使用此值（按项目 `repoVersionFormat` 校验与规范化），覆盖项目派生；发布一次后自动失效回项目版本线 | 缺省从项目统一版本派生 |
 | `lastPublishCommit` | `string \| null`（可选） | 上次统一发布时该仓库的 HEAD **fullHash**（40 hex）；变更检测基准，见 §8 | `null`（= 从未发布） |
 | `createdAt` | `string`（可选） | ISO 8601 接入时间 | 接入时写入 |
 

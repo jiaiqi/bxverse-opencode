@@ -46,7 +46,10 @@ function splitPrerelease(s: string): { prefix: string; num?: number } {
  * - prev 与 requested 前缀相同 → 递增 numeric（beta.1→beta.2；beta→beta.1 递增为 beta.2）
  * - 前缀不同 → 覆盖为 requested
  */
-export function resolvePrerelease(prev?: string | null, requested?: string | null): string | undefined {
+export function resolvePrerelease(
+  prev?: string | null,
+  requested?: string | null,
+): string | undefined {
   const req = requested?.trim()
   if (!req) return undefined
   if (!PRERELEASE_RE.test(req)) throw new Error(`INVALID_PRERELEASE: ${req}`)
@@ -189,7 +192,12 @@ export function parseSemverTolerant(v: string): SemverParts | null {
  * - X.Y.Z：返回无前缀的语义版本核心（含 prerelease 如 1.2.0-beta.1）
  * - VYYMMDDHHmm：返回 V + stamp（忽略 projectVersion 的语义部分）
  */
-export function formatRepoVersion(format: RepoVersionFormat, projectVersion: string, stamp: string, prerelease?: string): string {
+export function formatRepoVersion(
+  format: RepoVersionFormat,
+  projectVersion: string,
+  stamp: string,
+  prerelease?: string,
+): string {
   if (format === 'VYYMMDDHHmm') {
     if (!/^\d{10,12}$/.test(stamp)) throw new Error(`INVALID_STAMP: ${stamp}`)
     return `V${stamp}`
@@ -243,8 +251,8 @@ export function bumpSemver(v: string, bump: BumpType, prerelease?: string): stri
  * breaking → major；否则有 feat → minor；否则 patch（含空数组）。
  */
 export function suggestBump(commits: Pick<CommitInfo, 'type' | 'breaking'>[]): BumpType {
-  if (commits.some(c => c.breaking)) return 'major'
-  if (commits.some(c => c.type === 'feat')) return 'minor'
+  if (commits.some((c) => c.breaking)) return 'major'
+  if (commits.some((c) => c.type === 'feat')) return 'minor'
   return 'patch'
 }
 
@@ -300,4 +308,27 @@ export function compareVersion(a: string, b: string): number {
     return (x.build ?? 0) - (y.build ?? 0)
   }
   return pa.kind === 'semver' ? -1 : 1
+}
+
+/**
+ * 扩展 R35：仓库初始版本号校验与规范化（按项目 repoVersionFormat）。
+ * - 'VYYMMDDHHmm'：V + 10~12 位数字（容错裸数字自动补 V）
+ * - 'X.Y.Z'/未配置（含旧 repoVersionScheme）：容错 semver（允许 v/V 前缀与 prerelease），
+ *   规范化为无前缀核心；拒绝带 build 段（如 v1.2.3.26081215）
+ * 非法抛 Error（server 层转 400；planPublish 转 CoreError fail fast）。
+ */
+export function normalizeInitialVersion(raw: string, format?: RepoVersionFormat): string {
+  const s = raw.trim()
+  if (!s) throw new Error('初始版本号不能为空')
+  if (format === 'VYYMMDDHHmm') {
+    const m = /^V?(\d{10,12})$/.exec(s.toUpperCase())
+    if (!m) throw new Error(`初始版本号须为 V + 10~12 位时间戳（如 V2609071530）: ${s}`)
+    return `V${m[1]}`
+  }
+  // 扩展 R35：stripV 容错大写 V 前缀（parseVersionTolerant 仅容错小写 v）
+  const p = parseSemverTolerant(stripV(s))
+  if (!p || p.build !== undefined)
+    throw new Error(`初始版本号须为语义版本 X.Y.Z（可含 -beta.1 等 prerelease）: ${s}`)
+  const core = `${p.major}.${p.minor}.${p.patch}`
+  return p.prerelease ? `${core}-${p.prerelease}` : core
 }

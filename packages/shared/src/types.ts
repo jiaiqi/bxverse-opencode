@@ -98,6 +98,8 @@ export interface RepoDef {
   buildTimeoutMs?: number
   /** 扩展：R26 版本写回提交策略：package=自动提交仅 package.json+锁文件（默认）；none=只写不提交 */
   versionSyncCommit?: 'package' | 'none'
+  // 扩展：R35 仓库初始版本号——首次发布（lastPublishCommit 为空）时该仓库版本使用此值（按项目 repoVersionFormat 校验与规范化），缺省仍从项目统一版本派生；发布过一次后自动失效
+  initialVersion?: string
   /** 上次统一发布时的 commit（变更检测基准） */
   lastPublishCommit?: string | null
   createdAt?: string

@@ -376,6 +376,8 @@ NConfigProvider(theme + themeOverrides)
 
 **Tab 3 设置**：`NDynamicInput`/`NForm` 编辑 RepoDef 字段：`name`、`buildCommand`（placeholder 示例）、`outputDir`（默认 public 提示）、`writeVersionFile`（NSwitch + 说明「关闭后不写 version.json，零侵入」）、`remote` 只读展示；保存 → `PUT /api/projects/:pid`（整体保存 projects 中该仓库项，见 architecture §3.2）；「移除仓库」danger 按钮（确认后同路由保存）。
 
+**扩展 R35 初始版本号**：设置 Tab 新增「初始版本号」`NInput`（`initialVersion`，clearable，placeholder「如：1.2.3（仅首次发布生效，可留空）…」）；下方动态提示——仓库已发布过（`status.lastPublishCommit` 非空）时提示「该仓库已发布过，此设置不生效（版本跟随项目统一版本）」，否则提示「仅对该仓库首次发布生效（覆盖项目派生版本）；格式跟随项目仓库版本格式，发布一次后自动失效」。保存走 `PATCH /api/projects/:pid/repos/:rid`，服务端按项目 `repoVersionFormat` 校验规范化（非法 400），空串清除。
+
 ### 3.4 发布向导 `/project/:id/release`（ReleaseWizard.vue）
 
 详见 §8（状态机）与 §9（日志编辑器）。页面骨架：PageHeader（返回项目）+ `NSteps` 横向六步 + 步骤内容容器（`card card-pad`）+ 底部步骤操作栏（上一步/下一步/执行发布）。

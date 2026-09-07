@@ -136,3 +136,4 @@
 | 2026-08-27 | 方向 B·S4 收口：core JournalStore.appendEvent/loadEvents + queue.restoreFromJournal + sse.normalizeReplay + truncated 头帧 4 步实现本就绪（调研确认）；新增 4 条 S4 契约测试（追加/原序读回/空查询/超 MAX 截断）；core 145→149 / typecheck 0 / build / e2e 三场景全过 |
 | 2026-08-27 | 方向 C·A2 收口：DataStore 索引增量化 3 步实现本就绪（upsertScope/Global 追加式 + readRecord id→路径 + listRecords({limit, full}) 快速路径）；新增 packages/core/test/store.test.ts 8 条契约测试（追加式/性能 5ms/spy 验证/完整模式/不抛错/兼容性）；core 149→157 全过；typecheck/build/e2e 三场景全过；store 0 测试债务清零 |
 | 2026-09-06 | 立项 R33 项目与仓库多对多（阶段 1 前端聚合 0 契约 / 阶段 2 注册表契约扩展）+ R34 玻璃光影视觉体系（themeStyle 扩 'stone'，// 扩展：R34）；形态基准 design/bxverse-final-vision-v5.html，开发分支 feat/ui-glass-multi |
+| 2026-09-07 | 立项并落地 R35 仓库初始版本号：shared RepoDef.initialVersion（仅新增可选字段）+ core version.normalizeInitialVersion（按 repoVersionFormat 校验规范化，stripV 容错大写 V）+ planPublish 首次发布（lastPublishCommit 空）生效、非法 fail fast VALIDATION + server PATCH repos 支持（空串清除）+ web RepoDetail 设置输入框与生效提示；version.test.ts 补 5 组用例 |

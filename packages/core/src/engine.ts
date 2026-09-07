@@ -191,6 +191,26 @@ export async function planPublish(req: PublishRequest): Promise<PublishPlan> {
     warnings.push(...(statuses[repo.id].warnings ?? []).map((w) => `${repo.name}：${w}`))
   }
 
+  // 扩展 R35：仓库初始版本号——仅首次发布（lastPublishCommit 为空）且显式设置时生效；
+  // 非法配置 fail fast（阻断计划并提示修正），合法值预规范化供 changed 映射复用
+  const initialVersions: Record<string, string> = {}
+  for (const repo of project.repos) {
+    if (!candidateIds.includes(repo.id)) continue
+    if (repo.lastPublishCommit || !repo.initialVersion?.trim()) continue
+    try {
+      initialVersions[repo.id] = version.normalizeInitialVersion(
+        repo.initialVersion,
+        project.repoVersionFormat,
+      )
+    } catch (e) {
+      throw new CoreError(
+        CORE_ERROR_CODES.VALIDATION,
+        `${repo.name} 初始版本号非法: ${(e as Error).message}`,
+        { repoId: repo.id },
+      )
+    }
+  }
+
   let changedRepos = project.repos.filter(
     (r) => candidateIds.includes(r.id) && statuses[r.id]?.changed,
   )
@@ -316,7 +336,8 @@ export async function planPublish(req: PublishRequest): Promise<PublishPlan> {
       repoId: repo.id,
       name: repo.name,
       changed: true,
-      version: repoVersionFor(project, projectVersion, stamp),
+      // 扩展 R35：首次发布且设置了 initialVersion 时用初始版本号，否则按项目统一版本派生
+      version: initialVersions[repo.id] ?? repoVersionFor(project, projectVersion, stamp),
       from: repo.lastPublishCommit ?? null,
       to: st.head,
       commits,

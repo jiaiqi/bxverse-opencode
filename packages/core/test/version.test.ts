@@ -40,7 +40,12 @@ describe('version.parseSemver', () => {
   it('各形态解析', () => {
     expect(version.parseSemver('v1.0.6')).toEqual({ major: 1, minor: 0, patch: 6 })
     expect(version.parseSemver('1.0.6')).toEqual({ major: 1, minor: 0, patch: 6 })
-    expect(version.parseSemver('v1.0.6.26081315')).toEqual({ major: 1, minor: 0, patch: 6, build: 26081315 })
+    expect(version.parseSemver('v1.0.6.26081315')).toEqual({
+      major: 1,
+      minor: 0,
+      patch: 6,
+      build: 26081315,
+    })
     expect(version.parseSemver('abc')).toBeNull()
     expect(version.parseSemver('')).toBeNull()
   })
@@ -102,7 +107,9 @@ describe('version.buildStampMinute (R26)', () => {
   it('撞名追加两位序号（10→12 位）', () => {
     const d = new Date(2026, 7, 24, 15, 30)
     expect(version.buildStampMinute(d, new Set(['2608241530']))).toBe('260824153001')
-    expect(version.buildStampMinute(d, new Set(['2608241530', '260824153001']))).toBe('260824153002')
+    expect(version.buildStampMinute(d, new Set(['2608241530', '260824153001']))).toBe(
+      '260824153002',
+    )
   })
 
   it('序号耗尽抛错', () => {
@@ -115,8 +122,16 @@ describe('version.buildStampMinute (R26)', () => {
 
 describe('version.parseVersionTolerant (R26)', () => {
   it('X.Y.Z 与 vX.Y.Z', () => {
-    expect(version.parseVersionTolerant('1.2.0')).toEqual({ kind: 'semver', parts: { major: 1, minor: 2, patch: 0 }, raw: '1.2.0' })
-    expect(version.parseVersionTolerant('v1.2.0')).toEqual({ kind: 'semver', parts: { major: 1, minor: 2, patch: 0 }, raw: 'v1.2.0' })
+    expect(version.parseVersionTolerant('1.2.0')).toEqual({
+      kind: 'semver',
+      parts: { major: 1, minor: 2, patch: 0 },
+      raw: '1.2.0',
+    })
+    expect(version.parseVersionTolerant('v1.2.0')).toEqual({
+      kind: 'semver',
+      parts: { major: 1, minor: 2, patch: 0 },
+      raw: 'v1.2.0',
+    })
   })
 
   it('旧 hybrid vX.Y.Z.YYMMDDHH 兼容', () => {
@@ -126,12 +141,24 @@ describe('version.parseVersionTolerant (R26)', () => {
   })
 
   it('VYYMMDDHHmm', () => {
-    expect(version.parseVersionTolerant('V2608241530')).toEqual({ kind: 'timestamp', stamp: '2608241530', raw: 'V2608241530' })
-    expect(version.parseVersionTolerant('V260824153012')).toEqual({ kind: 'timestamp', stamp: '260824153012', raw: 'V260824153012' })
+    expect(version.parseVersionTolerant('V2608241530')).toEqual({
+      kind: 'timestamp',
+      stamp: '2608241530',
+      raw: 'V2608241530',
+    })
+    expect(version.parseVersionTolerant('V260824153012')).toEqual({
+      kind: 'timestamp',
+      stamp: '260824153012',
+      raw: 'V260824153012',
+    })
   })
 
   it('旧 timestamp vYYMMDDHH 兼容（小写 v）', () => {
-    expect(version.parseVersionTolerant('v26081315')).toEqual({ kind: 'timestamp', stamp: '26081315', raw: 'v26081315' })
+    expect(version.parseVersionTolerant('v26081315')).toEqual({
+      kind: 'timestamp',
+      stamp: '26081315',
+      raw: 'v26081315',
+    })
   })
 
   it('非法返回 null', () => {
@@ -189,4 +216,34 @@ describe('version.compareVersion (R26)', () => {
   })
 })
 
+describe('version.normalizeInitialVersion（R35 仓库初始版本号）', () => {
+  it('X.Y.Z 格式：容错 v 前缀并规范化为无前缀核心', () => {
+    expect(version.normalizeInitialVersion('1.2.3')).toBe('1.2.3')
+    expect(version.normalizeInitialVersion('v1.2.3')).toBe('1.2.3')
+    expect(version.normalizeInitialVersion('V2.0.0')).toBe('2.0.0')
+    expect(version.normalizeInitialVersion(' 1.2.3-beta.1 ')).toBe('1.2.3-beta.1')
+  })
 
+  it('X.Y.Z 格式：拒绝非法与带 build 段', () => {
+    expect(() => version.normalizeInitialVersion('abc')).toThrow()
+    expect(() => version.normalizeInitialVersion('1.2')).toThrow()
+    expect(() => version.normalizeInitialVersion('v1.2.3.26081315')).toThrow()
+    expect(() => version.normalizeInitialVersion('')).toThrow('不能为空')
+  })
+
+  it('VYYMMDDHHmm 格式：接受 V 前缀与裸数字（自动补 V）', () => {
+    expect(version.normalizeInitialVersion('V2609071530', 'VYYMMDDHHmm')).toBe('V2609071530')
+    expect(version.normalizeInitialVersion('2609071530', 'VYYMMDDHHmm')).toBe('V2609071530')
+    expect(version.normalizeInitialVersion('v2609071530', 'VYYMMDDHHmm')).toBe('V2609071530')
+    expect(version.normalizeInitialVersion('V260907153012', 'VYYMMDDHHmm')).toBe('V260907153012')
+  })
+
+  it('VYYMMDDHHmm 格式：拒绝语义版本与错误位数', () => {
+    expect(() => version.normalizeInitialVersion('1.2.3', 'VYYMMDDHHmm')).toThrow()
+    expect(() => version.normalizeInitialVersion('V12345', 'VYYMMDDHHmm')).toThrow()
+  })
+
+  it('未配置格式（旧 repoVersionScheme）：按语义版本处理', () => {
+    expect(version.normalizeInitialVersion('v0.9.0')).toBe('0.9.0')
+  })
+})
